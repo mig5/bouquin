@@ -13,17 +13,20 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QDialogButtonBox,
     QSizePolicy,
+    QMessageBox,
 )
 
-from .db import DBConfig
+from .db import DBConfig, DBManager
 from .settings import save_db_config
+from .key_prompt import KeyPrompt
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, cfg: DBConfig, parent=None):
+    def __init__(self, cfg: DBConfig, db: DBManager, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
         self._cfg = DBConfig(path=cfg.path, key="")
+        self._db = db
 
         form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
@@ -44,12 +47,17 @@ class SettingsDialog(QDialog):
         h.setStretch(1, 0)
         form.addRow("Database path", path_row)
 
+        # Change key button
+        self.rekey_btn = QPushButton("Change key")
+        self.rekey_btn.clicked.connect(self._change_key)
+
         bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         bb.accepted.connect(self._save)
         bb.rejected.connect(self.reject)
 
         v = QVBoxLayout(self)
         v.addLayout(form)
+        v.addWidget(self.rekey_btn)
         v.addWidget(bb)
 
     def _browse(self):
@@ -66,6 +74,26 @@ class SettingsDialog(QDialog):
         self._cfg = DBConfig(path=Path(self.path_edit.text()), key="")
         save_db_config(self._cfg)
         self.accept()
+
+    def _change_key(self):
+        p1 = KeyPrompt(self, title="Change key", message="Enter new key")
+        if p1.exec() != QDialog.Accepted:
+            return
+        new_key = p1.key()
+        p2 = KeyPrompt(self, title="Change key", message="Re-enter new key")
+        if p2.exec() != QDialog.Accepted:
+            return
+        if new_key != p2.key():
+            QMessageBox.warning(self, "Key mismatch", "The two entries did not match.")
+            return
+        if not new_key:
+            QMessageBox.warning(self, "Empty key", "Key cannot be empty.")
+            return
+        try:
+            self._db.rekey(new_key)
+            QMessageBox.information(self, "Key changed", "The database key was updated.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not change key:\n{e}")
 
     @property
     def config(self) -> DBConfig:

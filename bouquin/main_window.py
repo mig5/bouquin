@@ -231,7 +231,7 @@ class MainWindow(QMainWindow):
         self._save_date(self._current_date_iso(), explicit)
 
     def _open_settings(self):
-        dlg = SettingsDialog(self.cfg, self)
+        dlg = SettingsDialog(self.cfg, self.db, self)
         if dlg.exec() == QDialog.Accepted:
             new_cfg = dlg.config
             if new_cfg.path != self.cfg.path:

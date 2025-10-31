@@ -31,7 +31,6 @@ There is deliberately no network connectivity or syncing intended.
 
  * Search
  * Taxonomy/tagging
- * Ability to change the SQLCipher key
  * Export to other formats (plaintext, json, sql etc)
 
 

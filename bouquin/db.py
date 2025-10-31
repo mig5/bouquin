@@ -64,6 +64,25 @@ class DBManager:
         cur.execute("PRAGMA user_version = 1;")
         self.conn.commit()
 
+    def rekey(self, new_key: str) -> None:
+        """
+        Change the SQLCipher passphrase in-place, then reopen the connection
+        with the new key to verify.
+        """
+        if self.conn is None:
+            raise RuntimeError("Database is not connected")
+        cur = self.conn.cursor()
+        # Change the encryption key of the currently open database
+        cur.execute(f"PRAGMA rekey = '{new_key}';")
+        self.conn.commit()
+
+        # Close and reopen with the new key to verify and restore PRAGMAs
+        self.conn.close()
+        self.conn = None
+        self.cfg.key = new_key
+        if not self.connect():
+            raise sqlite.Error("Re-open failed after rekey")
+
     def get_entry(self, date_iso: str) -> str:
         cur = self.conn.cursor()
         cur.execute("SELECT content FROM entries WHERE date = ?;", (date_iso,))
