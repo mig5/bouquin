@@ -1,0 +1,61 @@
+# Bouquin
+
+
+## Introduction
+
+Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher.
+
+It uses [SQLCipher bindings](https://pypi.org/project/sqlcipher3-wheels) as a drop-in replacement
+for SQLite3. This means that the underlying database for the notebook is encrypted at rest.
+
+To increase security, the SQLCipher key is requested when the app is opened, and is not written
+to disk.
+
+There is deliberately no network connectivity or syncing intended.
+
+## Screenshot
+
+![Screenshot of Bouquin](./screenshot.png)
+
+## Features
+
+ * Every 'page' is linked to the calendar day
+ * Basic markdown
+ * Automatic periodic saving (or explicitly save)
+ * Navigating from one day to the next automatically saves
+ * Basic keyboard shortcuts
+ * Transparent integrity checking of the database when it opens
+
+
+## Yet to do
+
+ * Search
+ * Taxonomy/tagging
+ * Ability to change the SQLCipher key
+ * Export to other formats (plaintext, json, sql etc)
+
+
+## How to install
+
+### From source
+
+ * Clone this repo or download the tarball from the releases page
+ * Ensure you have poetry installed
+ * Run `poetry install` to install dependencies
+ * Run `poetry run bouquin` to start the application.
+
+### From the releases page
+
+ * Download the whl and run it
+
+### From PyPi
+
+ * `pip install bouquin`
+
+
+## How to run the tests
+
+ * Clone the repo
+ * Ensure you have poetry installed
+ * Run `poetry install --with test`
+ * Run `poetry run pytest -vvv`

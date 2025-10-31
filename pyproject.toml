@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "bouquin"
+version = "0.1.0"
+description = "Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher."
+authors = ["Miguel Jacq <mig@mig5.net>"]
+readme = "README.md"
+license = "GPL-3.0-or-later"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.14"
+pyside6 = ">=6.8.1,<7.0.0"
+sqlcipher3-wheels = "^0.5.5.post0"
+
+[tool.poetry.scripts]
+bouquin = "bouquin.__main__:main"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.4.2"
+pytest-qt = "^4.5.0"
+pytest-mock = "^3.15.1"
+pytest-cov = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

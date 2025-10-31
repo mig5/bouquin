@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from pathlib import Path
+from PySide6.QtCore import QSettings, QStandardPaths
+
+from .db import DBConfig
+
+APP_ORG = "Bouquin"
+APP_NAME = "Bouquin"
+
+
+def default_db_path() -> Path:
+    base = Path(QStandardPaths.writableLocation(QStandardPaths.AppDataLocation))
+    return base / "notebook.db"
+
+
+def get_settings() -> QSettings:
+    return QSettings(APP_ORG, APP_NAME)
+
+
+def load_db_config() -> DBConfig:
+    s = get_settings()
+    path = Path(s.value("db/path", str(default_db_path())))
+    return DBConfig(path=path, key="")
+
+
+def save_db_config(cfg: DBConfig) -> None:
+    s = get_settings()
+    s.setValue("db/path", str(cfg.path))
