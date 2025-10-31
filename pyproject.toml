@@ -5,6 +5,7 @@ description = "Bouquin is a simple, opinionated notebook application written in 
 authors = ["Miguel Jacq <mig@mig5.net>"]
 readme = "README.md"
 license = "GPL-3.0-or-later"
+repository = "https://git.mig5.net/mig5/bouquin"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.14"
