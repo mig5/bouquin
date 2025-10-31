@@ -97,6 +97,13 @@ class MainWindow(QMainWindow):
         nav_menu.addAction(act_next)
         self.addAction(act_next)
 
+        act_today = QAction("Today", self)
+        act_today.setShortcut("Ctrl+T")
+        act_today.setShortcutContext(Qt.ApplicationShortcut)
+        act_today.triggered.connect(self._adjust_today)
+        nav_menu.addAction(act_today)
+        self.addAction(act_today)
+
         # Autosave
         self._dirty = False
         self._save_timer = QTimer(self)
@@ -175,6 +182,11 @@ class MainWindow(QMainWindow):
         """Move selection by delta days (negative for previous)."""
         d = self.calendar.selectedDate().addDays(delta)
         self.calendar.setSelectedDate(d)
+
+    def _adjust_today(self):
+        """Jump to today."""
+        today = QDate.currentDate()
+        self.calendar.setSelectedDate(today)
 
     def _on_date_changed(self):
         """
