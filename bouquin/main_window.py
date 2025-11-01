@@ -206,6 +206,8 @@ class MainWindow(QMainWindow):
         self._dirty = False
         # track which date the editor currently represents
         self._active_date_iso = date_iso
+        qd = QDate.fromString(date_iso, "yyyy-MM-dd")
+        self.calendar.setSelectedDate(qd)
 
     def _on_text_changed(self):
         self._dirty = True

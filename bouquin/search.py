@@ -80,7 +80,7 @@ class Search(QWidget):
         for date_str, content in rows:
             # Build an HTML fragment around the match and whether to show ellipses
             frag_html, left_ell, right_ell = self._make_html_snippet(
-                content, query, radius=60, maxlen=180
+                content, query, radius=30, maxlen=90
             )
 
             # ---- Per-item widget: date on top, preview row below (with ellipses) ----
@@ -112,7 +112,7 @@ class Search(QWidget):
             preview = QLabel()
             preview.setTextFormat(Qt.TextFormat.RichText)
             preview.setWordWrap(True)
-            preview.setOpenExternalLinks(True)  # keep links in your HTML clickable
+            preview.setOpenExternalLinks(True)
             preview.setText(
                 frag_html
                 if frag_html
