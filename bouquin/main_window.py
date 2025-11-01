@@ -3,24 +3,28 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import QDate, QTimer, Qt
-from PySide6.QtGui import QAction, QFont, QTextCharFormat
+from PySide6.QtGui import (
+    QAction,
+    QFont,
+    QTextCharFormat,
+)
 from PySide6.QtWidgets import (
-    QDialog,
     QCalendarWidget,
+    QDialog,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
+    QSizePolicy,
     QSplitter,
     QVBoxLayout,
     QWidget,
-    QSizePolicy,
 )
 
 from .db import DBManager
-from .settings import APP_NAME, load_db_config, save_db_config
+from .editor import Editor
 from .key_prompt import KeyPrompt
-from .highlighter import MarkdownHighlighter
+from .settings import APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
+from .toolbar import ToolBar
 
 
 class MainWindow(QMainWindow):
@@ -40,6 +44,8 @@ class MainWindow(QMainWindow):
         self.calendar.setGridVisible(True)
         self.calendar.selectionChanged.connect(self._on_date_changed)
 
+        # Lock the calendar to the left panel at the top to stop it stretching
+        # when the main window is resized.
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(8, 8, 8, 8)
@@ -47,10 +53,22 @@ class MainWindow(QMainWindow):
         left_layout.addStretch(1)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
-        self.editor = QPlainTextEdit()
-        tab_w = 4 * self.editor.fontMetrics().horizontalAdvance(" ")
-        self.editor.setTabStopDistance(tab_w)
-        self.highlighter = MarkdownHighlighter(self.editor.document())
+        # This is the note-taking editor
+        self.editor = Editor()
+
+        # Toolbar for controlling styling
+        tb = ToolBar()
+        self.addToolBar(tb)
+        # Wire toolbar intents to editor methods
+        tb.boldRequested.connect(self.editor.apply_weight)
+        tb.italicRequested.connect(self.editor.apply_italic)
+        tb.underlineRequested.connect(self.editor.apply_underline)
+        tb.strikeRequested.connect(self.editor.apply_strikethrough)
+        tb.codeRequested.connect(self.editor.apply_code)
+        tb.headingRequested.connect(self.editor.apply_heading)
+        tb.bulletsRequested.connect(self.editor.toggle_bullets)
+        tb.numbersRequested.connect(self.editor.toggle_numbers)
+        tb.alignRequested.connect(self.editor.setAlignment)
 
         split = QSplitter()
         split.addWidget(left_panel)
@@ -67,13 +85,13 @@ class MainWindow(QMainWindow):
 
         # Menu bar (File)
         mb = self.menuBar()
-        file_menu = mb.addMenu("&File")
+        file_menu = mb.addMenu("&Application")
         act_save = QAction("&Save", self)
         act_save.setShortcut("Ctrl+S")
         act_save.triggered.connect(lambda: self._save_current(explicit=True))
         file_menu.addAction(act_save)
         act_settings = QAction("S&ettings", self)
-        act_save.setShortcut("Ctrl+E")
+        act_settings.setShortcut("Ctrl+E")
         act_settings.triggered.connect(self._open_settings)
         file_menu.addAction(act_settings)
         file_menu.addSeparator()
@@ -82,7 +100,7 @@ class MainWindow(QMainWindow):
         act_quit.triggered.connect(self.close)
         file_menu.addAction(act_quit)
 
-        # Navigate menu with next/previous day
+        # Navigate menu with next/previous/today
         nav_menu = mb.addMenu("&Navigate")
         act_prev = QAction("Previous Day", self)
         act_prev.setShortcut("Ctrl+P")
@@ -112,12 +130,14 @@ class MainWindow(QMainWindow):
         self._save_timer.timeout.connect(self._save_current)
         self.editor.textChanged.connect(self._on_text_changed)
 
-        # First load + mark dates with content
+        # First load + mark dates in calendar with content
         self._load_selected_date()
         self._refresh_calendar_marks()
 
-    # --- DB lifecycle
     def _try_connect(self) -> bool:
+        """
+        Try to connect to the database.
+        """
         try:
             self.db = DBManager(self.cfg)
             ok = self.db.connect()
@@ -131,6 +151,9 @@ class MainWindow(QMainWindow):
         return ok
 
     def _prompt_for_key_until_valid(self) -> bool:
+        """
+        Prompt for the SQLCipher key.
+        """
         while True:
             dlg = KeyPrompt(self, message="Enter a key to unlock the notebook")
             if dlg.exec() != QDialog.Accepted:
@@ -139,8 +162,11 @@ class MainWindow(QMainWindow):
             if self._try_connect():
                 return True
 
-    # --- Calendar marks to indicate text exists for htat day -----------------
     def _refresh_calendar_marks(self):
+        """
+        Sets a bold marker on the day to indicate that text exists
+        for that day.
+        """
         fmt_bold = QTextCharFormat()
         fmt_bold.setFontWeight(QFont.Weight.Bold)
         # Clear previous marks
@@ -169,7 +195,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Read Error", str(e))
             return
         self.editor.blockSignals(True)
-        self.editor.setPlainText(text)
+        self.editor.setHtml(text)
         self.editor.blockSignals(False)
         self._dirty = False
         # track which date the editor currently represents
@@ -212,7 +238,7 @@ class MainWindow(QMainWindow):
         """
         if not self._dirty and not explicit:
             return
-        text = self.editor.toPlainText()
+        text = self.editor.toHtml()
         try:
             self.db.upsert_entry(date_iso, text)
         except Exception as e:
@@ -249,7 +275,7 @@ class MainWindow(QMainWindow):
                 self._load_selected_date()
                 self._refresh_calendar_marks()
 
-    def closeEvent(self, event):  # noqa: N802
+    def closeEvent(self, event):
         try:
             self._save_current()
             self.db.close()

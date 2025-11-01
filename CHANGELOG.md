@@ -1,3 +1,8 @@
+# 0.1.2
+
+ * Switch from Markdown to HTML via QTextEdit, with a toolbar
+ * Fix Settings shortcut and change nav menu from 'File' to 'Application'
+
 # 0.1.1
 
  * Add ability to change the key
