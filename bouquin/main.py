@@ -11,5 +11,6 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_ORG)
-    win = MainWindow(); win.show()
+    win = MainWindow()
+    win.show()
     sys.exit(app.exec())

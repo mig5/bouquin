@@ -20,16 +20,15 @@ There is deliberately no network connectivity or syncing intended.
 ## Features
 
  * Every 'page' is linked to the calendar day
- * Basic markdown
+ * Text is HTML with basic styling
+ * Search
  * Automatic periodic saving (or explicitly save)
- * Navigating from one day to the next automatically saves
- * Basic keyboard shortcuts
  * Transparent integrity checking of the database when it opens
+ * Rekey the database (change the password)
 
 
 ## Yet to do
 
- * Search
  * Taxonomy/tagging
  * Export to other formats (plaintext, json, sql etc)
 
@@ -47,7 +46,7 @@ There is deliberately no network connectivity or syncing intended.
 
  * Download the whl and run it
 
-### From PyPi
+### From PyPi/pip
 
  * `pip install bouquin`
 

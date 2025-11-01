@@ -100,6 +100,12 @@ class DBManager:
         )
         self.conn.commit()
 
+    def search_entries(self, text: str) -> list[str]:
+        cur = self.conn.cursor()
+        pattern = f"%{text}%"
+        cur.execute("SELECT * FROM entries WHERE TRIM(content) LIKE ?", (pattern,))
+        return [r for r in cur.fetchall()]
+
     def dates_with_content(self) -> list[str]:
         cur = self.conn.cursor()
         cur.execute("SELECT date FROM entries WHERE TRIM(content) <> '';")

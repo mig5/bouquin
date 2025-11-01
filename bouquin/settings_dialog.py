@@ -91,7 +91,9 @@ class SettingsDialog(QDialog):
             return
         try:
             self._db.rekey(new_key)
-            QMessageBox.information(self, "Key changed", "The database key was updated.")
+            QMessageBox.information(
+                self, "Key changed", "The database key was updated."
+            )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not change key:\n{e}")
 

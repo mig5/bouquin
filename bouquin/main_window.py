@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from .db import DBManager
 from .editor import Editor
 from .key_prompt import KeyPrompt
+from .search import Search
 from .settings import APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .toolbar import ToolBar
@@ -44,12 +45,16 @@ class MainWindow(QMainWindow):
         self.calendar.setGridVisible(True)
         self.calendar.selectionChanged.connect(self._on_date_changed)
 
+        self.search = Search(self.db)
+        self.search.openDateRequested.connect(self._load_selected_date)
+
         # Lock the calendar to the left panel at the top to stop it stretching
         # when the main window is resized.
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(8, 8, 8, 8)
         left_layout.addWidget(self.calendar, alignment=Qt.AlignTop)
+        left_layout.addWidget(self.search, alignment=Qt.AlignBottom)
         left_layout.addStretch(1)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
@@ -187,8 +192,9 @@ class MainWindow(QMainWindow):
         d = self.calendar.selectedDate()
         return f"{d.year():04d}-{d.month():02d}-{d.day():02d}"
 
-    def _load_selected_date(self):
-        date_iso = self._current_date_iso()
+    def _load_selected_date(self, date_iso=False):
+        if not date_iso:
+            date_iso = self._current_date_iso()
         try:
             text = self.db.get_entry(date_iso)
         except Exception as e:

@@ -1,6 +1,7 @@
 # 0.1.2
 
  * Switch from Markdown to HTML via QTextEdit, with a toolbar
+ * Add search ability
  * Fix Settings shortcut and change nav menu from 'File' to 'Application'
 
 # 0.1.1
