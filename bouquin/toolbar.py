@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QToolBar
 
 
 class ToolBar(QToolBar):
-    boldRequested = Signal(QFont.Weight)
+    boldRequested = Signal()
     italicRequested = Signal()
     underlineRequested = Signal()
     strikeRequested = Signal()
@@ -24,7 +24,7 @@ class ToolBar(QToolBar):
         # Bold
         bold = QAction("Bold", self)
         bold.setShortcut("Ctrl+B")
-        bold.triggered.connect(lambda: self.boldRequested.emit(QFont.Weight.Bold))
+        bold.triggered.connect(self.boldRequested)
 
         italic = QAction("Italic", self)
         italic.setShortcut("Ctrl+I")

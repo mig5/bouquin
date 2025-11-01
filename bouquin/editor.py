@@ -28,9 +28,11 @@ class Editor(QTextEdit):
         cursor.mergeCharFormat(fmt)
         self.mergeCurrentCharFormat(fmt)
 
-    @Slot(QFont.Weight)
-    def apply_weight(self, weight):
+    @Slot()
+    def apply_weight(self):
+        cur = self.currentCharFormat()
         fmt = QTextCharFormat()
+        weight = QFont.Weight.Normal if cur.fontWeight() == QFont.Weight.Bold else QFont.Weight.Bold
         fmt.setFontWeight(weight)
         self.merge_on_sel(fmt)
 
