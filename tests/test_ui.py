@@ -30,11 +30,11 @@ def test_manual_save_current_day(patched_main_window, qtbot):
     win, *_ = patched_main_window
 
     # Type into the editor and save
-    win.editor.setPlainText("Test note")
+    win.editor.setHtml("Test note")
     win._save_current(explicit=True)  # call directly to avoid waiting timers
 
     day = win._current_date_iso()
-    assert win.db.get_entry(day) == "Test note"
+    assert "Test note" in win.db.get_entry(day)
 
 
 def test_switch_day_saves_previous(patched_main_window, qtbot):
@@ -45,13 +45,13 @@ def test_switch_day_saves_previous(patched_main_window, qtbot):
     # Write on Day 1
     d1 = win.calendar.selectedDate()
     d1_iso = f"{d1.year():04d}-{d1.month():02d}-{d1.day():02d}"
-    win.editor.setPlainText("Notes day 1")
+    win.editor.setHtml("Notes day 1")
 
     # Trigger a day change (this path calls _on_date_changed via signal)
     d2 = d1.addDays(1)
     win.calendar.setSelectedDate(d2)
     # After changing, previous day should be saved; editor now shows day 2 content (empty)
-    assert win.db.get_entry(d1_iso) == "Notes day 1"
+    assert "Notes day 1" in win.db.get_entry(d1_iso)
     assert win.editor.toPlainText() == ""
 
 
