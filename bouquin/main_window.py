@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QDate, QTimer, Qt
+from PySide6.QtCore import QDate, QTimer, Qt, QSettings
 from PySide6.QtGui import (
     QAction,
+    QCursor,
     QFont,
+    QGuiApplication,
     QTextCharFormat,
 )
 from PySide6.QtWidgets import (
@@ -138,6 +140,10 @@ class MainWindow(QMainWindow):
         # First load + mark dates in calendar with content
         self._load_selected_date()
         self._refresh_calendar_marks()
+
+        # Restore window position from settings
+        self.settings = QSettings(APP_NAME)
+        self._restore_window_position()
 
     def _try_connect(self) -> bool:
         """
@@ -283,8 +289,45 @@ class MainWindow(QMainWindow):
                 self._load_selected_date()
                 self._refresh_calendar_marks()
 
+    def _restore_window_position(self):
+        geom = self.settings.value("main/geometry", None)
+        state = self.settings.value("main/windowState", None)
+        was_max = self.settings.value("main/maximized", False, type=bool)
+
+        if geom is not None:
+            self.restoreGeometry(geom)
+            if state is not None:
+                self.restoreState(state)
+            if not self._rect_on_any_screen(self.frameGeometry()):
+                self._move_to_cursor_screen_center()
+        else:
+            # First run: place window on the screen where the mouse cursor is.
+            self._move_to_cursor_screen_center()
+
+        # If it was maximized, do that AFTER the window exists in the event loop.
+        if was_max:
+            QTimer.singleShot(0, self.showMaximized)
+
+    def _rect_on_any_screen(self, rect):
+        for sc in QGuiApplication.screens():
+            if sc.availableGeometry().intersects(rect):
+                return True
+        return False
+
+    def _move_to_cursor_screen_center(self):
+        screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        r = screen.availableGeometry()
+        # Center the window in that screen’s available area
+        self.move(r.center() - self.rect().center())
+
+
     def closeEvent(self, event):
         try:
+            # Save window position
+            self.settings.setValue("main/geometry", self.saveGeometry())
+            self.settings.setValue("main/windowState", self.saveState())
+            self.settings.setValue("main/maximized", self.isMaximized())
+            # Ensure we save any last pending edits to the db
             self._save_current()
             self.db.close()
         except Exception:
