@@ -23,7 +23,6 @@ class DBManager:
         self.conn = sqlite.connect(str(self.cfg.path))
         cur = self.conn.cursor()
         cur.execute(f"PRAGMA key = '{self.cfg.key}';")
-        cur.execute("PRAGMA cipher_compatibility = 4;")
         cur.execute("PRAGMA journal_mode = WAL;")
         self.conn.commit()
         try:
