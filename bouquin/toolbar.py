@@ -15,6 +15,7 @@ class ToolBar(QToolBar):
     bulletsRequested = Signal()
     numbersRequested = Signal()
     alignRequested = Signal(Qt.AlignmentFlag)
+    historyRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__("Format", parent)
@@ -76,6 +77,10 @@ class ToolBar(QToolBar):
             lambda: self.alignRequested.emit(Qt.AlignRight)
         )
 
+        # History button
+        self.actHistory = QAction("History", self)
+        self.actHistory.triggered.connect(self.historyRequested)
+
         self.addActions(
             [
                 self.actBold,
@@ -92,6 +97,7 @@ class ToolBar(QToolBar):
                 self.actAlignL,
                 self.actAlignC,
                 self.actAlignR,
+                self.actHistory,
             ]
         )
 
@@ -119,6 +125,9 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actAlignL, "L")
         self._style_letter_button(self.actAlignC, "C")
         self._style_letter_button(self.actAlignR, "R")
+
+        # History
+        self._style_letter_button(self.actHistory, "View History")
 
     def _style_letter_button(
         self,

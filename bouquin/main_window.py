@@ -29,7 +29,9 @@ from PySide6.QtWidgets import (
 
 from .db import DBManager
 from .editor import Editor
+from .history_dialog import HistoryDialog
 from .key_prompt import KeyPrompt
+from .save_dialog import SaveDialog
 from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
@@ -146,6 +148,7 @@ class MainWindow(QMainWindow):
         self.toolBar.bulletsRequested.connect(self.editor.toggle_bullets)
         self.toolBar.numbersRequested.connect(self.editor.toggle_numbers)
         self.toolBar.alignRequested.connect(self.editor.setAlignment)
+        self.toolBar.historyRequested.connect(self._open_history)
 
         split = QSplitter()
         split.addWidget(left_panel)
@@ -181,10 +184,15 @@ class MainWindow(QMainWindow):
         # Menu bar (File)
         mb = self.menuBar()
         file_menu = mb.addMenu("&File")
-        act_save = QAction("&Save", self)
+        act_save = QAction("&Save a version", self)
         act_save.setShortcut("Ctrl+S")
         act_save.triggered.connect(lambda: self._save_current(explicit=True))
         file_menu.addAction(act_save)
+        act_history = QAction("History", self)
+        act_history.setShortcut("Ctrl+H")
+        act_history.setShortcutContext(Qt.ApplicationShortcut)
+        act_history.triggered.connect(self._open_history)
+        file_menu.addAction(act_history)
         act_settings = QAction("Settin&gs", self)
         act_settings.setShortcut("Ctrl+G")
         act_settings.triggered.connect(self._open_settings)
@@ -330,7 +338,7 @@ class MainWindow(QMainWindow):
 
     def _on_text_changed(self):
         self._dirty = True
-        self._save_timer.start(1200)  # autosave after idle
+        self._save_timer.start(10000)  # autosave after idle
 
     def _adjust_day(self, delta: int):
         """Move selection by delta days (negative for previous)."""
@@ -358,7 +366,7 @@ class MainWindow(QMainWindow):
         # Now load the newly selected date
         self._load_selected_date()
 
-    def _save_date(self, date_iso: str, explicit: bool = False):
+    def _save_date(self, date_iso: str, explicit: bool = False, note: str = "autosave"):
         """
         Save editor contents into the given date. Shows status on success.
         explicit=True means user invoked Save: show feedback even if nothing changed.
@@ -367,7 +375,7 @@ class MainWindow(QMainWindow):
             return
         text = self.editor.toHtml()
         try:
-            self.db.upsert_entry(date_iso, text)
+            self.db.save_new_version(date_iso, text, note)
         except Exception as e:
             QMessageBox.critical(self, "Save Error", str(e))
             return
@@ -381,9 +389,34 @@ class MainWindow(QMainWindow):
         )
 
     def _save_current(self, explicit: bool = False):
+        try:
+            self._save_timer.stop()
+        except Exception:
+            pass
+        if explicit:
+            # Prompt for a note
+            dlg = SaveDialog(self)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            note = dlg.note_text()
+        else:
+            note = "autosave"
         # Delegate to _save_date for the currently selected date
-        self._save_date(self._current_date_iso(), explicit)
+        self._save_date(self._current_date_iso(), explicit, note)
+        try:
+            self._save_timer.start()
+        except Exception:
+            pass
 
+    def _open_history(self):
+        date_iso = self._current_date_iso()
+        dlg = HistoryDialog(self.db, date_iso, self)
+        if dlg.exec() == QDialog.Accepted:
+            # refresh editor + calendar (head pointer may have changed)
+            self._load_selected_date(date_iso)
+            self._refresh_calendar_marks()
+
+    # ----------- Settings handler ------------#
     def _open_settings(self):
         dlg = SettingsDialog(self.cfg, self.db, self)
         if dlg.exec() != QDialog.Accepted:
@@ -414,6 +447,7 @@ class MainWindow(QMainWindow):
             self._load_selected_date()
             self._refresh_calendar_marks()
 
+    # ------------ Window positioning --------------- #
     def _restore_window_position(self):
         geom = self.settings.value("main/geometry", None)
         state = self.settings.value("main/windowState", None)
@@ -447,6 +481,7 @@ class MainWindow(QMainWindow):
         # Center the window in that screen’s available area
         self.move(r.center() - self.rect().center())
 
+    # ----------------- Export handler ----------------- #
     @Slot()
     def _export(self):
         try:

@@ -26,6 +26,7 @@ There is deliberately no network connectivity or syncing intended.
  * Search
  * Automatic periodic saving (or explicitly save)
  * Transparent integrity checking of the database when it opens
+ * Automatic locking of the app after a period of inactivity (default 15 min)
  * Rekey the database (change the password)
  * Export the database to json, txt, html or csv
 

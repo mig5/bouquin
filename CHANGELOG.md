@@ -1,3 +1,7 @@
+# 0.1.5
+
+ * Refactor schema to support versioning of pages. Add HistoryDialog and diff with ability to revert.
+
 # 0.1.4
 
  * Add auto-lock of app (configurable in Settings, defaults to 15 minutes)

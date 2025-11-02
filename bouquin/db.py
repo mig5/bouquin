@@ -26,14 +26,17 @@ class DBManager:
         self.conn: sqlite.Connection | None = None
 
     def connect(self) -> bool:
+        """
+        Open, decrypt and install schema on the database.
+        """
         # Ensure parent dir exists
         self.cfg.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite.connect(str(self.cfg.path))
         self.conn.row_factory = sqlite.Row
         cur = self.conn.cursor()
         cur.execute(f"PRAGMA key = '{self.cfg.key}';")
-        cur.execute("PRAGMA journal_mode = WAL;")
-        self.conn.commit()
+        cur.execute("PRAGMA foreign_keys = ON;")
+        cur.execute("PRAGMA journal_mode = WAL;").fetchone()
         try:
             self._integrity_ok()
         except Exception:
@@ -44,15 +47,18 @@ class DBManager:
         return True
 
     def _integrity_ok(self) -> bool:
+        """
+        Runs the cipher_integrity_check PRAGMA on the database.
+        """
         cur = self.conn.cursor()
         cur.execute("PRAGMA cipher_integrity_check;")
         rows = cur.fetchall()
 
-        # OK
+        # OK: nothing returned
         if not rows:
             return
 
-        # Not OK
+        # Not OK: rows of problems returned
         details = "; ".join(str(r[0]) for r in rows if r and r[0] is not None)
         raise sqlite.IntegrityError(
             "SQLCipher integrity check failed"
@@ -60,16 +66,62 @@ class DBManager:
         )
 
     def _ensure_schema(self) -> None:
+        """
+        Install the expected schema on the database.
+        We also handle upgrades here.
+        """
         cur = self.conn.cursor()
-        cur.execute(
+        # Always keep FKs on
+        cur.execute("PRAGMA foreign_keys = ON;")
+
+        # Create new versioned schema if missing (< 0.1.5)
+        cur.executescript(
             """
-            CREATE TABLE IF NOT EXISTS entries (
-                date TEXT PRIMARY KEY, -- ISO yyyy-MM-dd
-                content TEXT NOT NULL
+            CREATE TABLE IF NOT EXISTS pages (
+                date TEXT PRIMARY KEY,                 -- yyyy-MM-dd
+                current_version_id INTEGER,
+                FOREIGN KEY(current_version_id) REFERENCES versions(id) ON DELETE SET NULL
             );
+
+            CREATE TABLE IF NOT EXISTS versions (
+                id INTEGER PRIMARY KEY,
+                date TEXT NOT NULL,                    -- FK to pages.date
+                version_no INTEGER NOT NULL,           -- 1,2,3… per date
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                note   TEXT,
+                content TEXT NOT NULL,
+                FOREIGN KEY(date) REFERENCES pages(date) ON DELETE CASCADE
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_versions_date_ver ON versions(date, version_no);
+            CREATE INDEX IF NOT EXISTS ix_versions_date_created ON versions(date, created_at);
             """
         )
-        cur.execute("PRAGMA user_version = 1;")
+
+        # If < 0.1.5 'entries' table exists and nothing has been migrated yet, try to migrate.
+        pre_0_1_5 = cur.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entries';"
+        ).fetchone()
+        pages_empty = cur.execute("SELECT 1 FROM pages LIMIT 1;").fetchone() is None
+
+        if pre_0_1_5 and pages_empty:
+            # Seed pages and versions (all as version 1)
+            cur.execute("INSERT OR IGNORE INTO pages(date) SELECT date FROM entries;")
+            cur.execute(
+                "INSERT INTO versions(date, version_no, content) "
+                "SELECT date, 1, content FROM entries;"
+            )
+            # Point head to v1 for each page
+            cur.execute(
+                """
+                UPDATE pages
+                SET current_version_id = (
+                    SELECT v.id FROM versions v
+                    WHERE v.date = pages.date AND v.version_no = 1
+                );
+                """
+            )
+            cur.execute("DROP TABLE IF EXISTS entries;")
         self.conn.commit()
 
     def rekey(self, new_key: str) -> None:
@@ -92,42 +144,214 @@ class DBManager:
             raise sqlite.Error("Re-open failed after rekey")
 
     def get_entry(self, date_iso: str) -> str:
+        """
+        Get a single entry by its date.
+        """
         cur = self.conn.cursor()
-        cur.execute("SELECT content FROM entries WHERE date = ?;", (date_iso,))
-        row = cur.fetchone()
+        row = cur.execute(
+            """
+            SELECT v.content
+            FROM pages p
+            JOIN versions v ON v.id = p.current_version_id
+            WHERE p.date = ?;
+            """,
+            (date_iso,),
+        ).fetchone()
         return row[0] if row else ""
 
     def upsert_entry(self, date_iso: str, content: str) -> None:
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO entries(date, content) VALUES(?, ?)
-            ON CONFLICT(date) DO UPDATE SET content = excluded.content;
-            """,
-            (date_iso, content),
-        )
-        self.conn.commit()
+        """
+        Insert or update an entry.
+        """
+        # Make a new version and set it as current
+        self.save_new_version(date_iso, content, note=None, set_current=True)
 
     def search_entries(self, text: str) -> list[str]:
+        """
+        Search for entries by term. This only works against the latest
+        version of the page.
+        """
         cur = self.conn.cursor()
         pattern = f"%{text}%"
-        return cur.execute(
-            "SELECT * FROM entries WHERE TRIM(content) LIKE ?", (pattern,)
+        rows = cur.execute(
+            """
+            SELECT p.date, v.content
+            FROM pages AS p
+            JOIN versions AS v
+              ON v.id = p.current_version_id
+            WHERE TRIM(v.content) <> ''
+              AND v.content LIKE LOWER(?) ESCAPE '\\'
+            ORDER BY p.date DESC;
+            """,
+            (pattern,),
         ).fetchall()
+        return [(r[0], r[1]) for r in rows]
 
     def dates_with_content(self) -> list[str]:
+        """
+        Find all entries and return the dates of them.
+        This is used to mark the calendar days in bold if they contain entries.
+        """
         cur = self.conn.cursor()
-        cur.execute("SELECT date FROM entries WHERE TRIM(content) <> '';")
-        return [r[0] for r in cur.fetchall()]
+        rows = cur.execute(
+            """
+            SELECT p.date
+            FROM pages p
+            JOIN versions v ON v.id = p.current_version_id
+            WHERE TRIM(v.content) <> ''
+            ORDER BY p.date;
+            """
+        ).fetchall()
+        return [r[0] for r in rows]
 
-    def get_all_entries(self) -> List[Entry]:
+    # ------------------------- Versioning logic here ------------------------#
+    def save_new_version(
+        self,
+        date_iso: str,
+        content: str,
+        note: str | None = None,
+        set_current: bool = True,
+    ) -> tuple[int, int]:
+        """
+        Append a new version for this date. Returns (version_id, version_no).
+        If set_current=True, flips the page head to this new version.
+        """
+        if self.conn is None:
+            raise RuntimeError("Database is not connected")
+        with self.conn:  # transaction
+            cur = self.conn.cursor()
+            # Ensure page row exists
+            cur.execute("INSERT OR IGNORE INTO pages(date) VALUES (?);", (date_iso,))
+            # Next version number
+            row = cur.execute(
+                "SELECT COALESCE(MAX(version_no), 0) AS maxv FROM versions WHERE date=?;",
+                (date_iso,),
+            ).fetchone()
+            next_ver = int(row["maxv"]) + 1
+            # Insert the version
+            cur.execute(
+                "INSERT INTO versions(date, version_no, content, note) "
+                "VALUES (?,?,?,?);",
+                (date_iso, next_ver, content, note),
+            )
+            ver_id = cur.lastrowid
+            if set_current:
+                cur.execute(
+                    "UPDATE pages SET current_version_id=? WHERE date=?;",
+                    (ver_id, date_iso),
+                )
+            return ver_id, next_ver
+
+    def list_versions(self, date_iso: str) -> list[dict]:
+        """
+        Returns history for a given date (newest first), including which one is current.
+        Each item: {id, version_no, created_at, note, is_current}
+        """
         cur = self.conn.cursor()
-        rows = cur.execute("SELECT date, content FROM entries ORDER BY date").fetchall()
-        return [(row["date"], row["content"]) for row in rows]
+        rows = cur.execute(
+            """
+            SELECT v.id, v.version_no, v.created_at, v.note,
+                   CASE WHEN v.id = p.current_version_id THEN 1 ELSE 0 END AS is_current
+            FROM versions v
+            LEFT JOIN pages p ON p.date = v.date
+            WHERE v.date = ?
+            ORDER BY v.version_no DESC;
+            """,
+            (date_iso,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_version(
+        self,
+        *,
+        date_iso: str | None = None,
+        version_no: int | None = None,
+        version_id: int | None = None,
+    ) -> dict | None:
+        """
+        Fetch a specific version by (date, version_no) OR by version_id.
+        Returns a dict with keys: id, date, version_no, created_at, note, content.
+        """
+        cur = self.conn.cursor()
+        if version_id is not None:
+            row = cur.execute(
+                "SELECT id, date, version_no, created_at, note, content "
+                "FROM versions WHERE id=?;",
+                (version_id,),
+            ).fetchone()
+        else:
+            if date_iso is None or version_no is None:
+                raise ValueError(
+                    "Provide either version_id OR (date_iso and version_no)"
+                )
+            row = cur.execute(
+                "SELECT id, date, version_no, created_at, note, content "
+                "FROM versions WHERE date=? AND version_no=?;",
+                (date_iso, version_no),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def revert_to_version(
+        self,
+        date_iso: str,
+        *,
+        version_no: int | None = None,
+        version_id: int | None = None,
+    ) -> None:
+        """
+        Point the page head (pages.current_version_id) to an existing version.
+        Fast revert: no content is rewritten.
+        """
+        if self.conn is None:
+            raise RuntimeError("Database is not connected")
+        cur = self.conn.cursor()
+
+        if version_id is None:
+            if version_no is None:
+                raise ValueError("Provide version_no or version_id")
+            row = cur.execute(
+                "SELECT id FROM versions WHERE date=? AND version_no=?;",
+                (date_iso, version_no),
+            ).fetchone()
+            if row is None:
+                raise ValueError("Version not found for this date")
+            version_id = int(row["id"])
+        else:
+            # Ensure that version_id belongs to the given date
+            row = cur.execute(
+                "SELECT date FROM versions WHERE id=?;", (version_id,)
+            ).fetchone()
+            if row is None or row["date"] != date_iso:
+                raise ValueError("version_id does not belong to the given date")
+
+        with self.conn:
+            cur.execute(
+                "UPDATE pages SET current_version_id=? WHERE date=?;",
+                (version_id, date_iso),
+            )
+
+    # ------------------------- Export logic here ------------------------#
+    def get_all_entries(self) -> List[Entry]:
+        """
+        Get all entries. Used for exports.
+        """
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT p.date, v.content
+            FROM pages p
+            JOIN versions v ON v.id = p.current_version_id
+            ORDER BY p.date;
+            """
+        ).fetchall()
+        return [(r[0], r[1]) for r in rows]
 
     def export_json(
         self, entries: Sequence[Entry], file_path: str, pretty: bool = True
     ) -> None:
+        """
+        Export to json.
+        """
         data = [{"date": d, "content": c} for d, c in entries]
         with open(file_path, "w", encoding="utf-8") as f:
             if pretty:
