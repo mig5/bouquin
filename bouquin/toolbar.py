@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QKeySequence, QFont, QFontDatabase
 from PySide6.QtWidgets import QToolBar
 
 
@@ -18,82 +18,131 @@ class ToolBar(QToolBar):
 
     def __init__(self, parent=None):
         super().__init__("Format", parent)
-        self._build_actions()
         self.setObjectName("Format")
+        self.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self._build_actions()
+        self._apply_toolbar_styles()
 
     def _build_actions(self):
-        # Bold
-        bold = QAction("Bold", self)
-        bold.setShortcut("Ctrl+B")
-        bold.triggered.connect(self.boldRequested)
+        self.actBold = QAction("Bold", self)
+        self.actBold.setShortcut(QKeySequence.Bold)
+        self.actBold.triggered.connect(self.boldRequested)
 
-        italic = QAction("Italic", self)
-        italic.setShortcut("Ctrl+I")
-        italic.triggered.connect(self.italicRequested)
+        self.actItalic = QAction("Italic", self)
+        self.actItalic.setShortcut(QKeySequence.Italic)
+        self.actItalic.triggered.connect(self.italicRequested)
 
-        underline = QAction("Underline", self)
-        underline.setShortcut("Ctrl+U")
-        underline.triggered.connect(self.underlineRequested)
+        self.actUnderline = QAction("Underline", self)
+        self.actUnderline.setShortcut(QKeySequence.Underline)
+        self.actUnderline.triggered.connect(self.underlineRequested)
 
-        strike = QAction("Strikethrough", self)
-        strike.setShortcut("Ctrl+-")
-        strike.triggered.connect(self.strikeRequested)
+        self.actStrike = QAction("Strikethrough", self)
+        self.actStrike.setShortcut("Ctrl+-")
+        self.actStrike.triggered.connect(self.strikeRequested)
 
-        code = QAction("<code>", self)
-        code.setShortcut("Ctrl+`")
-        code.triggered.connect(self.codeRequested)
+        self.actCode = QAction("Inline code", self)
+        self.actCode.setShortcut("Ctrl+`")
+        self.actCode.triggered.connect(self.codeRequested)
 
         # Headings
-        h1 = QAction("H1", self)
-        h1.setShortcut("Ctrl+1")
-        h2 = QAction("H2", self)
-        h2.setShortcut("Ctrl+2")
-        h3 = QAction("H3", self)
-        h3.setShortcut("Ctrl+3")
-        normal = QAction("Normal", self)
-        normal.setShortcut("Ctrl+P")
-
-        h1.triggered.connect(lambda: self.headingRequested.emit(24))
-        h2.triggered.connect(lambda: self.headingRequested.emit(18))
-        h3.triggered.connect(lambda: self.headingRequested.emit(14))
-        normal.triggered.connect(lambda: self.headingRequested.emit(0))
+        self.actH1 = QAction("Heading 1", self)
+        self.actH2 = QAction("Heading 2", self)
+        self.actH3 = QAction("Heading 3", self)
+        self.actNormal = QAction("Normal text", self)
+        self.actH1.setShortcut("Ctrl+1")
+        self.actH2.setShortcut("Ctrl+2")
+        self.actH3.setShortcut("Ctrl+3")
+        self.actNormal.setShortcut("Ctrl+N")
+        self.actH1.triggered.connect(lambda: self.headingRequested.emit(24))
+        self.actH2.triggered.connect(lambda: self.headingRequested.emit(18))
+        self.actH3.triggered.connect(lambda: self.headingRequested.emit(14))
+        self.actNormal.triggered.connect(lambda: self.headingRequested.emit(0))
 
         # Lists
-        bullets = QAction("• Bullets", self)
-        bullets.triggered.connect(self.bulletsRequested)
-        numbers = QAction("1. Numbered", self)
-        numbers.triggered.connect(self.numbersRequested)
+        self.actBullets = QAction("Bulleted list", self)
+        self.actBullets.triggered.connect(self.bulletsRequested)
+        self.actNumbers = QAction("Numbered list", self)
+        self.actNumbers.triggered.connect(self.numbersRequested)
 
         # Alignment
-        left = QAction("Align Left", self)
-        center = QAction("Align Center", self)
-        right = QAction("Align Right", self)
-
-        left.triggered.connect(
-            lambda: self.alignRequested.emit(Qt.AlignmentFlag.AlignLeft)
+        self.actAlignL = QAction("Align left", self)
+        self.actAlignC = QAction("Align center", self)
+        self.actAlignR = QAction("Align right", self)
+        self.actAlignL.triggered.connect(lambda: self.alignRequested.emit(Qt.AlignLeft))
+        self.actAlignC.triggered.connect(
+            lambda: self.alignRequested.emit(Qt.AlignHCenter)
         )
-        center.triggered.connect(
-            lambda: self.alignRequested.emit(Qt.AlignmentFlag.AlignHCenter)
-        )
-        right.triggered.connect(
-            lambda: self.alignRequested.emit(Qt.AlignmentFlag.AlignRight)
+        self.actAlignR.triggered.connect(
+            lambda: self.alignRequested.emit(Qt.AlignRight)
         )
 
         self.addActions(
             [
-                bold,
-                italic,
-                underline,
-                strike,
-                code,
-                h1,
-                h2,
-                h3,
-                normal,
-                bullets,
-                numbers,
-                left,
-                center,
-                right,
+                self.actBold,
+                self.actItalic,
+                self.actUnderline,
+                self.actStrike,
+                self.actCode,
+                self.actH1,
+                self.actH2,
+                self.actH3,
+                self.actNormal,
+                self.actBullets,
+                self.actNumbers,
+                self.actAlignL,
+                self.actAlignC,
+                self.actAlignR,
             ]
         )
+
+    def _apply_toolbar_styles(self):
+        self._style_letter_button(self.actBold, "B", bold=True)
+        self._style_letter_button(self.actItalic, "I", italic=True)
+        self._style_letter_button(self.actUnderline, "U", underline=True)
+        self._style_letter_button(self.actStrike, "S", strike=True)
+
+        # Monospace look for code; use a fixed font
+        code_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        self._style_letter_button(self.actCode, "</>", custom_font=code_font)
+
+        # Headings
+        self._style_letter_button(self.actH1, "H1")
+        self._style_letter_button(self.actH2, "H2")
+        self._style_letter_button(self.actH3, "H3")
+        self._style_letter_button(self.actNormal, "N")
+
+        # Lists
+        self._style_letter_button(self.actBullets, "•")
+        self._style_letter_button(self.actNumbers, "1.")
+
+        # Alignment
+        self._style_letter_button(self.actAlignL, "L")
+        self._style_letter_button(self.actAlignC, "C")
+        self._style_letter_button(self.actAlignR, "R")
+
+    def _style_letter_button(
+        self,
+        action: QAction,
+        text: str,
+        *,
+        bold: bool = False,
+        italic: bool = False,
+        underline: bool = False,
+        strike: bool = False,
+        custom_font: QFont | None = None,
+    ):
+        btn = self.widgetForAction(action)
+        if not btn:
+            return
+        btn.setText(text)
+        f = custom_font if custom_font is not None else QFont(btn.font())
+        if custom_font is None:
+            f.setBold(bold)
+            f.setItalic(italic)
+            f.setUnderline(underline)
+            f.setStrikeOut(strike)
+        btn.setFont(f)
+
+        # Keep accessibility/tooltip readable
+        btn.setToolTip(action.text())
+        btn.setAccessibleName(action.text())
