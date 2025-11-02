@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from PySide6.QtGui import (
-    QBrush,
     QColor,
     QDesktopServices,
     QFont,
@@ -14,7 +13,6 @@ from PySide6.QtGui import (
 from PySide6.QtCore import Qt, QUrl, Signal, Slot, QRegularExpression
 from PySide6.QtWidgets import QTextEdit
 
-from .url_highlighter import UrlHighlighter
 
 class Editor(QTextEdit):
     linkActivated = Signal(str)
@@ -55,13 +53,13 @@ class Editor(QTextEdit):
             while it.hasNext():
                 m = it.next()
                 start = block.position() + m.capturedStart()
-                end   = start + m.capturedLength()
+                end = start + m.capturedLength()
 
                 cur.setPosition(start)
                 cur.setPosition(end, QTextCursor.KeepAnchor)
 
                 fmt = cur.charFormat()
-                if fmt.isAnchor():   # already linkified; skip
+                if fmt.isAnchor():  # already linkified; skip
                     continue
 
                 href = m.captured(0)
@@ -110,7 +108,7 @@ class Editor(QTextEdit):
 
         # When pressing Enter/return key, insert first, then neutralise the empty block’s inline format
         if key in (Qt.Key_Return, Qt.Key_Enter):
-            super().keyPressEvent(e) # create the new (possibly empty) paragraph
+            super().keyPressEvent(e)  # create the new (possibly empty) paragraph
 
             # If we're on an empty block, clear the insertion char format so the
             # *next* Enter will create another new line (not consume the press to reset formatting).
@@ -156,7 +154,11 @@ class Editor(QTextEdit):
     def apply_weight(self):
         cur = self.currentCharFormat()
         fmt = QTextCharFormat()
-        weight = QFont.Weight.Normal if cur.fontWeight() == QFont.Weight.Bold else QFont.Weight.Bold
+        weight = (
+            QFont.Weight.Normal
+            if cur.fontWeight() == QFont.Weight.Bold
+            else QFont.Weight.Bold
+        )
         fmt.setFontWeight(weight)
         self.merge_on_sel(fmt)
 

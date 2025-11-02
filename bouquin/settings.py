@@ -21,9 +21,11 @@ def get_settings() -> QSettings:
 def load_db_config() -> DBConfig:
     s = get_settings()
     path = Path(s.value("db/path", str(default_db_path())))
-    return DBConfig(path=path, key="")
+    key = s.value("db/key", "")
+    return DBConfig(path=path, key=key)
 
 
 def save_db_config(cfg: DBConfig) -> None:
     s = get_settings()
     s.setValue("db/path", str(cfg.path))
+    s.setValue("db/key", str(cfg.key))

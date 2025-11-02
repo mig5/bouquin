@@ -3,8 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFormLayout,
+    QFrame,
+    QGroupBox,
+    QLabel,
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
@@ -15,9 +19,12 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QMessageBox,
 )
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QPalette
+
 
 from .db import DBConfig, DBManager
-from .settings import save_db_config
+from .settings import load_db_config, save_db_config
 from .key_prompt import KeyPrompt
 
 
@@ -27,10 +34,11 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Settings")
         self._cfg = DBConfig(path=cfg.path, key="")
         self._db = db
+        self.key = ""
 
         form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
         self.setSizeGripEnabled(True)
 
         self.path_edit = QLineEdit(str(self._cfg.path))
@@ -47,18 +55,65 @@ class SettingsDialog(QDialog):
         h.setStretch(1, 0)
         form.addRow("Database path", path_row)
 
+        # Encryption settings
+        enc_group = QGroupBox("Encryption")
+        enc = QVBoxLayout(enc_group)
+        enc.setContentsMargins(12, 8, 12, 12)
+        enc.setSpacing(6)
+
+        # Checkbox to remember key
+        self.save_key_btn = QCheckBox("Remember key")
+        current_settings = load_db_config()
+        if current_settings.key:
+            self.save_key_btn.setChecked(True)
+        else:
+            self.save_key_btn.setChecked(False)
+        self.save_key_btn.setCursor(Qt.PointingHandCursor)
+        self.save_key_btn.toggled.connect(self.save_key_btn_clicked)
+        enc.addWidget(self.save_key_btn, 0, Qt.AlignLeft)
+
+        # Explanation for remembering key
+        self.save_key_label = QLabel(
+            "If you don't want to be prompted for your encryption key, check this to remember it. "
+            "WARNING: the key is saved to disk and could be recoverable if your disk is compromised."
+        )
+        self.save_key_label.setWordWrap(True)
+        self.save_key_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        # make it look secondary
+        pal = self.save_key_label.palette()
+        pal.setColor(self.save_key_label.foregroundRole(), pal.color(QPalette.Mid))
+        self.save_key_label.setPalette(pal)
+
+        exp_row = QHBoxLayout()
+        exp_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the checkbox
+        exp_row.addWidget(self.save_key_label)
+        enc.addLayout(exp_row)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        enc.addWidget(line)
+
         # Change key button
         self.rekey_btn = QPushButton("Change key")
+        self.rekey_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.rekey_btn.clicked.connect(self._change_key)
+        enc.addWidget(self.rekey_btn, 0, Qt.AlignLeft)
 
+        # Put the group into the form so it spans the full width nicely
+        form.addRow(enc_group)
+
+        # Buttons
         bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         bb.accepted.connect(self._save)
         bb.rejected.connect(self.reject)
 
+        # Root layout (adjust margins/spacing a bit)
         v = QVBoxLayout(self)
+        v.setContentsMargins(12, 12, 12, 12)
+        v.setSpacing(10)
         v.addLayout(form)
-        v.addWidget(self.rekey_btn)
-        v.addWidget(bb)
+        v.addWidget(bb, 0, Qt.AlignRight)
 
     def _browse(self):
         p, _ = QFileDialog.getSaveFileName(
@@ -71,7 +126,7 @@ class SettingsDialog(QDialog):
             self.path_edit.setText(p)
 
     def _save(self):
-        self._cfg = DBConfig(path=Path(self.path_edit.text()), key="")
+        self._cfg = DBConfig(path=Path(self.path_edit.text()), key=self.key)
         save_db_config(self._cfg)
         self.accept()
 
@@ -96,6 +151,18 @@ class SettingsDialog(QDialog):
             )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not change key:\n{e}")
+
+    @Slot(bool)
+    def save_key_btn_clicked(self, checked: bool):
+        if checked:
+            p1 = KeyPrompt(
+                self, title="Enter your key", message="Enter the encryption key"
+            )
+            if p1.exec() != QDialog.Accepted:
+                return
+            self.key = p1.key()
+        self._cfg = DBConfig(path=Path(self.path_edit.text()), key=self.key)
+        save_db_config(self._cfg)
 
     @property
     def config(self) -> DBConfig:

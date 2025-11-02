@@ -9,7 +9,7 @@ It uses [SQLCipher bindings](https://pypi.org/project/sqlcipher3-wheels) as a dr
 for SQLite3. This means that the underlying database for the notebook is encrypted at rest.
 
 To increase security, the SQLCipher key is requested when the app is opened, and is not written
-to disk.
+to disk unless the user configures it to be in the settings.
 
 There is deliberately no network connectivity or syncing intended.
 
@@ -34,6 +34,8 @@ There is deliberately no network connectivity or syncing intended.
 
 
 ## How to install
+
+Make sure you have `libxcb-cursor0` installed (it may be called something else on non-Debian distributions).
 
 ### From source
 

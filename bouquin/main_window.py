@@ -26,7 +26,7 @@ from .db import DBManager
 from .editor import Editor
 from .key_prompt import KeyPrompt
 from .search import Search
-from .settings import APP_NAME, load_db_config, save_db_config
+from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .toolbar import ToolBar
 
@@ -44,9 +44,12 @@ class MainWindow(QMainWindow):
         else:
             first_time = False
 
-        # Always prompt for the key (we never store it)
-        if not self._prompt_for_key_until_valid(first_time):
-            sys.exit(1)
+        # Prompt for the key unless it is found in config
+        if not self.cfg.key:
+            if not self._prompt_for_key_until_valid(first_time):
+                sys.exit(1)
+        else:
+            self._try_connect()
 
         # ---- UI: Left fixed panel (calendar) + right editor -----------------
         self.calendar = QCalendarWidget()
@@ -149,7 +152,7 @@ class MainWindow(QMainWindow):
         self._refresh_calendar_marks()
 
         # Restore window position from settings
-        self.settings = QSettings(APP_NAME)
+        self.settings = QSettings(APP_ORG, APP_NAME)
         self._restore_window_position()
 
     def _try_connect(self) -> bool:
@@ -328,11 +331,12 @@ class MainWindow(QMainWindow):
         return False
 
     def _move_to_cursor_screen_center(self):
-        screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        screen = (
+            QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        )
         r = screen.availableGeometry()
         # Center the window in that screen’s available area
         self.move(r.center() - self.rect().center())
-
 
     def closeEvent(self, event):
         try:
