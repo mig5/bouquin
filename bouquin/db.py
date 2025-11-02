@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import csv
+import html
+import json
+import os
+
 from dataclasses import dataclass
 from pathlib import Path
-
 from sqlcipher3 import dbapi2 as sqlite
+from typing import List, Sequence, Tuple
+
+Entry = Tuple[str, str]
 
 
 @dataclass
@@ -21,6 +28,7 @@ class DBManager:
         # Ensure parent dir exists
         self.cfg.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite.connect(str(self.cfg.path))
+        self.conn.row_factory = sqlite.Row
         cur = self.conn.cursor()
         cur.execute(f"PRAGMA key = '{self.cfg.key}';")
         cur.execute("PRAGMA journal_mode = WAL;")
@@ -102,13 +110,115 @@ class DBManager:
     def search_entries(self, text: str) -> list[str]:
         cur = self.conn.cursor()
         pattern = f"%{text}%"
-        cur.execute("SELECT * FROM entries WHERE TRIM(content) LIKE ?", (pattern,))
-        return [r for r in cur.fetchall()]
+        return cur.execute(
+            "SELECT * FROM entries WHERE TRIM(content) LIKE ?", (pattern,)
+        ).fetchall()
 
     def dates_with_content(self) -> list[str]:
         cur = self.conn.cursor()
         cur.execute("SELECT date FROM entries WHERE TRIM(content) <> '';")
         return [r[0] for r in cur.fetchall()]
+
+    def get_all_entries(self) -> List[Entry]:
+        cur = self.conn.cursor()
+        rows = cur.execute("SELECT date, content FROM entries ORDER BY date").fetchall()
+        return [(row["date"], row["content"]) for row in rows]
+
+    def export_json(
+        self, entries: Sequence[Entry], file_path: str, pretty: bool = True
+    ) -> None:
+        data = [{"date": d, "content": c} for d, c in entries]
+        with open(file_path, "w", encoding="utf-8") as f:
+            if pretty:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            else:
+                json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+
+    def export_csv(self, entries: Sequence[Entry], file_path: str) -> None:
+        # utf-8-sig adds a BOM so Excel opens as UTF-8 by default.
+        with open(file_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["date", "content"])  # header
+            writer.writerows(entries)
+
+    def export_txt(
+        self,
+        entries: Sequence[Entry],
+        file_path: str,
+        separator: str = "\n\n— — — — —\n\n",
+        strip_html: bool = True,
+    ) -> None:
+        import re, html as _html
+
+        # Precompiled patterns
+        STYLE_SCRIPT_RE = re.compile(r"(?is)<(script|style)[^>]*>.*?</\1>")
+        COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+        BR_RE = re.compile(r"(?i)<br\\s*/?>")
+        BLOCK_END_RE = re.compile(r"(?i)</(p|div|section|article|li|h[1-6])\\s*>")
+        TAG_RE = re.compile(r"<[^>]+>")
+        WS_ENDS_RE = re.compile(r"[ \\t]+\\n")
+        MULTINEWLINE_RE = re.compile(r"\\n{3,}")
+
+        def _strip(s: str) -> str:
+            # 1) Remove <style> and <script> blocks *including their contents*
+            s = STYLE_SCRIPT_RE.sub("", s)
+            # 2) Remove HTML comments
+            s = COMMENT_RE.sub("", s)
+            # 3) Turn some block-ish boundaries into newlines before removing tags
+            s = BR_RE.sub("\n", s)
+            s = BLOCK_END_RE.sub("\n", s)
+            # 4) Drop remaining tags
+            s = TAG_RE.sub("", s)
+            # 5) Unescape entities (&nbsp; etc.)
+            s = _html.unescape(s)
+            # 6) Tidy whitespace
+            s = WS_ENDS_RE.sub("\n", s)
+            s = MULTINEWLINE_RE.sub("\n\n", s)
+            return s.strip()
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            for i, (d, c) in enumerate(entries):
+                body = _strip(c) if strip_html else c
+                f.write(f"{d}\n{body}\n")
+                if i < len(entries) - 1:
+                    f.write(separator)
+
+    def export_html(
+        self, entries: Sequence[Entry], file_path: str, title: str = "Entries export"
+    ) -> None:
+        parts = [
+            "<!doctype html>",
+            '<html lang="en">',
+            '<meta charset="utf-8">',
+            f"<title>{html.escape(title)}</title>",
+            "<style>body{font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;max-width:900px;margin:auto;}",
+            "article{padding:16px 0;border-bottom:1px solid #ddd;} time{font-weight:600;color:#333;} section{margin-top:8px;}</style>",
+            "<body>",
+            f"<h1>{html.escape(title)}</h1>",
+        ]
+        for d, c in entries:
+            parts.append(
+                f"<article><header><time>{html.escape(d)}</time></header><section>{c}</section></article>"
+            )
+        parts.append("</body></html>")
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(parts))
+
+    def export_by_extension(self, file_path: str) -> None:
+        entries = self.get_all_entries()
+        ext = os.path.splitext(file_path)[1].lower()
+
+        if ext == ".json":
+            self.export_json(entries, file_path)
+        elif ext == ".csv":
+            self.export_csv(entries, file_path)
+        elif ext == ".txt":
+            self.export_txt(entries, file_path)
+        elif ext in {".html", ".htm"}:
+            self.export_html(entries, file_path)
+        else:
+            raise ValueError(f"Unsupported extension: {ext}")
 
     def close(self) -> None:
         if self.conn is not None:

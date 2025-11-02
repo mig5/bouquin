@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import sys
 
-from PySide6.QtCore import QDate, QTimer, Qt, QSettings
+from pathlib import Path
+from PySide6.QtCore import QDate, QTimer, Qt, QSettings, Slot
 from PySide6.QtGui import (
     QAction,
     QCursor,
@@ -14,6 +15,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QCalendarWidget,
     QDialog,
+    QFileDialog,
     QMainWindow,
     QMessageBox,
     QSizePolicy,
@@ -102,15 +104,19 @@ class MainWindow(QMainWindow):
 
         # Menu bar (File)
         mb = self.menuBar()
-        file_menu = mb.addMenu("&Application")
+        file_menu = mb.addMenu("&File")
         act_save = QAction("&Save", self)
         act_save.setShortcut("Ctrl+S")
         act_save.triggered.connect(lambda: self._save_current(explicit=True))
         file_menu.addAction(act_save)
-        act_settings = QAction("S&ettings", self)
-        act_settings.setShortcut("Ctrl+E")
+        act_settings = QAction("Settin&gs", self)
+        act_settings.setShortcut("Ctrl+G")
         act_settings.triggered.connect(self._open_settings)
         file_menu.addAction(act_settings)
+        act_export = QAction("&Export", self)
+        act_export.setShortcut("Ctrl+E")
+        act_export.triggered.connect(self._export)
+        file_menu.addAction(act_export)
         file_menu.addSeparator()
         act_quit = QAction("&Quit", self)
         act_quit.setShortcut("Ctrl+Q")
@@ -337,6 +343,50 @@ class MainWindow(QMainWindow):
         r = screen.availableGeometry()
         # Center the window in that screen’s available area
         self.move(r.center() - self.rect().center())
+
+    @Slot()
+    def _export(self):
+        try:
+            self.export_dialog()
+        except Exception as e:
+            QMessageBox.critical(self, "Export failed", str(e))
+
+    def export_dialog(self) -> None:
+        filters = "Text (*.txt);;" "JSON (*.json);;" "CSV (*.csv);;" "HTML (*.html);;"
+
+        start_dir = os.path.join(os.path.expanduser("~"), "Documents")
+        filename, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export entries", start_dir, filters
+        )
+        if not filename:
+            return  # user cancelled
+
+        default_ext = {
+            "Text (*.txt)": ".txt",
+            "JSON (*.json)": ".json",
+            "CSV (*.csv)": ".csv",
+            "HTML (*.html)": ".html",
+        }.get(selected_filter, ".txt")
+
+        if not Path(filename).suffix:
+            filename += default_ext
+
+        try:
+            entries = self.db.get_all_entries()
+            if selected_filter.startswith("Text"):
+                self.db.export_txt(entries, filename)
+            elif selected_filter.startswith("JSON"):
+                self.db.export_json(entries, filename)
+            elif selected_filter.startswith("CSV"):
+                self.db.export_csv(entries, filename)
+            elif selected_filter.startswith("HTML"):
+                self.bd.export_html(entries, filename)
+            else:
+                self.bd.export_by_extension(entries, filename)
+
+            QMessageBox.information(self, "Export complete", f"Saved to:\n{filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export failed", str(e))
 
     def closeEvent(self, event):
         try:

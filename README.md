@@ -19,18 +19,15 @@ There is deliberately no network connectivity or syncing intended.
 
 ## Features
 
+ * Data is encrypted at rest
+ * Encryption key is prompted for and never stored, unless user chooses to via Settings
  * Every 'page' is linked to the calendar day
  * Text is HTML with basic styling
  * Search
  * Automatic periodic saving (or explicitly save)
  * Transparent integrity checking of the database when it opens
  * Rekey the database (change the password)
-
-
-## Yet to do
-
- * Taxonomy/tagging
- * Export to other formats (plaintext, json, sql etc)
+ * Export the database to json, txt, html or csv
 
 
 ## How to install

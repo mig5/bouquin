@@ -6,6 +6,7 @@
  * Explain the purpose of the encryption key for first-time use
  * Support saving the encryption key to the settings file to avoid being prompted (off by default)
  * Abbreviated toolbar symbols to keep things tidier. Add tooltips
+ * Add ability to export the database to different formats
 
 # 0.1.2
 
