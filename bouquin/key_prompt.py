@@ -14,8 +14,8 @@ class KeyPrompt(QDialog):
     def __init__(
         self,
         parent=None,
-        title: str = "Unlock database",
-        message: str = "Enter SQLCipher key",
+        title: str = "Enter key",
+        message: str = "Enter key",
     ):
         super().__init__(parent)
         self.setWindowTitle(title)

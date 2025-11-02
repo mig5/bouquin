@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 
 from PySide6.QtCore import QDate, QTimer, Qt, QSettings
@@ -37,8 +38,14 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1000, 650)
 
         self.cfg = load_db_config()
+        if not os.path.exists(self.cfg.path):
+            # Fresh database/first time use, so guide the user re: setting a key
+            first_time = True
+        else:
+            first_time = False
+
         # Always prompt for the key (we never store it)
-        if not self._prompt_for_key_until_valid():
+        if not self._prompt_for_key_until_valid(first_time):
             sys.exit(1)
 
         # ---- UI: Left fixed panel (calendar) + right editor -----------------
@@ -161,12 +168,18 @@ class MainWindow(QMainWindow):
             return False
         return ok
 
-    def _prompt_for_key_until_valid(self) -> bool:
+    def _prompt_for_key_until_valid(self, first_time: bool) -> bool:
         """
         Prompt for the SQLCipher key.
         """
+        if first_time:
+            title = "Set an encryption key"
+            message = "Bouquin encrypts your data.\n\nPlease create a strong passphrase to encrypt the notebook.\n\nYou can always change it later!"
+        else:
+            title = "Unlock encrypted notebook"
+            message = "Enter your key to unlock the notebook"
         while True:
-            dlg = KeyPrompt(self, message="Enter a key to unlock the notebook")
+            dlg = KeyPrompt(self, title, message)
             if dlg.exec() != QDialog.Accepted:
                 return False
             self.cfg.key = dlg.key()

@@ -76,11 +76,11 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _change_key(self):
-        p1 = KeyPrompt(self, title="Change key", message="Enter new key")
+        p1 = KeyPrompt(self, title="Change key", message="Enter a new encryption key")
         if p1.exec() != QDialog.Accepted:
             return
         new_key = p1.key()
-        p2 = KeyPrompt(self, title="Change key", message="Re-enter new key")
+        p2 = KeyPrompt(self, title="Change key", message="Re-enter the new key")
         if p2.exec() != QDialog.Accepted:
             return
         if new_key != p2.key():
@@ -92,7 +92,7 @@ class SettingsDialog(QDialog):
         try:
             self._db.rekey(new_key)
             QMessageBox.information(
-                self, "Key changed", "The database key was updated."
+                self, "Key changed", "The notebook was re-encrypted with the new key!"
             )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not change key:\n{e}")
