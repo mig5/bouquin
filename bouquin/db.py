@@ -17,6 +17,7 @@ Entry = Tuple[str, str]
 class DBConfig:
     path: Path
     key: str
+    idle_minutes: int = 15  # 0 = never lock
 
 
 class DBManager:

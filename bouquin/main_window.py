@@ -4,7 +4,7 @@ import os
 import sys
 
 from pathlib import Path
-from PySide6.QtCore import QDate, QTimer, Qt, QSettings, Slot, QUrl
+from PySide6.QtCore import QDate, QTimer, Qt, QSettings, Slot, QUrl, QEvent
 from PySide6.QtGui import (
     QAction,
     QCursor,
@@ -17,8 +17,10 @@ from PySide6.QtWidgets import (
     QCalendarWidget,
     QDialog,
     QFileDialog,
+    QLabel,
     QMainWindow,
     QMessageBox,
+    QPushButton,
     QSizePolicy,
     QSplitter,
     QVBoxLayout,
@@ -32,6 +34,61 @@ from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .toolbar import ToolBar
+
+
+class _LockOverlay(QWidget):
+    def __init__(self, parent: QWidget, on_unlock: callable):
+        super().__init__(parent)
+        self.setObjectName("LockOverlay")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setGeometry(parent.rect())
+
+        self.setStyleSheet(
+            """
+#LockOverlay { background-color: #ccc; }
+#LockOverlay QLabel { color: #fff; font-size: 18px; }
+#LockOverlay QPushButton {
+    background-color: #f2f2f2;
+    color: #000;
+    padding: 6px 14px;
+    border: 1px solid #808080;
+    border-radius: 6px;
+    font-size: 14px;
+}
+#LockOverlay QPushButton:hover   { background-color: #ffffff; }
+#LockOverlay QPushButton:pressed { background-color: #e6e6e6; }
+"""
+        )
+
+        lay = QVBoxLayout(self)
+        lay.addStretch(1)
+
+        msg = QLabel("Locked due to inactivity")
+        msg.setAlignment(Qt.AlignCenter)
+
+        self._btn = QPushButton("Unlock")
+        self._btn.setFixedWidth(200)
+        self._btn.setCursor(Qt.PointingHandCursor)
+        self._btn.setAutoDefault(True)
+        self._btn.setDefault(True)
+        self._btn.clicked.connect(on_unlock)
+
+        lay.addWidget(msg, 0, Qt.AlignCenter)
+        lay.addWidget(self._btn, 0, Qt.AlignCenter)
+        lay.addStretch(1)
+
+        self.hide()  # start hidden
+
+    # keep overlay sized with its parent
+    def eventFilter(self, obj, event):
+        if obj is self.parent() and event.type() in (QEvent.Resize, QEvent.Show):
+            self.setGeometry(obj.rect())
+        return False
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self._btn.setFocus()
 
 
 class MainWindow(QMainWindow):
@@ -77,18 +134,18 @@ class MainWindow(QMainWindow):
         self.editor = Editor()
 
         # Toolbar for controlling styling
-        tb = ToolBar()
-        self.addToolBar(tb)
+        self.toolBar = ToolBar()
+        self.addToolBar(self.toolBar)
         # Wire toolbar intents to editor methods
-        tb.boldRequested.connect(self.editor.apply_weight)
-        tb.italicRequested.connect(self.editor.apply_italic)
-        tb.underlineRequested.connect(self.editor.apply_underline)
-        tb.strikeRequested.connect(self.editor.apply_strikethrough)
-        tb.codeRequested.connect(self.editor.apply_code)
-        tb.headingRequested.connect(self.editor.apply_heading)
-        tb.bulletsRequested.connect(self.editor.toggle_bullets)
-        tb.numbersRequested.connect(self.editor.toggle_numbers)
-        tb.alignRequested.connect(self.editor.setAlignment)
+        self.toolBar.boldRequested.connect(self.editor.apply_weight)
+        self.toolBar.italicRequested.connect(self.editor.apply_italic)
+        self.toolBar.underlineRequested.connect(self.editor.apply_underline)
+        self.toolBar.strikeRequested.connect(self.editor.apply_strikethrough)
+        self.toolBar.codeRequested.connect(self.editor.apply_code)
+        self.toolBar.headingRequested.connect(self.editor.apply_heading)
+        self.toolBar.bulletsRequested.connect(self.editor.toggle_bullets)
+        self.toolBar.numbersRequested.connect(self.editor.toggle_numbers)
+        self.toolBar.alignRequested.connect(self.editor.setAlignment)
 
         split = QSplitter()
         split.addWidget(left_panel)
@@ -99,6 +156,24 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(container)
         lay.addWidget(split)
         self.setCentralWidget(container)
+
+        # Idle lock setup
+        self._idle_timer = QTimer(self)
+        self._idle_timer.setSingleShot(True)
+        self._idle_timer.timeout.connect(self._enter_lock)
+        self._apply_idle_minutes(getattr(self.cfg, "idle_minutes", 15))
+        self._idle_timer.start()
+
+        # full-window overlay that sits on top of the central widget
+        self._lock_overlay = _LockOverlay(self.centralWidget(), self._on_unlock_clicked)
+        self.centralWidget().installEventFilter(self._lock_overlay)
+
+        self._locked = False
+
+        # reset idle timer on any key press anywhere in the app
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.instance().installEventFilter(self)
 
         # Status bar for feedback
         self.statusBar().showMessage("Ready", 800)
@@ -155,6 +230,12 @@ class MainWindow(QMainWindow):
         act_docs.triggered.connect(self._open_docs)
         help_menu.addAction(act_docs)
         self.addAction(act_docs)
+        act_bugs = QAction("Report a bug", self)
+        act_bugs.setShortcut("Ctrl+R")
+        act_bugs.setShortcutContext(Qt.ApplicationShortcut)
+        act_bugs.triggered.connect(self._open_bugs)
+        help_menu.addAction(act_bugs)
+        self.addAction(act_bugs)
 
         # Autosave
         self._dirty = False
@@ -305,21 +386,33 @@ class MainWindow(QMainWindow):
 
     def _open_settings(self):
         dlg = SettingsDialog(self.cfg, self.db, self)
-        if dlg.exec() == QDialog.Accepted:
-            new_cfg = dlg.config
-            if new_cfg.path != self.cfg.path:
-                # Save the new path to the notebook
-                self.cfg.path = new_cfg.path
-                save_db_config(self.cfg)
-                self.db.close()
-                # Prompt again for the key for the new path
-                if not self._prompt_for_key_until_valid():
-                    QMessageBox.warning(
-                        self, "Reopen failed", "Could not unlock database at new path."
-                    )
-                    return
-                self._load_selected_date()
-                self._refresh_calendar_marks()
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        new_cfg = dlg.config
+        old_path = self.cfg.path
+
+        # Update in-memory config from the dialog
+        self.cfg.path = new_cfg.path
+        self.cfg.key = new_cfg.key
+        self.cfg.idle_minutes = getattr(new_cfg, "idle_minutes", self.cfg.idle_minutes)
+
+        # Persist once
+        save_db_config(self.cfg)
+
+        # Apply idle setting immediately (restart the timer with new interval if it changed)
+        self._apply_idle_minutes(self.cfg.idle_minutes)
+
+        # If the DB path changed, reconnect
+        if self.cfg.path != old_path:
+            self.db.close()
+            if not self._prompt_for_key_until_valid(first_time=False):
+                QMessageBox.warning(
+                    self, "Reopen failed", "Could not unlock database at new path."
+                )
+                return
+            self._load_selected_date()
+            self._refresh_calendar_marks()
 
     def _restore_window_position(self):
         geom = self.settings.value("main/geometry", None)
@@ -402,9 +495,77 @@ class MainWindow(QMainWindow):
         url_str = "https://git.mig5.net/mig5/bouquin/wiki/Help"
         url = QUrl.fromUserInput(url_str)
         if not QDesktopServices.openUrl(url):
-            QMessageBox.warning(self, "Open Documentation",
-                                f"Couldn't open:\n{url.toDisplayString()}")
+            QMessageBox.warning(
+                self, "Open Documentation", f"Couldn't open:\n{url.toDisplayString()}"
+            )
 
+    def _open_bugs(self):
+        url_str = "https://nr.mig5.net/forms/mig5/contact"
+        url = QUrl.fromUserInput(url_str)
+        if not QDesktopServices.openUrl(url):
+            QMessageBox.warning(
+                self, "Open Documentation", f"Couldn't open:\n{url.toDisplayString()}"
+            )
+
+    # Idle handlers
+    def _apply_idle_minutes(self, minutes: int):
+        minutes = max(0, int(minutes))
+        if not hasattr(self, "_idle_timer"):
+            return
+        if minutes == 0:
+            self._idle_timer.stop()
+            # If you’re currently locked, unlock when user disables the timer:
+            if getattr(self, "_locked", False):
+                try:
+                    self._locked = False
+                    if hasattr(self, "_lock_overlay"):
+                        self._lock_overlay.hide()
+                except Exception:
+                    pass
+        else:
+            self._idle_timer.setInterval(minutes * 60 * 1000)
+            if not getattr(self, "_locked", False):
+                self._idle_timer.start()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress and not self._locked:
+            self._idle_timer.start()
+        return super().eventFilter(obj, event)
+
+    def _enter_lock(self):
+        if self._locked:
+            return
+        self._locked = True
+        if self.menuBar():
+            self.menuBar().setEnabled(False)
+        if self.statusBar():
+            self.statusBar().setEnabled(False)
+        tb = getattr(self, "toolBar", None)
+        if tb:
+            tb.setEnabled(False)
+        self._lock_overlay.show()
+        self._lock_overlay.raise_()
+
+    @Slot()
+    def _on_unlock_clicked(self):
+        try:
+            ok = self._prompt_for_key_until_valid(first_time=False)
+        except Exception as e:
+            QMessageBox.critical(self, "Unlock failed", str(e))
+            return
+        if ok:
+            self._locked = False
+            self._lock_overlay.hide()
+            if self.menuBar():
+                self.menuBar().setEnabled(True)
+            if self.statusBar():
+                self.statusBar().setEnabled(True)
+            tb = getattr(self, "toolBar", None)
+            if tb:
+                tb.setEnabled(True)
+            self._idle_timer.start()
+
+    # Close app handler - save window position and database
     def closeEvent(self, event):
         try:
             # Save window position

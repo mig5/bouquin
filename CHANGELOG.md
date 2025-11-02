@@ -1,3 +1,8 @@
+# 0.1.4
+
+ * Add auto-lock of app (configurable in Settings, defaults to 15 minutes)
+ * Add 'Report a bug' to Help nav
+
 # 0.1.3
 
  * Fix bold toggle

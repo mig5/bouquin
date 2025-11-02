@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QDialogButtonBox,
     QSizePolicy,
+    QSpinBox,
     QMessageBox,
 )
 from PySide6.QtCore import Qt, Slot
@@ -56,7 +57,7 @@ class SettingsDialog(QDialog):
         form.addRow("Database path", path_row)
 
         # Encryption settings
-        enc_group = QGroupBox("Encryption")
+        enc_group = QGroupBox("Encryption and Privacy")
         enc = QVBoxLayout(enc_group)
         enc.setContentsMargins(12, 8, 12, 12)
         enc.setSpacing(6)
@@ -64,10 +65,8 @@ class SettingsDialog(QDialog):
         # Checkbox to remember key
         self.save_key_btn = QCheckBox("Remember key")
         current_settings = load_db_config()
-        if current_settings.key:
-            self.save_key_btn.setChecked(True)
-        else:
-            self.save_key_btn.setChecked(False)
+        self.key = current_settings.key or ""
+        self.save_key_btn.setChecked(bool(self.key))
         self.save_key_btn.setCursor(Qt.PointingHandCursor)
         self.save_key_btn.toggled.connect(self.save_key_btn_clicked)
         enc.addWidget(self.save_key_btn, 0, Qt.AlignLeft)
@@ -100,6 +99,31 @@ class SettingsDialog(QDialog):
         self.rekey_btn.clicked.connect(self._change_key)
         enc.addWidget(self.rekey_btn, 0, Qt.AlignLeft)
 
+        self.idle_spin = QSpinBox()
+        self.idle_spin.setRange(0, 240)
+        self.idle_spin.setSingleStep(1)
+        self.idle_spin.setAccelerated(True)
+        self.idle_spin.setSuffix(" min")
+        self.idle_spin.setSpecialValueText("Never")
+        self.idle_spin.setValue(getattr(cfg, "idle_minutes", 15))
+        enc.addWidget(self.idle_spin, 0, Qt.AlignLeft)
+        # Explanation for idle option (autolock)
+        self.idle_spin_label = QLabel(
+            "Bouquin will automatically lock the notepad after this length of time, after which you'll need to re-enter the key to unlock it. "
+            "Set to 0 (never) to never lock."
+        )
+        self.idle_spin_label.setWordWrap(True)
+        self.idle_spin_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        # make it look secondary
+        spal = self.idle_spin_label.palette()
+        spal.setColor(self.idle_spin_label.foregroundRole(), spal.color(QPalette.Mid))
+        self.idle_spin_label.setPalette(spal)
+
+        spin_row = QHBoxLayout()
+        spin_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the spinbox
+        spin_row.addWidget(self.idle_spin_label)
+        enc.addLayout(spin_row)
+
         # Put the group into the form so it spans the full width nicely
         form.addRow(enc_group)
 
@@ -126,7 +150,12 @@ class SettingsDialog(QDialog):
             self.path_edit.setText(p)
 
     def _save(self):
-        self._cfg = DBConfig(path=Path(self.path_edit.text()), key=self.key)
+        key_to_save = self.key if self.save_key_btn.isChecked() else ""
+        self._cfg = DBConfig(
+            path=Path(self.path_edit.text()),
+            key=key_to_save,
+            idle_minutes=self.idle_spin.value(),
+        )
         save_db_config(self._cfg)
         self.accept()
 
@@ -155,14 +184,18 @@ class SettingsDialog(QDialog):
     @Slot(bool)
     def save_key_btn_clicked(self, checked: bool):
         if checked:
-            p1 = KeyPrompt(
-                self, title="Enter your key", message="Enter the encryption key"
-            )
-            if p1.exec() != QDialog.Accepted:
-                return
-            self.key = p1.key()
-        self._cfg = DBConfig(path=Path(self.path_edit.text()), key=self.key)
-        save_db_config(self._cfg)
+            if not self.key:
+                p1 = KeyPrompt(
+                    self, title="Enter your key", message="Enter the encryption key"
+                )
+                if p1.exec() != QDialog.Accepted:
+                    self.save_key_btn.blockSignals(True)
+                    self.save_key_btn.setChecked(False)
+                    self.save_key_btn.blockSignals(False)
+                    return
+            self.key = p1.key() or ""
+        else:
+            self.key = ""
 
     @property
     def config(self) -> DBConfig:

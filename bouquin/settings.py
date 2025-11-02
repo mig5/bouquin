@@ -22,10 +22,12 @@ def load_db_config() -> DBConfig:
     s = get_settings()
     path = Path(s.value("db/path", str(default_db_path())))
     key = s.value("db/key", "")
-    return DBConfig(path=path, key=key)
+    idle = s.value("db/idle_minutes", 15, type=int)
+    return DBConfig(path=path, key=key, idle_minutes=idle)
 
 
 def save_db_config(cfg: DBConfig) -> None:
     s = get_settings()
     s.setValue("db/path", str(cfg.path))
     s.setValue("db/key", str(cfg.key))
+    s.setValue("db/idle_minutes", str(cfg.idle_minutes))
