@@ -210,14 +210,14 @@ class MainWindow(QMainWindow):
         # Navigate menu with next/previous/today
         nav_menu = mb.addMenu("&Navigate")
         act_prev = QAction("Previous Day", self)
-        act_prev.setShortcut("Ctrl+P")
+        act_prev.setShortcut("Ctrl+<")
         act_prev.setShortcutContext(Qt.ApplicationShortcut)
         act_prev.triggered.connect(lambda: self._adjust_day(-1))
         nav_menu.addAction(act_prev)
         self.addAction(act_prev)
 
         act_next = QAction("Next Day", self)
-        act_next.setShortcut("Ctrl+N")
+        act_next.setShortcut("Ctrl+>")
         act_next.setShortcutContext(Qt.ApplicationShortcut)
         act_next.triggered.connect(lambda: self._adjust_day(1))
         nav_menu.addAction(act_next)

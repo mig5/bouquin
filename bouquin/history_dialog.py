@@ -77,14 +77,14 @@ class HistoryDialog(QDialog):
         self.list.currentItemChanged.connect(self._on_select)
         top.addWidget(self.list, 1)
 
-        # Right: tabs (Preview / Diff vs current)
+        # Right: tabs (Preview / Diff)
         self.tabs = QTabWidget()
         self.preview = QTextBrowser()
         self.preview.setOpenExternalLinks(True)
         self.diff = QTextBrowser()
         self.diff.setOpenExternalLinks(False)
         self.tabs.addTab(self.preview, "Preview")
-        self.tabs.addTab(self.diff, "Diff vs current")
+        self.tabs.addTab(self.diff, "Diff")
         self.tabs.setMinimumSize(500, 650)
         top.addWidget(self.tabs, 2)
 

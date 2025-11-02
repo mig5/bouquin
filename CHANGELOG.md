@@ -1,3 +1,7 @@
+# 0.1.6
+
+ * Fix shortcuts for next/previous day to not collide with Normal text (Ctrl+N)
+
 # 0.1.5
 
  * Refactor schema to support versioning of pages. Add HistoryDialog and diff with ability to revert.
