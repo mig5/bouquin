@@ -4,10 +4,11 @@ import os
 import sys
 
 from pathlib import Path
-from PySide6.QtCore import QDate, QTimer, Qt, QSettings, Slot
+from PySide6.QtCore import QDate, QTimer, Qt, QSettings, Slot, QUrl
 from PySide6.QtGui import (
     QAction,
     QCursor,
+    QDesktopServices,
     QFont,
     QGuiApplication,
     QTextCharFormat,
@@ -145,6 +146,15 @@ class MainWindow(QMainWindow):
         act_today.triggered.connect(self._adjust_today)
         nav_menu.addAction(act_today)
         self.addAction(act_today)
+
+        # Help menu with drop-down
+        help_menu = mb.addMenu("&Help")
+        act_docs = QAction("Documentation", self)
+        act_docs.setShortcut("Ctrl+D")
+        act_docs.setShortcutContext(Qt.ApplicationShortcut)
+        act_docs.triggered.connect(self._open_docs)
+        help_menu.addAction(act_docs)
+        self.addAction(act_docs)
 
         # Autosave
         self._dirty = False
@@ -387,6 +397,13 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Export complete", f"Saved to:\n{filename}")
         except Exception as e:
             QMessageBox.critical(self, "Export failed", str(e))
+
+    def _open_docs(self):
+        url_str = "https://git.mig5.net/mig5/bouquin/wiki/Help"
+        url = QUrl.fromUserInput(url_str)
+        if not QDesktopServices.openUrl(url):
+            QMessageBox.warning(self, "Open Documentation",
+                                f"Couldn't open:\n{url.toDisplayString()}")
 
     def closeEvent(self, event):
         try:

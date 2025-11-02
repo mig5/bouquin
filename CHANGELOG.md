@@ -7,6 +7,7 @@
  * Support saving the encryption key to the settings file to avoid being prompted (off by default)
  * Abbreviated toolbar symbols to keep things tidier. Add tooltips
  * Add ability to export the database to different formats
+ * Add Documentation/Help menu
 
 # 0.1.2
 
