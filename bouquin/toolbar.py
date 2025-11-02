@@ -19,6 +19,7 @@ class ToolBar(QToolBar):
     def __init__(self, parent=None):
         super().__init__("Format", parent)
         self._build_actions()
+        self.setObjectName("Format")
 
     def _build_actions(self):
         # Bold
