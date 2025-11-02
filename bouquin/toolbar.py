@@ -53,7 +53,7 @@ class ToolBar(QToolBar):
         self.actH1.setShortcut("Ctrl+1")
         self.actH2.setShortcut("Ctrl+2")
         self.actH3.setShortcut("Ctrl+3")
-        self.actNormal.setShortcut("Ctrl+N")
+        self.actNormal.setShortcut("Ctrl+O")
         self.actH1.triggered.connect(lambda: self.headingRequested.emit(24))
         self.actH2.triggered.connect(lambda: self.headingRequested.emit(18))
         self.actH3.triggered.connect(lambda: self.headingRequested.emit(14))

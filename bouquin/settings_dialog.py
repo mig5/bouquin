@@ -93,12 +93,6 @@ class SettingsDialog(QDialog):
         line.setFrameShadow(QFrame.Sunken)
         enc.addWidget(line)
 
-        # Change key button
-        self.rekey_btn = QPushButton("Change key")
-        self.rekey_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.rekey_btn.clicked.connect(self._change_key)
-        enc.addWidget(self.rekey_btn, 0, Qt.AlignLeft)
-
         self.idle_spin = QSpinBox()
         self.idle_spin.setRange(0, 240)
         self.idle_spin.setSingleStep(1)
@@ -123,6 +117,18 @@ class SettingsDialog(QDialog):
         spin_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the spinbox
         spin_row.addWidget(self.idle_spin_label)
         enc.addLayout(spin_row)
+
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.HLine)
+        line2.setFrameShadow(QFrame.Sunken)
+        enc.addWidget(line2)
+
+        # Change key button
+        self.rekey_btn = QPushButton("Change encryption key")
+        self.rekey_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.rekey_btn.clicked.connect(self._change_key)
+
+        enc.addWidget(self.rekey_btn, 0, Qt.AlignLeft)
 
         # Put the group into the form so it spans the full width nicely
         form.addRow(enc_group)
