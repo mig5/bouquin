@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bouquin"
-version = "0.1.7"
+version = "0.1.8"
 description = "Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher."
 authors = ["Miguel Jacq <mig@mig5.net>"]
 readme = "README.md"
