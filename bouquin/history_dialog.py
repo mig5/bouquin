@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib, re, html as _html
+from datetime import datetime
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QDialog,
@@ -104,6 +105,14 @@ class HistoryDialog(QDialog):
         self._load_versions()
 
     # --- Data/UX helpers ---
+    def _fmt_local(self, iso_utc: str) -> str:
+        """
+        Convert UTC in the database to user's local tz
+        """
+        dt = datetime.fromisoformat(iso_utc.replace("Z", "+00:00"))
+        local = dt.astimezone()
+        return local.strftime("%Y-%m-%d %H:%M:%S %Z")
+
     def _load_versions(self):
         self._versions = self._db.list_versions(
             self._date
@@ -113,7 +122,7 @@ class HistoryDialog(QDialog):
         )
         self.list.clear()
         for v in self._versions:
-            label = f"v{v['version_no']} — {v['created_at']}"
+            label = f"v{v['version_no']} — {self._fmt_local(v['created_at'])}"
             if v.get("note"):
                 label += f"  ·  {v['note']}"
             if v["is_current"]:
