@@ -1,6 +1,8 @@
 # 0.1.8
 
  * Fix saving the new key to the settings if the 'remember key' option was set and the DB was rekeyed
+ * Fixes for multi-line code blocks
+ * Fix URL href linking
 
 # 0.1.7
 

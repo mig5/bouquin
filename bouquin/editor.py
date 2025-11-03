@@ -7,6 +7,7 @@ from PySide6.QtGui import (
     QFontDatabase,
     QTextCharFormat,
     QTextCursor,
+    QTextFrameFormat,
     QTextListFormat,
     QTextBlockFormat,
 )
@@ -17,7 +18,9 @@ from PySide6.QtWidgets import QTextEdit
 class Editor(QTextEdit):
     linkActivated = Signal(str)
 
-    _URL_RX = QRegularExpression(r"(https?://[^\s<>\"]+|www\.[^\s<>\"]+)")
+    _URL_RX = QRegularExpression(r'((?:https?://|www\.)[^\s<>"\'<>]+)')
+    _CODE_BG = QColor(245, 245, 245)
+    _CODE_FRAME_PROP = int(QTextFrameFormat.UserProperty) + 100  # marker for our frames
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,50 +40,78 @@ class Editor(QTextEdit):
         self.textChanged.connect(self._linkify_document)
         self.viewport().setMouseTracking(True)
 
+    def _find_code_frame(self, cursor=None):
+        """Return the nearest ancestor frame that's one of our code frames, else None."""
+        if cursor is None:
+            cursor = self.textCursor()
+        f = cursor.currentFrame()
+        while f:
+            if f.frameFormat().property(self._CODE_FRAME_PROP):
+                return f
+            f = f.parentFrame()
+        return None
+
+    def _is_code_block(self, block) -> bool:
+        if not block.isValid():
+            return False
+        bf = block.blockFormat()
+        return bool(
+            bf.nonBreakableLines()
+            and bf.background().color().rgb() == self._CODE_BG.rgb()
+        )
+
+    def _trim_url_end(self, url: str) -> str:
+        # strip common trailing punctuation not part of the URL
+        trimmed = url.rstrip(".,;:!?\"'")
+        # drop an unmatched closing ) or ] at the very end
+        if trimmed.endswith(")") and trimmed.count("(") < trimmed.count(")"):
+            trimmed = trimmed[:-1]
+        if trimmed.endswith("]") and trimmed.count("[") < trimmed.count("]"):
+            trimmed = trimmed[:-1]
+        return trimmed
+
     def _linkify_document(self):
         if self._linkifying:
             return
         self._linkifying = True
 
-        doc = self.document()
-        cur = QTextCursor(doc)
-        cur.beginEditBlock()
-
-        block = doc.begin()
-        while block.isValid():
+        try:
+            block = self.textCursor().block()
+            start_pos = block.position()
             text = block.text()
+
+            cur = QTextCursor(self.document())
+            cur.beginEditBlock()
+
             it = self._URL_RX.globalMatch(text)
             while it.hasNext():
                 m = it.next()
-                start = block.position() + m.capturedStart()
-                end = start + m.capturedLength()
-
-                cur.setPosition(start)
-                cur.setPosition(end, QTextCursor.KeepAnchor)
-
-                fmt = cur.charFormat()
-                if fmt.isAnchor():  # already linkified; skip
+                s = start_pos + m.capturedStart()
+                raw = m.captured(0)
+                url = self._trim_url_end(raw)
+                if not url:
                     continue
 
-                href = m.captured(0)
-                if href.startswith("www."):
-                    href = "https://" + href
+                e = s + len(url)
+                cur.setPosition(s)
+                cur.setPosition(e, QTextCursor.KeepAnchor)
 
+                if url.startswith("www."):
+                    href = "https://" + url
+                else:
+                    href = url
+
+                fmt = QTextCharFormat()
                 fmt.setAnchor(True)
-                # Qt 6: use setAnchorHref; for compatibility, also set names.
-                try:
-                    fmt.setAnchorHref(href)
-                except AttributeError:
-                    fmt.setAnchorNames([href])
-
+                fmt.setAnchorHref(href)  # always refresh to the latest full URL
                 fmt.setFontUnderline(True)
                 fmt.setForeground(Qt.blue)
-                cur.setCharFormat(fmt)
 
-            block = block.next()
+                cur.mergeCharFormat(fmt)  # merge so we don’t clobber other styling
 
-        cur.endEditBlock()
-        self._linkifying = False
+            cur.endEditBlock()
+        finally:
+            self._linkifying = False
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton and (e.modifiers() & Qt.ControlModifier):
@@ -106,18 +137,19 @@ class Editor(QTextEdit):
             self._break_anchor_for_next_char()
             return super().keyPressEvent(e)
 
-        # When pressing Enter/return key, insert first, then neutralise the empty block’s inline format
         if key in (Qt.Key_Return, Qt.Key_Enter):
-            super().keyPressEvent(e)  # create the new (possibly empty) paragraph
-
-            # If we're on an empty block, clear the insertion char format so the
-            # *next* Enter will create another new line (not consume the press to reset formatting).
             c = self.textCursor()
-            block = c.block()
-            if block.length() == 1:
-                self._clear_insertion_char_format()
-            return
+            # If we're on an empty line inside a code frame, consume Enter and jump out
+            if c.block().length() == 1:
+                frame = self._find_code_frame(c)
+                if frame:
+                    out = QTextCursor(self.document())
+                    out.setPosition(frame.lastPosition())  # after the frame's contents
+                    self.setTextCursor(out)
+                    super().insertPlainText("\n")  # start a normal paragraph
+                    return
 
+        # otherwise default handling
         return super().keyPressEvent(e)
 
     def _clear_insertion_char_format(self):
@@ -187,34 +219,50 @@ class Editor(QTextEdit):
     def apply_code(self):
         c = self.textCursor()
         if not c.hasSelection():
-            c.select(c.SelectionType.BlockUnderCursor)
+            c.select(QTextCursor.BlockUnderCursor)
 
-        bf = QTextBlockFormat()
-        bf.setLeftMargin(12)
-        bf.setRightMargin(12)
-        bf.setTopMargin(6)
-        bf.setBottomMargin(6)
-        bf.setBackground(QColor(245, 245, 245))
-        bf.setNonBreakableLines(True)
+        # Wrap the selection in a single frame (no per-block padding/margins).
+        ff = QTextFrameFormat()
+        ff.setBackground(self._CODE_BG)
+        ff.setPadding(6)  # visual padding for the WHOLE block
+        ff.setBorder(0)
+        ff.setLeftMargin(0)
+        ff.setRightMargin(0)
+        ff.setTopMargin(0)
+        ff.setBottomMargin(0)
+        ff.setProperty(self._CODE_FRAME_PROP, True)
 
-        cf = QTextCharFormat()
-        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        cf.setFont(mono)
-        cf.setFontFixedPitch(True)
+        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
 
-        # If the current block already looks like a code block, remove styling
-        cur_bf = c.blockFormat()
-        is_code = (
-            cur_bf.nonBreakableLines()
-            and cur_bf.background().color().rgb() == QColor(245, 245, 245).rgb()
-        )
-        if is_code:
-            # clear: margins/background/wrapping
-            bf = QTextBlockFormat()
-            cf = QTextCharFormat()
+        c.beginEditBlock()
+        try:
+            c.insertFrame(ff)  # with a selection, this wraps the selection
 
-        c.mergeBlockFormat(bf)
-        c.mergeBlockCharFormat(cf)
+            # Format all blocks inside the new frame: zero vertical margins, mono font, no wrapping
+            frame = self._find_code_frame(c)
+            bc = QTextCursor(self.document())
+            bc.setPosition(frame.firstPosition())
+
+            while bc.position() < frame.lastPosition():
+                bc.select(QTextCursor.BlockUnderCursor)
+
+                bf = QTextBlockFormat()
+                bf.setTopMargin(0)
+                bf.setBottomMargin(0)
+                bf.setLeftMargin(12)
+                bf.setRightMargin(12)
+                bf.setNonBreakableLines(True)
+
+                cf = QTextCharFormat()
+                cf.setFont(mono)
+                cf.setFontFixedPitch(True)
+
+                bc.mergeBlockFormat(bf)
+                bc.mergeBlockCharFormat(cf)
+
+                bc.setPosition(bc.block().position() + bc.block().length())
+        finally:
+            c.endEditBlock()
 
     @Slot(int)
     def apply_heading(self, size):
