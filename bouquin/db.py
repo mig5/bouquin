@@ -133,7 +133,7 @@ class DBManager:
             raise RuntimeError("Database is not connected")
         cur = self.conn.cursor()
         # Change the encryption key of the currently open database
-        cur.execute(f"PRAGMA rekey = '{new_key}';")
+        cur.execute(f"PRAGMA rekey = '{new_key}';").fetchone()
         self.conn.commit()
 
         # Close and reopen with the new key to verify and restore PRAGMAs

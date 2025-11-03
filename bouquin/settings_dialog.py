@@ -180,6 +180,7 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "Empty key", "Key cannot be empty.")
             return
         try:
+            self.key = new_key
             self._db.rekey(new_key)
             QMessageBox.information(
                 self, "Key changed", "The notebook was re-encrypted with the new key!"

@@ -1,3 +1,11 @@
+# 0.1.8
+
+ * Fix saving the new key to the settings if the 'remember key' option was set and the DB was rekeyed
+
+# 0.1.7
+
+ * More fixes for shortcuts and move the Change Key button in settings
+
 # 0.1.6
 
  * Fix shortcuts for next/previous day to not collide with Normal text (Ctrl+N)
