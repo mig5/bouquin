@@ -232,7 +232,7 @@ class SettingsDialog(QDialog):
                     self.save_key_btn.setChecked(False)
                     self.save_key_btn.blockSignals(False)
                     return
-            self.key = p1.key() or ""
+                self.key = p1.key() or ""
         else:
             self.key = ""
 
