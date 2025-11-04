@@ -16,6 +16,7 @@ class ToolBar(QToolBar):
     numbersRequested = Signal()
     alignRequested = Signal(Qt.AlignmentFlag)
     historyRequested = Signal()
+    insertImageRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__("Format", parent)
@@ -86,6 +87,12 @@ class ToolBar(QToolBar):
         self.actNumbers.setCheckable(True)
         self.actNumbers.triggered.connect(self.numbersRequested)
 
+        # Images
+        self.actInsertImg = QAction("Image", self)
+        self.actInsertImg.setToolTip("Insert image")
+        self.actInsertImg.setShortcut("Ctrl+Shift+I")
+        self.actInsertImg.triggered.connect(self.insertImageRequested)
+
         # Alignment
         self.actAlignL = QAction("L", self)
         self.actAlignL.setToolTip("Align Left")
@@ -143,6 +150,7 @@ class ToolBar(QToolBar):
                 self.actNormal,
                 self.actBullets,
                 self.actNumbers,
+                self.actInsertImg,
                 self.actAlignL,
                 self.actAlignC,
                 self.actAlignR,

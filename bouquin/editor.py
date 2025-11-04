@@ -1,17 +1,34 @@
 from __future__ import annotations
 
+from pathlib import Path
+import base64, re
+
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
     QFont,
     QFontDatabase,
+    QImage,
+    QImageReader,
+    QPixmap,
     QTextCharFormat,
     QTextCursor,
     QTextFrameFormat,
     QTextListFormat,
     QTextBlockFormat,
+    QTextImageFormat,
+    QTextDocument,
 )
-from PySide6.QtCore import Qt, QUrl, Signal, Slot, QRegularExpression
+from PySide6.QtCore import (
+    Qt,
+    QUrl,
+    Signal,
+    Slot,
+    QRegularExpression,
+    QBuffer,
+    QByteArray,
+    QIODevice,
+)
 from PySide6.QtWidgets import QTextEdit
 
 
@@ -22,6 +39,8 @@ class Editor(QTextEdit):
     _CODE_BG = QColor(245, 245, 245)
     _CODE_FRAME_PROP = int(QTextFrameFormat.UserProperty) + 100  # marker for our frames
     _HEADING_SIZES = (24.0, 18.0, 14.0)
+    _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
+    _DATA_IMG_RX = re.compile(r'src=["\']data:image/[^;]+;base64,([^"\']+)["\']', re.I)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -128,6 +147,291 @@ class Editor(QTextEdit):
             cur.endEditBlock()
         finally:
             self._linkifying = False
+
+    def _to_qimage(self, obj) -> QImage | None:
+        if isinstance(obj, QImage):
+            return None if obj.isNull() else obj
+        if isinstance(obj, QPixmap):
+            qi = obj.toImage()
+            return None if qi.isNull() else qi
+        if isinstance(obj, (bytes, bytearray)):
+            qi = QImage.fromData(obj)
+            return None if qi.isNull() else qi
+        return None
+
+    def _qimage_to_data_url(self, img: QImage, fmt: str = "PNG") -> str:
+        ba = QByteArray()
+        buf = QBuffer(ba)
+        buf.open(QIODevice.WriteOnly)
+        img.save(buf, fmt.upper())
+        b64 = base64.b64encode(bytes(ba)).decode("ascii")
+        mime = "image/png" if fmt.upper() == "PNG" else f"image/{fmt.lower()}"
+        return f"data:{mime};base64,{b64}"
+
+    def _image_name_to_qimage(self, name: str) -> QImage | None:
+        res = self.document().resource(QTextDocument.ImageResource, QUrl(name))
+        return res if isinstance(res, QImage) and not res.isNull() else None
+
+    def to_html_with_embedded_images(self) -> str:
+        """
+        Return the document HTML with all image src's replaced by data: URLs,
+        so it is self-contained for storage in the DB.
+        """
+        # 1) Walk the document collecting name -> data: URL
+        name_to_data = {}
+        cur = QTextCursor(self.document())
+        cur.movePosition(QTextCursor.Start)
+        while True:
+            cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, 1)
+            fmt = cur.charFormat()
+            if fmt.isImageFormat():
+                imgfmt = QTextImageFormat(fmt)
+                name = imgfmt.name()
+                if name and name not in name_to_data:
+                    img = self._image_name_to_qimage(name)
+                    if img:
+                        name_to_data[name] = self._qimage_to_data_url(img, "PNG")
+            if cur.atEnd():
+                break
+            cur.clearSelection()
+
+        # 2) Serialize and replace names with data URLs
+        html = self.document().toHtml()
+        for old, data_url in name_to_data.items():
+            html = html.replace(f'src="{old}"', f'src="{data_url}"')
+            html = html.replace(f"src='{old}'", f"src='{data_url}'")
+        return html
+
+    def _insert_qimage_at_cursor(self, img: QImage, autoscale=True):
+        c = self.textCursor()
+
+        # Don’t drop inside a code frame
+        frame = self._find_code_frame(c)
+        if frame:
+            out = QTextCursor(self.document())
+            out.setPosition(frame.lastPosition())
+            self.setTextCursor(out)
+            c = self.textCursor()
+
+        # Start a fresh paragraph if mid-line
+        if c.positionInBlock() != 0:
+            c.insertBlock()
+
+        if autoscale and self.viewport():
+            max_w = int(self.viewport().width() * 0.92)
+            if img.width() > max_w:
+                img = img.scaledToWidth(max_w, Qt.SmoothTransformation)
+
+        c.insertImage(img)
+        c.insertBlock()  # one blank line after the image
+
+    def _image_info_at_cursor(self):
+        """
+        Returns (cursorSelectingImageChar, QTextImageFormat, originalQImage) or (None, None, None)
+        """
+        # Try current position (select 1 char forward)
+        tc = QTextCursor(self.textCursor())
+        tc.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, 1)
+        fmt = tc.charFormat()
+        if fmt.isImageFormat():
+            imgfmt = QTextImageFormat(fmt)
+            img = self._resolve_image_resource(imgfmt)
+            return tc, imgfmt, img
+
+        # Try previous char (if caret is just after the image)
+        tc = QTextCursor(self.textCursor())
+        if tc.position() > 0:
+            tc.movePosition(QTextCursor.Left, QTextCursor.MoveAnchor, 1)
+            tc.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, 1)
+            fmt = tc.charFormat()
+            if fmt.isImageFormat():
+                imgfmt = QTextImageFormat(fmt)
+                img = self._resolve_image_resource(imgfmt)
+                return tc, imgfmt, img
+
+        return None, None, None
+
+    def _resolve_image_resource(self, imgfmt: QTextImageFormat) -> QImage | None:
+        """
+        Fetch the original QImage backing the inline image, if available.
+        """
+        name = imgfmt.name()
+        if name:
+            try:
+                img = self.document().resource(QTextDocument.ImageResource, QUrl(name))
+                if isinstance(img, QImage) and not img.isNull():
+                    return img
+            except Exception:
+                pass
+        return None  # fallback handled by callers
+
+    def _apply_image_size(
+        self,
+        tc: QTextCursor,
+        imgfmt: QTextImageFormat,
+        new_w: float,
+        orig_img: QImage | None,
+    ):
+        # compute height proportionally
+        if orig_img and orig_img.width() > 0:
+            ratio = new_w / orig_img.width()
+            new_h = max(1.0, orig_img.height() * ratio)
+        else:
+            # fallback: keep current aspect ratio if we have it
+            cur_w = imgfmt.width() if imgfmt.width() > 0 else new_w
+            cur_h = imgfmt.height() if imgfmt.height() > 0 else new_w
+            ratio = new_w / max(1.0, cur_w)
+            new_h = max(1.0, cur_h * ratio)
+
+        imgfmt.setWidth(max(1.0, new_w))
+        imgfmt.setHeight(max(1.0, new_h))
+        tc.mergeCharFormat(imgfmt)
+
+    def _scale_image_at_cursor(self, factor: float):
+        tc, imgfmt, orig = self._image_info_at_cursor()
+        if not imgfmt:
+            return
+        base_w = imgfmt.width()
+        if base_w <= 0 and orig:
+            base_w = orig.width()
+        if base_w <= 0:
+            return
+        self._apply_image_size(tc, imgfmt, base_w * factor, orig)
+
+    def _fit_image_to_editor_width(self):
+        tc, imgfmt, orig = self._image_info_at_cursor()
+        if not imgfmt:
+            return
+        if not self.viewport():
+            return
+        target = int(self.viewport().width() * 0.92)
+        self._apply_image_size(tc, imgfmt, target, orig)
+
+    def _set_image_width_dialog(self):
+        from PySide6.QtWidgets import QInputDialog
+
+        tc, imgfmt, orig = self._image_info_at_cursor()
+        if not imgfmt:
+            return
+        # propose current display width or original width
+        cur_w = (
+            int(imgfmt.width())
+            if imgfmt.width() > 0
+            else (orig.width() if orig else 400)
+        )
+        w, ok = QInputDialog.getInt(
+            self, "Set image width", "Width (px):", cur_w, 1, 10000, 10
+        )
+        if ok:
+            self._apply_image_size(tc, imgfmt, float(w), orig)
+
+    def _reset_image_size(self):
+        tc, imgfmt, orig = self._image_info_at_cursor()
+        if not imgfmt or not orig:
+            return
+        self._apply_image_size(tc, imgfmt, float(orig.width()), orig)
+
+    def contextMenuEvent(self, e):
+        menu = self.createStandardContextMenu()
+        tc, imgfmt, orig = self._image_info_at_cursor()
+        if imgfmt:
+            menu.addSeparator()
+            sub = menu.addMenu("Image size")
+            sub.addAction("Shrink 10%", lambda: self._scale_image_at_cursor(0.9))
+            sub.addAction("Grow 10%", lambda: self._scale_image_at_cursor(1.1))
+            sub.addAction("Fit to editor width", self._fit_image_to_editor_width)
+            sub.addAction("Set width…", self._set_image_width_dialog)
+            sub.addAction("Reset to original", self._reset_image_size)
+        menu.exec(e.globalPos())
+
+    def insertFromMimeData(self, source):
+        # 1) Direct image from clipboard
+        if source.hasImage():
+            img = self._to_qimage(source.imageData())
+            if img is not None:
+                self._insert_qimage_at_cursor(self, img, autoscale=True)
+                return
+
+        # 2) File URLs (drag/drop or paste)
+        if source.hasUrls():
+            paths = []
+            non_local_urls = []
+            for url in source.urls():
+                if url.isLocalFile():
+                    path = url.toLocalFile()
+                    if path.lower().endswith(self._IMAGE_EXTS):
+                        paths.append(path)
+                    else:
+                        # Non-image file: insert as link
+                        self.textCursor().insertHtml(
+                            f'<a href="{url.toString()}">{Path(path).name}</a>'
+                        )
+                        self.textCursor().insertBlock()
+                else:
+                    non_local_urls.append(url)
+
+            if paths:
+                self.insert_images(paths)
+
+            for url in non_local_urls:
+                self.textCursor().insertHtml(
+                    f'<a href="{url.toString()}">{url.toString()}</a>'
+                )
+                self.textCursor().insertBlock()
+
+            if paths or non_local_urls:
+                return
+
+        # 3) HTML with data: image
+        if source.hasHtml():
+            html = source.html()
+            m = self._DATA_IMG_RX.search(html or "")
+            if m:
+                try:
+                    data = base64.b64decode(m.group(1))
+                    img = QImage.fromData(data)
+                    if not img.isNull():
+                        self._insert_qimage_at_cursor(self, img, autoscale=True)
+                        return
+                except Exception:
+                    pass  # fall through
+
+        # 4) Everything else → default behavior
+        super().insertFromMimeData(source)
+
+    @Slot(list)
+    def insert_images(self, paths: list[str], autoscale=True):
+        """
+        Insert one or more images at the cursor. Large images can be auto-scaled
+        to fit the viewport width while preserving aspect ratio.
+        """
+        c = self.textCursor()
+
+        # Avoid dropping images inside a code frame
+        frame = self._find_code_frame(c)
+        if frame:
+            out = QTextCursor(self.document())
+            out.setPosition(frame.lastPosition())
+            self.setTextCursor(out)
+            c = self.textCursor()
+
+        # Ensure there's a paragraph break if we're mid-line
+        if c.positionInBlock() != 0:
+            c.insertBlock()
+
+        for path in paths:
+            reader = QImageReader(path)
+            img = reader.read()
+            if img.isNull():
+                continue
+
+            if autoscale and self.viewport():
+                max_w = int(self.viewport().width() * 0.92)  # ~92% of editor width
+                if img.width() > max_w:
+                    img = img.scaledToWidth(max_w, Qt.SmoothTransformation)
+
+            c.insertImage(img)
+            c.insertBlock()  # put each image on its own line
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton and (e.modifiers() & Qt.ControlModifier):

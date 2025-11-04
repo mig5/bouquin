@@ -105,8 +105,8 @@ class _LockOverlay(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.setWindowTitle(APP_NAME)
         self.setMinimumSize(1000, 650)
 
@@ -160,6 +160,7 @@ class MainWindow(QMainWindow):
         self.toolBar.numbersRequested.connect(self.editor.toggle_numbers)
         self.toolBar.alignRequested.connect(self.editor.setAlignment)
         self.toolBar.historyRequested.connect(self._open_history)
+        self.toolBar.insertImageRequested.connect(self._on_insert_image)
 
         self.editor.currentCharFormatChanged.connect(lambda _f: self._sync_toolbar())
         self.editor.cursorPositionChanged.connect(self._sync_toolbar)
@@ -446,7 +447,7 @@ class MainWindow(QMainWindow):
         """
         if not self._dirty and not explicit:
             return
-        text = self.editor.toHtml()
+        text = self.editor.to_html_with_embedded_images()
         try:
             self.db.save_new_version(date_iso, text, note)
         except Exception as e:
@@ -488,6 +489,18 @@ class MainWindow(QMainWindow):
             # refresh editor + calendar (head pointer may have changed)
             self._load_selected_date(date_iso)
             self._refresh_calendar_marks()
+
+    def _on_insert_image(self):
+        # Let the user pick one or many images
+        paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Insert image(s)",
+            "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)",
+        )
+        if not paths:
+            return
+        self.editor.insert_images(paths)  # call into the editor
 
     # ----------- Settings handler ------------#
     def _open_settings(self):

@@ -470,7 +470,7 @@ class DBManager:
         """
         try:
             cur = self.conn.cursor()
-            cur.execute(f"VACUUM")
+            cur.execute("VACUUM")
         except Exception as e:
             print(f"Error: {e}")
 

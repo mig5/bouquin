@@ -6,6 +6,7 @@
  * Add plaintext SQLite3 Export option
  * Add Backup option (database remains encrypted with SQLCipher)
  * Add ability to run VACUUM (compact) on the database in settings
+ * Add ability to store images in the page
 
 # 0.1.8
 
