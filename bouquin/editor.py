@@ -21,6 +21,7 @@ class Editor(QTextEdit):
     _URL_RX = QRegularExpression(r'((?:https?://|www\.)[^\s<>"\'<>]+)')
     _CODE_BG = QColor(245, 245, 245)
     _CODE_FRAME_PROP = int(QTextFrameFormat.UserProperty) + 100  # marker for our frames
+    _HEADING_SIZES = (24.0, 18.0, 14.0)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -39,6 +40,21 @@ class Editor(QTextEdit):
         self._linkifying = False
         self.textChanged.connect(self._linkify_document)
         self.viewport().setMouseTracking(True)
+
+    def _approx(self, a: float, b: float, eps: float = 0.5) -> bool:
+        return abs(float(a) - float(b)) <= eps
+
+    def _is_heading_typing(self) -> bool:
+        """Is the current *insertion* format using a heading size?"""
+        s = self.currentCharFormat().fontPointSize() or self.font().pointSizeF()
+        return any(self._approx(s, h) for h in self._HEADING_SIZES)
+
+    def _apply_normal_typing(self):
+        """Switch the *insertion* format to Normal (default size, normal weight)."""
+        nf = QTextCharFormat()
+        nf.setFontPointSize(self.font().pointSizeF())
+        nf.setFontWeight(QFont.Weight.Normal)
+        self.mergeCurrentCharFormat(nf)
 
     def _find_code_frame(self, cursor=None):
         """Return the nearest ancestor frame that's one of our code frames, else None."""
@@ -139,6 +155,7 @@ class Editor(QTextEdit):
 
         if key in (Qt.Key_Return, Qt.Key_Enter):
             c = self.textCursor()
+
             # If we're on an empty line inside a code frame, consume Enter and jump out
             if c.block().length() == 1:
                 frame = self._find_code_frame(c)
@@ -149,6 +166,13 @@ class Editor(QTextEdit):
                     super().insertPlainText("\n")  # start a normal paragraph
                     return
 
+            # Follow-on style: if we typed a heading and press Enter at end of block,
+            # new paragraph should revert to Normal.
+            if not c.hasSelection() and c.atBlockEnd() and self._is_heading_typing():
+                super().keyPressEvent(e)  # insert the new paragraph
+                self._apply_normal_typing()  # make the *new* paragraph Normal for typing
+                return
+
         # otherwise default handling
         return super().keyPressEvent(e)
 
@@ -158,28 +182,32 @@ class Editor(QTextEdit):
         self.setCurrentCharFormat(nf)
 
     def _break_anchor_for_next_char(self):
-        c = self.textCursor()
-        fmt = c.charFormat()
-        if fmt.isAnchor() or fmt.fontUnderline() or fmt.foreground().style() != 0:
-            # clone, then strip just the link-specific bits so the next char is plain text
-            nf = QTextCharFormat(fmt)
-            nf.setAnchor(False)
-            nf.setFontUnderline(False)
-            nf.clearForeground()
-            try:
-                nf.setAnchorHref("")
-            except AttributeError:
-                nf.setAnchorNames([])
-            self.setCurrentCharFormat(nf)
+        """
+        Ensure the *next* typed character is not part of a hyperlink.
+        Only strips link-specific attributes; leaves bold/italic/underline etc intact.
+        """
+        # What we're about to type with
+        ins_fmt = self.currentCharFormat()
+        # What the cursor is sitting on
+        cur_fmt = self.textCursor().charFormat()
+
+        # Do nothing unless either side indicates we're in/propagating an anchor
+        if not (ins_fmt.isAnchor() or cur_fmt.isAnchor()):
+            return
+
+        nf = QTextCharFormat(ins_fmt)
+        nf.setAnchor(False)
+        nf.setAnchorHref("")
+
+        self.setCurrentCharFormat(nf)
 
     def merge_on_sel(self, fmt):
         """
-        Sets the styling on the selected characters.
+        Sets the styling on the selected characters or the insertion position.
         """
         cursor = self.textCursor()
-        if not cursor.hasSelection():
-            cursor.select(cursor.SelectionType.WordUnderCursor)
-        cursor.mergeCharFormat(fmt)
+        if cursor.hasSelection():
+            cursor.mergeCharFormat(fmt)
         self.mergeCurrentCharFormat(fmt)
 
     @Slot()
@@ -265,15 +293,25 @@ class Editor(QTextEdit):
             c.endEditBlock()
 
     @Slot(int)
-    def apply_heading(self, size):
-        fmt = QTextCharFormat()
-        if size:
-            fmt.setFontWeight(QFont.Weight.Bold)
-            fmt.setFontPointSize(size)
-        else:
-            fmt.setFontWeight(QFont.Weight.Normal)
-            fmt.setFontPointSize(self.font().pointSizeF())
-        self.merge_on_sel(fmt)
+    def apply_heading(self, size: int):
+        """
+        Set heading point size for typing. If there's a selection, also apply bold
+        to that selection (for H1..H3). "Normal" clears bold on the selection.
+        """
+        base_size = size if size else self.font().pointSizeF()
+        c = self.textCursor()
+
+        # Update the typing (insertion) format to be size only, but don't represent
+        # it as if the Bold style has been toggled on
+        ins = QTextCharFormat()
+        ins.setFontPointSize(base_size)
+        self.mergeCurrentCharFormat(ins)
+
+        # If user selected text, style that text visually as a heading
+        if c.hasSelection():
+            sel = QTextCharFormat(ins)
+            sel.setFontWeight(QFont.Weight.Bold if size else QFont.Weight.Normal)
+            c.mergeCharFormat(sel)
 
     def toggle_bullets(self):
         c = self.textCursor()

@@ -4,7 +4,16 @@ import os
 import sys
 
 from pathlib import Path
-from PySide6.QtCore import QDate, QTimer, Qt, QSettings, Slot, QUrl, QEvent
+from PySide6.QtCore import (
+    QDate,
+    QTimer,
+    Qt,
+    QSettings,
+    Slot,
+    QUrl,
+    QEvent,
+    QSignalBlocker,
+)
 from PySide6.QtGui import (
     QAction,
     QCursor,
@@ -12,6 +21,7 @@ from PySide6.QtGui import (
     QFont,
     QGuiApplication,
     QTextCharFormat,
+    QTextListFormat,
 )
 from PySide6.QtWidgets import (
     QCalendarWidget,
@@ -149,6 +159,9 @@ class MainWindow(QMainWindow):
         self.toolBar.numbersRequested.connect(self.editor.toggle_numbers)
         self.toolBar.alignRequested.connect(self.editor.setAlignment)
         self.toolBar.historyRequested.connect(self._open_history)
+
+        self.editor.currentCharFormatChanged.connect(lambda _f: self._sync_toolbar())
+        self.editor.cursorPositionChanged.connect(self._sync_toolbar)
 
         split = QSplitter()
         split.addWidget(left_panel)
@@ -315,6 +328,61 @@ class MainWindow(QMainWindow):
             pass
 
     # --- UI handlers ---------------------------------------------------------
+
+    def _sync_toolbar(self):
+        fmt = self.editor.currentCharFormat()
+        c = self.editor.textCursor()
+        bf = c.blockFormat()
+
+        # Block signals so setChecked() doesn't re-trigger actions
+        blocker1 = QSignalBlocker(self.toolBar.actBold)
+        blocker2 = QSignalBlocker(self.toolBar.actItalic)
+        blocker3 = QSignalBlocker(self.toolBar.actUnderline)
+        blocker4 = QSignalBlocker(self.toolBar.actStrike)
+
+        self.toolBar.actBold.setChecked(fmt.fontWeight() == QFont.Weight.Bold)
+        self.toolBar.actItalic.setChecked(fmt.fontItalic())
+        self.toolBar.actUnderline.setChecked(fmt.fontUnderline())
+        self.toolBar.actStrike.setChecked(fmt.fontStrikeOut())
+
+        # Headings: decide which to check by current point size
+        def _approx(a, b, eps=0.5):  # small float tolerance
+            return abs(float(a) - float(b)) <= eps
+
+        cur_size = fmt.fontPointSize() or self.editor.font().pointSizeF()
+
+        bH1 = _approx(cur_size, 24)
+        bH2 = _approx(cur_size, 18)
+        bH3 = _approx(cur_size, 14)
+
+        b1 = QSignalBlocker(self.toolBar.actH1)
+        b2 = QSignalBlocker(self.toolBar.actH2)
+        b3 = QSignalBlocker(self.toolBar.actH3)
+        bN = QSignalBlocker(self.toolBar.actNormal)
+
+        self.toolBar.actH1.setChecked(bH1)
+        self.toolBar.actH2.setChecked(bH2)
+        self.toolBar.actH3.setChecked(bH3)
+        self.toolBar.actNormal.setChecked(not (bH1 or bH2 or bH3))
+
+        # Lists
+        lst = c.currentList()
+        bullets_on = lst and lst.format().style() == QTextListFormat.Style.ListDisc
+        numbers_on = lst and lst.format().style() == QTextListFormat.Style.ListDecimal
+        QSignalBlocker(self.toolBar.actBullets)
+        QSignalBlocker(self.toolBar.actNumbers)
+        self.toolBar.actBullets.setChecked(bool(bullets_on))
+        self.toolBar.actNumbers.setChecked(bool(numbers_on))
+
+        # Alignment
+        align = bf.alignment() & Qt.AlignHorizontal_Mask
+        QSignalBlocker(self.toolBar.actAlignL)
+        self.toolBar.actAlignL.setChecked(align == Qt.AlignLeft)
+        QSignalBlocker(self.toolBar.actAlignC)
+        self.toolBar.actAlignC.setChecked(align == Qt.AlignHCenter)
+        QSignalBlocker(self.toolBar.actAlignR)
+        self.toolBar.actAlignR.setChecked(align == Qt.AlignRight)
+
     def _current_date_iso(self) -> str:
         d = self.calendar.selectedDate()
         return f"{d.year():04d}-{d.month():02d}-{d.day():02d}"
@@ -518,9 +586,9 @@ class MainWindow(QMainWindow):
             elif selected_filter.startswith("CSV"):
                 self.db.export_csv(entries, filename)
             elif selected_filter.startswith("HTML"):
-                self.bd.export_html(entries, filename)
+                self.db.export_html(entries, filename)
             else:
-                self.bd.export_by_extension(entries, filename)
+                self.db.export_by_extension(entries, filename)
 
             QMessageBox.information(self, "Export complete", f"Saved to:\n{filename}")
         except Exception as e:

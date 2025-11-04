@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QAction, QKeySequence, QFont, QFontDatabase
+from PySide6.QtGui import QAction, QKeySequence, QFont, QFontDatabase, QActionGroup
 from PySide6.QtWidgets import QToolBar
 
 
@@ -25,54 +25,81 @@ class ToolBar(QToolBar):
         self._apply_toolbar_styles()
 
     def _build_actions(self):
-        self.actBold = QAction("Bold", self)
+        self.actBold = QAction("B", self)
+        self.actBold.setToolTip("Bold")
+        self.actBold.setCheckable(True)
         self.actBold.setShortcut(QKeySequence.Bold)
         self.actBold.triggered.connect(self.boldRequested)
 
-        self.actItalic = QAction("Italic", self)
+        self.actItalic = QAction("I", self)
+        self.actItalic.setToolTip("Italic")
+        self.actItalic.setCheckable(True)
         self.actItalic.setShortcut(QKeySequence.Italic)
         self.actItalic.triggered.connect(self.italicRequested)
 
-        self.actUnderline = QAction("Underline", self)
+        self.actUnderline = QAction("U", self)
+        self.actUnderline.setToolTip("Underline")
+        self.actUnderline.setCheckable(True)
         self.actUnderline.setShortcut(QKeySequence.Underline)
         self.actUnderline.triggered.connect(self.underlineRequested)
 
-        self.actStrike = QAction("Strikethrough", self)
+        self.actStrike = QAction("S", self)
+        self.actStrike.setToolTip("Strikethrough")
+        self.actStrike.setCheckable(True)
         self.actStrike.setShortcut("Ctrl+-")
         self.actStrike.triggered.connect(self.strikeRequested)
 
-        self.actCode = QAction("Inline code", self)
+        self.actCode = QAction("</>", self)
+        self.actCode.setToolTip("Code block")
         self.actCode.setShortcut("Ctrl+`")
         self.actCode.triggered.connect(self.codeRequested)
 
         # Headings
-        self.actH1 = QAction("Heading 1", self)
-        self.actH2 = QAction("Heading 2", self)
-        self.actH3 = QAction("Heading 3", self)
-        self.actNormal = QAction("Normal text", self)
+        self.actH1 = QAction("H1", self)
+        self.actH1.setToolTip("Heading 1")
+        self.actH1.setCheckable(True)
         self.actH1.setShortcut("Ctrl+1")
-        self.actH2.setShortcut("Ctrl+2")
-        self.actH3.setShortcut("Ctrl+3")
-        self.actNormal.setShortcut("Ctrl+O")
         self.actH1.triggered.connect(lambda: self.headingRequested.emit(24))
+        self.actH2 = QAction("H2", self)
+        self.actH2.setToolTip("Heading 2")
+        self.actH2.setCheckable(True)
+        self.actH2.setShortcut("Ctrl+2")
         self.actH2.triggered.connect(lambda: self.headingRequested.emit(18))
+        self.actH3 = QAction("H3", self)
+        self.actH3.setToolTip("Heading 3")
+        self.actH3.setCheckable(True)
+        self.actH3.setShortcut("Ctrl+3")
         self.actH3.triggered.connect(lambda: self.headingRequested.emit(14))
+        self.actNormal = QAction("N", self)
+        self.actNormal.setToolTip("Normal paragraph text")
+        self.actNormal.setCheckable(True)
+        self.actNormal.setShortcut("Ctrl+O")
         self.actNormal.triggered.connect(lambda: self.headingRequested.emit(0))
 
         # Lists
-        self.actBullets = QAction("Bulleted list", self)
+        self.actBullets = QAction("•", self)
+        self.actBullets.setToolTip("Bulleted list")
+        self.actBullets.setCheckable(True)
         self.actBullets.triggered.connect(self.bulletsRequested)
-        self.actNumbers = QAction("Numbered list", self)
+        self.actNumbers = QAction("1.", self)
+        self.actNumbers.setToolTip("Numbered list")
+        self.actNumbers.setCheckable(True)
         self.actNumbers.triggered.connect(self.numbersRequested)
 
         # Alignment
-        self.actAlignL = QAction("Align left", self)
-        self.actAlignC = QAction("Align center", self)
-        self.actAlignR = QAction("Align right", self)
+        self.actAlignL = QAction("L", self)
+        self.actAlignL.setToolTip("Align Left")
+        self.actAlignL.setCheckable(True)
         self.actAlignL.triggered.connect(lambda: self.alignRequested.emit(Qt.AlignLeft))
+        self.actAlignC = QAction("C", self)
+        self.actAlignC.setToolTip("Align Center")
+        self.actAlignC.setCheckable(True)
         self.actAlignC.triggered.connect(
             lambda: self.alignRequested.emit(Qt.AlignHCenter)
         )
+        self.actAlignR = QAction("R", self)
+        self.actAlignR.setToolTip("Align Right")
+        self.actAlignR.setCheckable(True)
         self.actAlignR.triggered.connect(
             lambda: self.alignRequested.emit(Qt.AlignRight)
         )
@@ -81,6 +108,28 @@ class ToolBar(QToolBar):
         self.actHistory = QAction("History", self)
         self.actHistory.triggered.connect(self.historyRequested)
 
+        # Set exclusive buttons in QActionGroups
+        self.grpHeadings = QActionGroup(self)
+        self.grpHeadings.setExclusive(True)
+        for a in (
+            self.actBold,
+            self.actItalic,
+            self.actUnderline,
+            self.actStrike,
+            self.actH1,
+            self.actH2,
+            self.actH3,
+            self.actNormal,
+        ):
+            a.setCheckable(True)
+            a.setActionGroup(self.grpHeadings)
+
+        self.grpAlign = QActionGroup(self)
+        self.grpAlign.setExclusive(True)
+        for a in (self.actAlignL, self.actAlignC, self.actAlignR):
+            a.setActionGroup(self.grpAlign)
+
+        # Add actions
         self.addActions(
             [
                 self.actBold,
@@ -106,7 +155,6 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actItalic, "I", italic=True)
         self._style_letter_button(self.actUnderline, "U", underline=True)
         self._style_letter_button(self.actStrike, "S", strike=True)
-
         # Monospace look for code; use a fixed font
         code_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         self._style_letter_button(self.actCode, "</>", custom_font=code_font)
@@ -139,11 +187,13 @@ class ToolBar(QToolBar):
         underline: bool = False,
         strike: bool = False,
         custom_font: QFont | None = None,
+        tooltip: str | None = None,
     ):
         btn = self.widgetForAction(action)
         if not btn:
             return
         btn.setText(text)
+
         f = custom_font if custom_font is not None else QFont(btn.font())
         if custom_font is None:
             f.setBold(bold)
@@ -153,5 +203,6 @@ class ToolBar(QToolBar):
         btn.setFont(f)
 
         # Keep accessibility/tooltip readable
-        btn.setToolTip(action.text())
-        btn.setAccessibleName(action.text())
+        if tooltip:
+            btn.setToolTip(tooltip)
+            btn.setAccessibleName(tooltip)

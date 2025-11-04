@@ -1,3 +1,9 @@
+# 0.1.9
+
+ * More styling/toolbar fixes to support toggled-on styles, exclusive styles (e.g it should not be
+   possible to set both H1 and H2 at once)
+ * Fix small bug in export of HTML or arbitrary extension
+
 # 0.1.8
 
  * Fix saving the new key to the settings if the 'remember key' option was set and the DB was rekeyed
