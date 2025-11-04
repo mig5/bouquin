@@ -1,56 +1,77 @@
 import os
+import sys
+from pathlib import Path
 import pytest
+from PySide6.QtCore import QStandardPaths
+from tests.qt_helpers import AutoResponder
 
-# Run Qt without a visible display (CI-safe)
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-
-@pytest.fixture
-def fake_key_prompt_cls():
-    """A KeyPrompt stand-in that immediately returns Accepted with a fixed key."""
-    from PySide6.QtWidgets import QDialog
-
-    class FakeKeyPrompt:
-        accepted_count = 0
-
-        def __init__(self, *a, **k):
-            self._key = "sekret"
-
-        def exec(self):
-            FakeKeyPrompt.accepted_count += 1
-            return QDialog.Accepted
-
-        def key(self):
-            return self._key
-
-    return FakeKeyPrompt
+# Force Qt *non-native* file dialog so we can type a filename programmatically.
+os.environ.setdefault("QT_FILE_DIALOG_ALWAYS_USE_NATIVE", "0")
+# For CI headless runs, set QT_QPA_PLATFORM=offscreen in the CI env
+# os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@pytest.fixture
-def fake_db_cls():
-    """In-memory DB fake that mimics the subset of DBManager used by the UI."""
-    class FakeDB:
-        def __init__(self, cfg):
-            self.cfg = cfg
-            self.data = {}
-            self.connected_key = None
-            self.closed = False
+# Make project importable
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-        def connect(self):
-            # record the key that UI supplied
-            self.connected_key = self.cfg.key
-            return True
 
-        def get_entry(self, date_iso: str) -> str:
-            return self.data.get(date_iso, "")
+@pytest.fixture(scope="session", autouse=True)
+def enable_qstandardpaths_test_mode():
+    QStandardPaths.setTestModeEnabled(True)
 
-        def upsert_entry(self, date_iso: str, content: str) -> None:
-            self.data[date_iso] = content
 
-        def dates_with_content(self) -> list[str]:
-            return [d for d, t in self.data.items() if t.strip()]
+@pytest.fixture()
+def temp_home(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / "Documents").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    return home
 
-        def close(self) -> None:
-            self.closed = True
 
-    return FakeDB
+@pytest.fixture()
+def clean_settings():
+    try:
+        from bouquin.settings import APP_NAME, APP_ORG
+        from PySide6.QtCore import QSettings
+    except Exception:
+        yield
+        return
+    s = QSettings(APP_ORG, APP_NAME)
+    s.clear()
+    yield
+    s.clear()
+
+
+@pytest.fixture(autouse=True)
+def auto_accept_common_dialogs(qtbot):
+    ar = AutoResponder()
+    ar.start()
+    try:
+        yield
+    finally:
+        ar.stop()
+
+
+@pytest.fixture()
+def open_window(qtbot, temp_home, clean_settings):
+    """Launch the app and immediately satisfy first-run/unlock key prompts."""
+    from bouquin.main_window import MainWindow
+
+    win = MainWindow()
+    qtbot.addWidget(win)
+    win.show()
+    qtbot.waitExposed(win)
+
+    # Immediately satisfy first-run 'Set key' or 'Unlock' prompts if already visible
+    AutoResponder().prehandle_key_prompts_if_present()
+    return win
+
+
+@pytest.fixture()
+def today_iso():
+    from datetime import date
+
+    d = date.today()
+    return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
