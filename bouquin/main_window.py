@@ -627,7 +627,7 @@ If you want an encrypted backup, choose Backup instead of Export.
             elif selected_filter.startswith("SQL"):
                 self.db.export_sql(filename)
             else:
-                self.db.export_by_extension(entries, filename)
+                self.db.export_by_extension(filename)
 
             QMessageBox.information(self, "Export complete", f"Saved to:\n{filename}")
         except Exception as e:
