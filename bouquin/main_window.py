@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import os
 import sys
 
@@ -214,6 +215,10 @@ class MainWindow(QMainWindow):
         act_export.setShortcut("Ctrl+E")
         act_export.triggered.connect(self._export)
         file_menu.addAction(act_export)
+        act_backup = QAction("&Backup", self)
+        act_backup.setShortcut("Ctrl+Shift+B")
+        act_backup.triggered.connect(self._backup)
+        file_menu.addAction(act_backup)
         file_menu.addSeparator()
         act_quit = QAction("&Quit", self)
         act_quit.setShortcut("Ctrl+Q")
@@ -223,21 +228,21 @@ class MainWindow(QMainWindow):
         # Navigate menu with next/previous/today
         nav_menu = mb.addMenu("&Navigate")
         act_prev = QAction("Previous Day", self)
-        act_prev.setShortcut("Ctrl+P")
+        act_prev.setShortcut("Ctrl+Shift+P")
         act_prev.setShortcutContext(Qt.ApplicationShortcut)
         act_prev.triggered.connect(lambda: self._adjust_day(-1))
         nav_menu.addAction(act_prev)
         self.addAction(act_prev)
 
         act_next = QAction("Next Day", self)
-        act_next.setShortcut("Ctrl+N")
+        act_next.setShortcut("Ctrl+Shift+N")
         act_next.setShortcutContext(Qt.ApplicationShortcut)
         act_next.triggered.connect(lambda: self._adjust_day(1))
         nav_menu.addAction(act_next)
         self.addAction(act_next)
 
         act_today = QAction("Today", self)
-        act_today.setShortcut("Ctrl+T")
+        act_today.setShortcut("Ctrl+Shift+T")
         act_today.setShortcutContext(Qt.ApplicationShortcut)
         act_today.triggered.connect(self._adjust_today)
         nav_menu.addAction(act_today)
@@ -552,13 +557,31 @@ class MainWindow(QMainWindow):
     # ----------------- Export handler ----------------- #
     @Slot()
     def _export(self):
-        try:
-            self.export_dialog()
-        except Exception as e:
-            QMessageBox.critical(self, "Export failed", str(e))
+        warning_title = "Unencrypted export"
+        warning_message = """
+Exporting the database will be unencrypted!
 
-    def export_dialog(self) -> None:
-        filters = "Text (*.txt);;" "JSON (*.json);;" "CSV (*.csv);;" "HTML (*.html);;"
+Are you sure you want to continue?
+
+If you want an encrypted backup, choose Backup instead of Export.
+"""
+        dlg = QMessageBox()
+        dlg.setWindowTitle(warning_title)
+        dlg.setText(warning_message)
+        dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        dlg.setIcon(QMessageBox.Warning)
+        dlg.show()
+        dlg.adjustSize()
+        if dlg.exec() != QMessageBox.Yes:
+            return False
+
+        filters = (
+            "Text (*.txt);;"
+            "JSON (*.json);;"
+            "CSV (*.csv);;"
+            "HTML (*.html);;"
+            "SQL (*.sql);;"
+        )
 
         start_dir = os.path.join(os.path.expanduser("~"), "Documents")
         filename, selected_filter = QFileDialog.getSaveFileName(
@@ -572,6 +595,7 @@ class MainWindow(QMainWindow):
             "JSON (*.json)": ".json",
             "CSV (*.csv)": ".csv",
             "HTML (*.html)": ".html",
+            "SQL (*.sql)": ".sql",
         }.get(selected_filter, ".txt")
 
         if not Path(filename).suffix:
@@ -587,12 +611,47 @@ class MainWindow(QMainWindow):
                 self.db.export_csv(entries, filename)
             elif selected_filter.startswith("HTML"):
                 self.db.export_html(entries, filename)
+            elif selected_filter.startswith("SQL"):
+                self.db.export_sql(filename)
             else:
                 self.db.export_by_extension(entries, filename)
 
             QMessageBox.information(self, "Export complete", f"Saved to:\n{filename}")
         except Exception as e:
             QMessageBox.critical(self, "Export failed", str(e))
+
+    # ----------------- Backup handler ----------------- #
+    @Slot()
+    def _backup(self):
+        filters = "SQLCipher (*.db);;"
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        start_dir = os.path.join(
+            os.path.expanduser("~"), "Documents", f"bouquin_backup_{now}.db"
+        )
+        filename, selected_filter = QFileDialog.getSaveFileName(
+            self, "Backup encrypted notebook", start_dir, filters
+        )
+        if not filename:
+            return  # user cancelled
+
+        default_ext = {
+            "SQLCipher (*.db)": ".db",
+        }.get(selected_filter, ".db")
+
+        if not Path(filename).suffix:
+            filename += default_ext
+
+        try:
+            if selected_filter.startswith("SQL"):
+                self.db.export_sqlcipher(filename)
+                QMessageBox.information(
+                    self, "Backup complete", f"Saved to:\n{filename}"
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Backup failed", str(e))
+
+    # ----------------- Help handlers ----------------- #
 
     def _open_docs(self):
         url_str = "https://git.mig5.net/mig5/bouquin/wiki/Help"
@@ -610,7 +669,7 @@ class MainWindow(QMainWindow):
                 self, "Open Documentation", f"Couldn't open:\n{url.toDisplayString()}"
             )
 
-    # Idle handlers
+    # ----------------- Idle handlers ----------------- #
     def _apply_idle_minutes(self, minutes: int):
         minutes = max(0, int(minutes))
         if not hasattr(self, "_idle_timer"):
@@ -668,13 +727,14 @@ class MainWindow(QMainWindow):
                 tb.setEnabled(True)
             self._idle_timer.start()
 
-    # Close app handler - save window position and database
+    # ----------------- Close handlers ----------------- #
     def closeEvent(self, event):
         try:
             # Save window position
             self.settings.setValue("main/geometry", self.saveGeometry())
             self.settings.setValue("main/windowState", self.saveState())
             self.settings.setValue("main/maximized", self.isMaximized())
+
             # Ensure we save any last pending edits to the db
             self._save_current()
             self.db.close()

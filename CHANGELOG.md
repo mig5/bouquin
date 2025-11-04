@@ -3,6 +3,8 @@
  * More styling/toolbar fixes to support toggled-on styles, exclusive styles (e.g it should not be
    possible to set both H1 and H2 at once)
  * Fix small bug in export of HTML or arbitrary extension
+ * Add plaintext SQLite3 Export option
+ * Add Backup option (database remains encrypted with SQLCipher)
 
 # 0.1.8
 

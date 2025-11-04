@@ -73,7 +73,7 @@ class ToolBar(QToolBar):
         self.actNormal = QAction("N", self)
         self.actNormal.setToolTip("Normal paragraph text")
         self.actNormal.setCheckable(True)
-        self.actNormal.setShortcut("Ctrl+O")
+        self.actNormal.setShortcut("Ctrl+N")
         self.actNormal.triggered.connect(lambda: self.headingRequested.emit(0))
 
         # Lists

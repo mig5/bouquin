@@ -409,7 +409,7 @@ class DBManager:
                     f.write(separator)
 
     def export_html(
-        self, entries: Sequence[Entry], file_path: str, title: str = "Entries export"
+        self, entries: Sequence[Entry], file_path: str, title: str = "Bouquin export"
     ) -> None:
         parts = [
             "<!doctype html>",
@@ -429,6 +429,25 @@ class DBManager:
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("\n".join(parts))
+
+    def export_sql(self, file_path: str) -> None:
+        """
+        Exports the encrypted database as plaintext SQL.
+        """
+        cur = self.conn.cursor()
+        cur.execute(f"ATTACH DATABASE '{file_path}' AS plaintext KEY '';")
+        cur.execute("SELECT sqlcipher_export('plaintext')")
+        cur.execute("DETACH DATABASE plaintext")
+
+    def export_sqlcipher(self, file_path: str) -> None:
+        """
+        Exports the encrypted database as an encrypted database with the same key.
+        Intended for Bouquin-compatible backups.
+        """
+        cur = self.conn.cursor()
+        cur.execute(f"ATTACH DATABASE '{file_path}' AS backup KEY '{self.cfg.key}'")
+        cur.execute("SELECT sqlcipher_export('backup')")
+        cur.execute("DETACH DATABASE backup")
 
     def export_by_extension(self, file_path: str) -> None:
         entries = self.get_all_entries()
