@@ -3,7 +3,7 @@
 
 ## Introduction
 
-Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher.
+Bouquin ("Book-ahn") is a simple, opinionated notebook application written in Python, PyQt and SQLCipher.
 
 It uses [SQLCipher bindings](https://pypi.org/project/sqlcipher3-wheels) as a drop-in replacement
 for SQLite3. This means that the underlying database for the notebook is encrypted at rest.
@@ -24,12 +24,14 @@ There is deliberately no network connectivity or syncing intended.
  * Every 'page' is linked to the calendar day
  * All changes are version controlled, with ability to view/diff versions and revert
  * Text is HTML with basic styling
+ * Images are supported
  * Search
  * Automatic periodic saving (or explicitly save)
  * Transparent integrity checking of the database when it opens
  * Automatic locking of the app after a period of inactivity (default 15 min)
  * Rekey the database (change the password)
- * Export the database to json, txt, html or csv
+ * Export the database to json, txt, html, csv or .sql (for sqlite3)
+ * Backup the database to encrypted SQLCipher format (which can then be loaded back in to a Bouquin)
 
 
 ## How to install
