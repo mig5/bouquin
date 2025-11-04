@@ -5,6 +5,7 @@
  * Fix small bug in export of HTML or arbitrary extension
  * Add plaintext SQLite3 Export option
  * Add Backup option (database remains encrypted with SQLCipher)
+ * Add ability to run VACUUM (compact) on the database in settings
 
 # 0.1.8
 

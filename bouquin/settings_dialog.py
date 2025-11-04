@@ -57,7 +57,7 @@ class SettingsDialog(QDialog):
         form.addRow("Database path", path_row)
 
         # Encryption settings
-        enc_group = QGroupBox("Encryption and Privacy")
+        enc_group = QGroupBox("Encryption")
         enc = QVBoxLayout(enc_group)
         enc.setContentsMargins(12, 8, 12, 12)
         enc.setSpacing(6)
@@ -68,7 +68,7 @@ class SettingsDialog(QDialog):
         self.key = current_settings.key or ""
         self.save_key_btn.setChecked(bool(self.key))
         self.save_key_btn.setCursor(Qt.PointingHandCursor)
-        self.save_key_btn.toggled.connect(self.save_key_btn_clicked)
+        self.save_key_btn.toggled.connect(self._save_key_btn_clicked)
         enc.addWidget(self.save_key_btn, 0, Qt.AlignLeft)
 
         # Explanation for remembering key
@@ -93,6 +93,21 @@ class SettingsDialog(QDialog):
         line.setFrameShadow(QFrame.Sunken)
         enc.addWidget(line)
 
+        # Change key button
+        self.rekey_btn = QPushButton("Change encryption key")
+        self.rekey_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.rekey_btn.clicked.connect(self._change_key)
+
+        enc.addWidget(self.rekey_btn, 0, Qt.AlignLeft)
+
+        form.addRow(enc_group)
+
+        # Privacy settings
+        priv_group = QGroupBox("Lock screen when idle")
+        priv = QVBoxLayout(priv_group)
+        priv.setContentsMargins(12, 8, 12, 12)
+        priv.setSpacing(6)
+
         self.idle_spin = QSpinBox()
         self.idle_spin.setRange(0, 240)
         self.idle_spin.setSingleStep(1)
@@ -100,7 +115,7 @@ class SettingsDialog(QDialog):
         self.idle_spin.setSuffix(" min")
         self.idle_spin.setSpecialValueText("Never")
         self.idle_spin.setValue(getattr(cfg, "idle_minutes", 15))
-        enc.addWidget(self.idle_spin, 0, Qt.AlignLeft)
+        priv.addWidget(self.idle_spin, 0, Qt.AlignLeft)
         # Explanation for idle option (autolock)
         self.idle_spin_label = QLabel(
             "Bouquin will automatically lock the notepad after this length of time, after which you'll need to re-enter the key to unlock it. "
@@ -116,22 +131,39 @@ class SettingsDialog(QDialog):
         spin_row = QHBoxLayout()
         spin_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the spinbox
         spin_row.addWidget(self.idle_spin_label)
-        enc.addLayout(spin_row)
+        priv.addLayout(spin_row)
 
-        line2 = QFrame()
-        line2.setFrameShape(QFrame.HLine)
-        line2.setFrameShadow(QFrame.Sunken)
-        enc.addWidget(line2)
+        form.addRow(priv_group)
 
-        # Change key button
-        self.rekey_btn = QPushButton("Change encryption key")
-        self.rekey_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.rekey_btn.clicked.connect(self._change_key)
+        # Maintenance settings
+        maint_group = QGroupBox("Database maintenance")
+        maint = QVBoxLayout(maint_group)
+        maint.setContentsMargins(12, 8, 12, 12)
+        maint.setSpacing(6)
 
-        enc.addWidget(self.rekey_btn, 0, Qt.AlignLeft)
+        self.compact_btn = QPushButton("Compact database")
+        self.compact_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.compact_btn.clicked.connect(self._compact_btn_clicked)
 
-        # Put the group into the form so it spans the full width nicely
-        form.addRow(enc_group)
+        maint.addWidget(self.compact_btn, 0, Qt.AlignLeft)
+
+        # Explanation for compating button
+        self.compact_label = QLabel(
+            "Compacting runs VACUUM on the database. This can help reduce its size."
+        )
+        self.compact_label.setWordWrap(True)
+        self.compact_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        # make it look secondary
+        cpal = self.compact_label.palette()
+        cpal.setColor(self.compact_label.foregroundRole(), cpal.color(QPalette.Mid))
+        self.compact_label.setPalette(cpal)
+
+        maint_row = QHBoxLayout()
+        maint_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the button
+        maint_row.addWidget(self.compact_label)
+        maint.addLayout(maint_row)
+
+        form.addRow(maint_group)
 
         # Buttons
         bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -189,7 +221,7 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "Error", f"Could not change key:\n{e}")
 
     @Slot(bool)
-    def save_key_btn_clicked(self, checked: bool):
+    def _save_key_btn_clicked(self, checked: bool):
         if checked:
             if not self.key:
                 p1 = KeyPrompt(
@@ -203,6 +235,16 @@ class SettingsDialog(QDialog):
             self.key = p1.key() or ""
         else:
             self.key = ""
+
+    @Slot(bool)
+    def _compact_btn_clicked(self):
+        try:
+            self._db.compact()
+            QMessageBox.information(
+                self, "Compact complete", "Database compacted successfully!"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not compact database:\n{e}")
 
     @property
     def config(self) -> DBConfig:

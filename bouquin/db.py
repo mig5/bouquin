@@ -464,6 +464,16 @@ class DBManager:
         else:
             raise ValueError(f"Unsupported extension: {ext}")
 
+    def compact(self) -> None:
+        """
+        Runs VACUUM on the db.
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute(f"VACUUM")
+        except Exception as e:
+            print(f"Error: {e}")
+
     def close(self) -> None:
         if self.conn is not None:
             self.conn.close()
