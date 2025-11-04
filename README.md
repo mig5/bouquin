@@ -36,6 +36,10 @@ There is deliberately no network connectivity or syncing intended.
 
 Make sure you have `libxcb-cursor0` installed (it may be called something else on non-Debian distributions).
 
+### From PyPi/pip
+
+ * `pip install bouquin`
+
 ### From source
 
  * Clone this repo or download the tarball from the releases page
@@ -47,14 +51,9 @@ Make sure you have `libxcb-cursor0` installed (it may be called something else o
 
  * Download the whl and run it
 
-### From PyPi/pip
-
- * `pip install bouquin`
-
-
 ## How to run the tests
 
  * Clone the repo
  * Ensure you have poetry installed
  * Run `poetry install --with test`
- * Run `poetry run pytest -vvv`
+ * Run `poetry run pytest -vvvv --cov=bouquin`
