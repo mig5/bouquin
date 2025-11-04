@@ -167,22 +167,10 @@ class HistoryDialog(QDialog):
             return
         sel = self._db.get_version(version_id=sel_id)
         vno = sel["version_no"]
-        # Confirm
-        if (
-            QMessageBox.question(
-                self,
-                "Revert",
-                f"Revert {self._date} to version v{vno}?\n\nYou can always change your mind later.",
-                QMessageBox.Yes | QMessageBox.No,
-            )
-            != QMessageBox.Yes
-        ):
-            return
         # Flip head pointer
         try:
             self._db.revert_to_version(self._date, version_id=sel_id)
         except Exception as e:
             QMessageBox.critical(self, "Revert failed", str(e))
             return
-        QMessageBox.information(self, "Reverted", f"{self._date} is now at v{vno}.")
         self.accept()  # let the caller refresh the editor
