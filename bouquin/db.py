@@ -19,6 +19,7 @@ class DBConfig:
     path: Path
     key: str
     idle_minutes: int = 15  # 0 = never lock
+    theme: str = "system"
 
 
 class DBManager:
@@ -159,13 +160,6 @@ class DBManager:
             (date_iso,),
         ).fetchone()
         return row[0] if row else ""
-
-    def upsert_entry(self, date_iso: str, content: str) -> None:
-        """
-        Insert or update an entry.
-        """
-        # Make a new version and set it as current
-        self.save_new_version(date_iso, content, note=None, set_current=True)
 
     def search_entries(self, text: str) -> list[str]:
         """

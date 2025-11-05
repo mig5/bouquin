@@ -10,6 +10,7 @@ from PySide6.QtGui import (
     QFontDatabase,
     QImage,
     QImageReader,
+    QPalette,
     QPixmap,
     QTextCharFormat,
     QTextCursor,
@@ -28,8 +29,11 @@ from PySide6.QtCore import (
     QBuffer,
     QByteArray,
     QIODevice,
+    QTimer,
 )
-from PySide6.QtWidgets import QTextEdit
+from PySide6.QtWidgets import QTextEdit, QApplication
+
+from .theme import Theme, ThemeManager
 
 
 class Editor(QTextEdit):
@@ -42,7 +46,7 @@ class Editor(QTextEdit):
     _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
     _DATA_IMG_RX = re.compile(r'src=["\']data:image/[^;]+;base64,([^"\']+)["\']', re.I)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, theme_manager: ThemeManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         tab_w = 4 * self.fontMetrics().horizontalAdvance(" ")
         self.setTabStopDistance(tab_w)
@@ -55,7 +59,13 @@ class Editor(QTextEdit):
 
         self.setAcceptRichText(True)
 
-        # Turn raw URLs into anchors
+        # If older docs have a baked-in color, normalize once:
+        self._retint_anchors_to_palette()
+
+        self._themes = theme_manager
+        # Refresh on theme change
+        self._themes.themeChanged.connect(self._on_theme_changed)
+
         self._linkifying = False
         self.textChanged.connect(self._linkify_document)
         self.viewport().setMouseTracking(True)
@@ -86,15 +96,6 @@ class Editor(QTextEdit):
                 return f
             f = f.parentFrame()
         return None
-
-    def _is_code_block(self, block) -> bool:
-        if not block.isValid():
-            return False
-        bf = block.blockFormat()
-        return bool(
-            bf.nonBreakableLines()
-            and bf.background().color().rgb() == self._CODE_BG.rgb()
-        )
 
     def _trim_url_end(self, url: str) -> str:
         # strip common trailing punctuation not part of the URL
@@ -141,7 +142,7 @@ class Editor(QTextEdit):
                 fmt.setAnchor(True)
                 fmt.setAnchorHref(href)  # always refresh to the latest full URL
                 fmt.setFontUnderline(True)
-                fmt.setForeground(Qt.blue)
+                fmt.setForeground(self.palette().brush(QPalette.Link))
 
                 cur.mergeCharFormat(fmt)  # merge so we don’t clobber other styling
 
@@ -481,11 +482,6 @@ class Editor(QTextEdit):
         # otherwise default handling
         return super().keyPressEvent(e)
 
-    def _clear_insertion_char_format(self):
-        """Reset inline typing format (keeps lists, alignment, margins, etc.)."""
-        nf = QTextCharFormat()
-        self.setCurrentCharFormat(nf)
-
     def _break_anchor_for_next_char(self):
         """
         Ensure the *next* typed character is not part of a hyperlink.
@@ -669,3 +665,41 @@ class Editor(QTextEdit):
         fmt = QTextListFormat()
         fmt.setStyle(QTextListFormat.Style.ListDecimal)
         c.createList(fmt)
+
+    @Slot(Theme)
+    def _on_theme_changed(self, _theme: Theme):
+        # Defer one event-loop tick so widgets have the new palette
+        QTimer.singleShot(0, self._retint_anchors_to_palette)
+
+    @Slot()
+    def _retint_anchors_to_palette(self, *_):
+        # Always read from the *application* palette to avoid stale widget palette
+        app = QApplication.instance()
+        link_brush = app.palette().brush(QPalette.Link)
+        doc = self.document()
+        cur = QTextCursor(doc)
+        cur.beginEditBlock()
+        block = doc.firstBlock()
+        while block.isValid():
+            it = block.begin()
+            while not it.atEnd():
+                frag = it.fragment()
+                if frag.isValid():
+                    fmt = frag.charFormat()
+                    if fmt.isAnchor():
+                        new_fmt = QTextCharFormat(fmt)
+                        new_fmt.setForeground(link_brush)  # force palette link color
+                        cur.setPosition(frag.position())
+                        cur.setPosition(
+                            frag.position() + frag.length(), QTextCursor.KeepAnchor
+                        )
+                        cur.setCharFormat(new_fmt)
+                it += 1
+            block = block.next()
+        cur.endEditBlock()
+        self.viewport().update()
+
+    def setHtml(self, html: str) -> None:
+        super().setHtml(html)
+        # Ensure anchors adopt the palette color on startup
+        self._retint_anchors_to_palette()

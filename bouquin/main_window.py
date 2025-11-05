@@ -23,9 +23,12 @@ from PySide6.QtGui import (
     QDesktopServices,
     QFont,
     QGuiApplication,
+    QPalette,
+    QTextCharFormat,
     QTextListFormat,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QCalendarWidget,
     QDialog,
     QFileDialog,
@@ -48,6 +51,7 @@ from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .toolbar import ToolBar
+from .theme import Theme, ThemeManager
 
 
 class _LockOverlay(QWidget):
@@ -57,23 +61,6 @@ class _LockOverlay(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setGeometry(parent.rect())
-
-        self.setStyleSheet(
-            """
-#LockOverlay { background-color: #ccc; }
-#LockOverlay QLabel { color: #fff; font-size: 18px; }
-#LockOverlay QPushButton {
-    background-color: #f2f2f2;
-    color: #000;
-    padding: 6px 14px;
-    border: 1px solid #808080;
-    border-radius: 6px;
-    font-size: 14px;
-}
-#LockOverlay QPushButton:hover   { background-color: #ffffff; }
-#LockOverlay QPushButton:pressed { background-color: #e6e6e6; }
-"""
-        )
 
         lay = QVBoxLayout(self)
         lay.addStretch(1)
@@ -92,7 +79,41 @@ class _LockOverlay(QWidget):
         lay.addWidget(self._btn, 0, Qt.AlignCenter)
         lay.addStretch(1)
 
+        self._apply_overlay_style()
+
         self.hide()  # start hidden
+
+    def _apply_overlay_style(self):
+        pal = self.palette()
+        bg = (
+            pal.window().color().darker(180)
+            if pal.color(QPalette.Window).value() < 128
+            else pal.window().color().lighter(110)
+        )
+        text = pal.windowText().color()
+        btn_bg = pal.button().color()
+        btn_fg = pal.buttonText().color()
+        border = pal.mid().color()
+
+        hover_bg = btn_bg.lighter(106)  # +6%
+        press_bg = btn_bg.darker(106)  # -6%
+
+        self.setStyleSheet(
+            f"""
+    #LockOverlay {{ background-color: {bg.name()}; }}
+    #LockOverlay QLabel {{ color: {text.name()}; font-size: 18px; }}
+    #LockOverlay QPushButton {{
+        background-color: {btn_bg.name()};
+        color: {btn_fg.name()};
+        padding: 6px 14px;
+        border: 1px solid {border.name()};
+        border-radius: 6px;
+        font-size: 14px;
+    }}
+    #LockOverlay QPushButton:hover   {{ background-color: {hover_bg.name()}; }}
+    #LockOverlay QPushButton:pressed {{ background-color: {press_bg.name()}; }}
+    """
+        )
 
     # keep overlay sized with its parent
     def eventFilter(self, obj, event):
@@ -106,10 +127,12 @@ class _LockOverlay(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, themes: ThemeManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setWindowTitle(APP_NAME)
         self.setMinimumSize(1000, 650)
+
+        self.themes = themes  # Store the themes manager
 
         self.cfg = load_db_config()
         if not os.path.exists(self.cfg.path):
@@ -145,7 +168,7 @@ class MainWindow(QMainWindow):
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
         # This is the note-taking editor
-        self.editor = Editor()
+        self.editor = Editor(self.themes)
 
         # Toolbar for controlling styling
         self.toolBar = ToolBar()
@@ -185,6 +208,7 @@ class MainWindow(QMainWindow):
 
         # full-window overlay that sits on top of the central widget
         self._lock_overlay = _LockOverlay(self.centralWidget(), self._on_unlock_clicked)
+        self._lock_overlay._apply_overlay_style()
         self.centralWidget().installEventFilter(self._lock_overlay)
 
         self._locked = False
@@ -280,6 +304,16 @@ class MainWindow(QMainWindow):
         self.settings = QSettings(APP_ORG, APP_NAME)
         self._restore_window_position()
 
+        self._apply_link_css()  # Apply link color on startup
+        # re-apply all runtime color tweaks when theme changes
+        self.themes.themeChanged.connect(lambda _t: self._retheme_overrides())
+        self.themes.themeChanged.connect(self._apply_calendar_theme)
+        self._apply_calendar_text_colors()
+        self._apply_calendar_theme(self.themes.current())
+
+        # apply once on startup so links / calendar colors are set immediately
+        self._retheme_overrides()
+
     def _try_connect(self) -> bool:
         """
         Try to connect to the database.
@@ -314,6 +348,86 @@ class MainWindow(QMainWindow):
             if self._try_connect():
                 return True
 
+    def _retheme_overrides(self):
+        if hasattr(self, "_lock_overlay"):
+            self._lock_overlay._apply_overlay_style()
+        self._apply_calendar_text_colors()
+        self._apply_link_css()  # Reapply link styles based on the current theme
+        self._apply_search_highlights(getattr(self, "_search_highlighted_dates", set()))
+        self.calendar.update()
+        self.editor.viewport().update()
+
+    def _apply_link_css(self):
+        if self.themes and self.themes.current() == Theme.DARK:
+            anchor = "#FFA500"  # Orange links
+            visited = "#B38000"  # Visited links color
+            css = f"""
+                a {{ color: {anchor}; text-decoration: underline; }}
+                a:visited {{ color: {visited}; }}
+            """
+        else:
+            css = ""  # Default to no custom styling for links (system or light theme)
+
+        try:
+            # Apply to the editor (QTextEdit or any other relevant widgets)
+            self.editor.document().setDefaultStyleSheet(css)
+        except Exception:
+            pass
+
+        try:
+            # Apply to the search widget (if it's also a rich-text widget)
+            self.search.document().setDefaultStyleSheet(css)
+        except Exception:
+            pass
+
+    def _apply_calendar_theme(self, theme: Theme):
+        """Use orange accents on the calendar in dark mode only."""
+        app_pal = QApplication.instance().palette()
+
+        if theme == Theme.DARK:
+            orange = QColor("#FFA500")
+            black  = QColor(0, 0, 0)
+
+            # Per-widget palette: selection color inside the date grid
+            pal = self.calendar.palette()
+            pal.setColor(QPalette.Highlight, orange)
+            pal.setColor(QPalette.HighlightedText, black)
+            self.calendar.setPalette(pal)
+
+            # Stylesheet: nav bar + selected-day background
+            self.calendar.setStyleSheet("""
+                QWidget#qt_calendar_navigationbar { background-color: #FFA500; }
+                QCalendarWidget QToolButton { color: black; }
+                QCalendarWidget QToolButton:hover { background-color: rgba(255,165,0,0.20); }
+                /* Selected day color in the table view */
+                QCalendarWidget QTableView:enabled {
+                    selection-background-color: #FFA500;
+                    selection-color: black;
+                }
+                /* Optional: keep weekday header readable */
+                QCalendarWidget QTableView QHeaderView::section {
+                    background: transparent;
+                    color: palette(windowText);
+                }
+            """)
+        else:
+            # Back to app defaults in light/system
+            self.calendar.setPalette(app_pal)
+            self.calendar.setStyleSheet("")
+
+        # Keep weekend text color in sync with the current palette
+        self._apply_calendar_text_colors()
+        self.calendar.update()
+
+    def _apply_calendar_text_colors(self):
+        pal = self.palette()
+        txt = pal.windowText().color()
+        fmt = QTextCharFormat()
+        fmt.setForeground(txt)
+        # Use normal text color for weekends
+        self.calendar.setWeekdayTextFormat(Qt.Saturday, fmt)
+        self.calendar.setWeekdayTextFormat(Qt.Sunday, fmt)
+
     def _on_search_dates_changed(self, date_strs: list[str]):
         dates = set()
         for ds in date_strs or []:
@@ -323,7 +437,16 @@ class MainWindow(QMainWindow):
         self._apply_search_highlights(dates)
 
     def _apply_search_highlights(self, dates: set):
-        yellow = QBrush(QColor("#fff9c4"))
+        pal = self.palette()
+        base = pal.base().color()
+        hi = pal.highlight().color()
+        # Blend highlight with base so it looks soft in both modes
+        blend = QColor(
+            (2 * hi.red() + base.red()) // 3,
+            (2 * hi.green() + base.green()) // 3,
+            (2 * hi.blue() + base.blue()) // 3,
+        )
+        yellow = QBrush(blend)
         old = getattr(self, "_search_highlighted_dates", set())
 
         for d in old - dates:  # clear removed
@@ -364,10 +487,10 @@ class MainWindow(QMainWindow):
         bf = c.blockFormat()
 
         # Block signals so setChecked() doesn't re-trigger actions
-        blocker1 = QSignalBlocker(self.toolBar.actBold)
-        blocker2 = QSignalBlocker(self.toolBar.actItalic)
-        blocker3 = QSignalBlocker(self.toolBar.actUnderline)
-        blocker4 = QSignalBlocker(self.toolBar.actStrike)
+        QSignalBlocker(self.toolBar.actBold)
+        QSignalBlocker(self.toolBar.actItalic)
+        QSignalBlocker(self.toolBar.actUnderline)
+        QSignalBlocker(self.toolBar.actStrike)
 
         self.toolBar.actBold.setChecked(fmt.fontWeight() == QFont.Weight.Bold)
         self.toolBar.actItalic.setChecked(fmt.fontItalic())
@@ -384,10 +507,10 @@ class MainWindow(QMainWindow):
         bH2 = _approx(cur_size, 18)
         bH3 = _approx(cur_size, 14)
 
-        b1 = QSignalBlocker(self.toolBar.actH1)
-        b2 = QSignalBlocker(self.toolBar.actH2)
-        b3 = QSignalBlocker(self.toolBar.actH3)
-        bN = QSignalBlocker(self.toolBar.actNormal)
+        QSignalBlocker(self.toolBar.actH1)
+        QSignalBlocker(self.toolBar.actH2)
+        QSignalBlocker(self.toolBar.actH3)
+        QSignalBlocker(self.toolBar.actNormal)
 
         self.toolBar.actH1.setChecked(bH1)
         self.toolBar.actH2.setChecked(bH2)
@@ -538,6 +661,7 @@ class MainWindow(QMainWindow):
         self.cfg.path = new_cfg.path
         self.cfg.key = new_cfg.key
         self.cfg.idle_minutes = getattr(new_cfg, "idle_minutes", self.cfg.idle_minutes)
+        self.cfg.theme = getattr(new_cfg, "theme", self.cfg.theme)
 
         # Persist once
         save_db_config(self.cfg)

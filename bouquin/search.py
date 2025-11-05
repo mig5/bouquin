@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-# type: rows are (date_iso, content)
 Row = Tuple[str, str]
 
 
@@ -102,11 +101,10 @@ class Search(QWidget):
             # Date label (plain text)
             date_lbl = QLabel()
             date_lbl.setTextFormat(Qt.TextFormat.RichText)
-            date_lbl.setText(f"<i>{date_str}</i>:")
+            date_lbl.setText(f"<h3><i>{date_str}</i></h3>")
             date_f = date_lbl.font()
             date_f.setPointSizeF(date_f.pointSizeF() + 1)
             date_lbl.setFont(date_f)
-            date_lbl.setStyleSheet("color:#000;")
             outer.addWidget(date_lbl)
 
             # Preview row with optional ellipses

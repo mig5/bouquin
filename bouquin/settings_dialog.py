@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFileDialog,
     QDialogButtonBox,
+    QRadioButton,
     QSizePolicy,
     QSpinBox,
     QMessageBox,
@@ -26,6 +27,7 @@ from PySide6.QtGui import QPalette
 
 from .db import DBConfig, DBManager
 from .settings import load_db_config, save_db_config
+from .theme import Theme
 from .key_prompt import KeyPrompt
 
 
@@ -41,6 +43,31 @@ class SettingsDialog(QDialog):
         form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         self.setMinimumWidth(560)
         self.setSizeGripEnabled(True)
+
+        current_settings = load_db_config()
+
+        # Add theme selection
+        theme_group = QGroupBox("Theme")
+        theme_layout = QVBoxLayout(theme_group)
+
+        self.theme_system = QRadioButton("System")
+        self.theme_light = QRadioButton("Light")
+        self.theme_dark = QRadioButton("Dark")
+
+        # Load current theme from settings
+        current_theme = current_settings.theme
+        if current_theme == Theme.DARK.value:
+            self.theme_dark.setChecked(True)
+        elif current_theme == Theme.LIGHT.value:
+            self.theme_light.setChecked(True)
+        else:
+            self.theme_system.setChecked(True)
+
+        theme_layout.addWidget(self.theme_system)
+        theme_layout.addWidget(self.theme_light)
+        theme_layout.addWidget(self.theme_dark)
+
+        form.addRow(theme_group)
 
         self.path_edit = QLineEdit(str(self._cfg.path))
         self.path_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -64,7 +91,6 @@ class SettingsDialog(QDialog):
 
         # Checkbox to remember key
         self.save_key_btn = QCheckBox("Remember key")
-        current_settings = load_db_config()
         self.key = current_settings.key or ""
         self.save_key_btn.setChecked(bool(self.key))
         self.save_key_btn.setCursor(Qt.PointingHandCursor)
@@ -188,13 +214,24 @@ class SettingsDialog(QDialog):
             self.path_edit.setText(p)
 
     def _save(self):
+        # Save the selected theme into QSettings
+        if self.theme_dark.isChecked():
+            selected_theme = Theme.DARK
+        elif self.theme_light.isChecked():
+            selected_theme = Theme.LIGHT
+        else:
+            selected_theme = Theme.SYSTEM
+
         key_to_save = self.key if self.save_key_btn.isChecked() else ""
         self._cfg = DBConfig(
             path=Path(self.path_edit.text()),
             key=key_to_save,
             idle_minutes=self.idle_spin.value(),
+            theme=selected_theme.value,
         )
+
         save_db_config(self._cfg)
+        self.parent().themes.apply(selected_theme)
         self.accept()
 
     def _change_key(self):
