@@ -165,12 +165,10 @@ class HistoryDialog(QDialog):
         sel_id = item.data(Qt.UserRole)
         if sel_id == self._current_id:
             return
-        sel = self._db.get_version(version_id=sel_id)
-        vno = sel["version_no"]
         # Flip head pointer
         try:
             self._db.revert_to_version(self._date, version_id=sel_id)
         except Exception as e:
             QMessageBox.critical(self, "Revert failed", str(e))
             return
-        self.accept()  # let the caller refresh the editor
+        self.accept()
