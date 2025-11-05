@@ -65,8 +65,9 @@ class Editor(QTextEdit):
 
     def _is_heading_typing(self) -> bool:
         """Is the current *insertion* format using a heading size?"""
-        s = self.currentCharFormat().fontPointSize() or self.font().pointSizeF()
-        return any(self._approx(s, h) for h in self._HEADING_SIZES)
+        bf = self.textCursor().blockFormat()
+        if bf.headingLevel() > 0:
+            return True
 
     def _apply_normal_typing(self):
         """Switch the *insertion* format to Normal (default size, normal weight)."""
@@ -611,20 +612,43 @@ class Editor(QTextEdit):
         Set heading point size for typing. If there's a selection, also apply bold
         to that selection (for H1..H3). "Normal" clears bold on the selection.
         """
-        base_size = size if size else self.font().pointSizeF()
+        # Map toolbar's sizes to heading levels
+        level = 1 if size >= 24 else 2 if size >= 18 else 3 if size >= 14 else 0
+
         c = self.textCursor()
 
-        # Update the typing (insertion) format to be size only, but don't represent
-        # it as if the Bold style has been toggled on
+        # On-screen look
         ins = QTextCharFormat()
-        ins.setFontPointSize(base_size)
+        if size:
+            ins.setFontPointSize(float(size))
+            ins.setFontWeight(QFont.Weight.Bold)
+        else:
+            ins.setFontPointSize(self.font().pointSizeF())
+            ins.setFontWeight(QFont.Weight.Normal)
         self.mergeCurrentCharFormat(ins)
 
-        # If user selected text, style that text visually as a heading
+        # Apply heading level to affected block(s)
+        def set_level_for_block(cur):
+            bf = cur.blockFormat()
+            if hasattr(bf, "setHeadingLevel"):
+                bf.setHeadingLevel(level)  # 0 clears heading
+                cur.mergeBlockFormat(bf)
+
         if c.hasSelection():
-            sel = QTextCharFormat(ins)
-            sel.setFontWeight(QFont.Weight.Bold if size else QFont.Weight.Normal)
-            c.mergeCharFormat(sel)
+            start, end = c.selectionStart(), c.selectionEnd()
+            bc = QTextCursor(self.document())
+            bc.setPosition(start)
+            while True:
+                set_level_for_block(bc)
+                if bc.position() >= end:
+                    break
+                bc.movePosition(QTextCursor.EndOfBlock)
+                if bc.position() >= end:
+                    break
+                bc.movePosition(QTextCursor.NextBlock)
+        else:
+            bc = QTextCursor(c)
+            set_level_for_block(bc)
 
     def toggle_bullets(self):
         c = self.textCursor()

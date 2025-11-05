@@ -616,6 +616,7 @@ If you want an encrypted backup, choose Backup instead of Export.
             "JSON (*.json);;"
             "CSV (*.csv);;"
             "HTML (*.html);;"
+            "Markdown (*.md);;"
             "SQL (*.sql);;"
         )
 
@@ -631,6 +632,7 @@ If you want an encrypted backup, choose Backup instead of Export.
             "JSON (*.json)": ".json",
             "CSV (*.csv)": ".csv",
             "HTML (*.html)": ".html",
+            "Markdown (*.md)": ".md",
             "SQL (*.sql)": ".sql",
         }.get(selected_filter, ".txt")
 
@@ -647,6 +649,8 @@ If you want an encrypted backup, choose Backup instead of Export.
                 self.db.export_csv(entries, filename)
             elif selected_filter.startswith("HTML"):
                 self.db.export_html(entries, filename)
+            elif selected_filter.startswith("Markdown"):
+                self.db.export_markdown(entries, filename)
             elif selected_filter.startswith("SQL"):
                 self.db.export_sql(filename)
             else:

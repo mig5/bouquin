@@ -11,6 +11,7 @@ repository = "https://git.mig5.net/mig5/bouquin"
 python = ">=3.9,<3.14"
 pyside6 = ">=6.8.1,<7.0.0"
 sqlcipher3-wheels = "^0.5.5.post0"
+markdownify = "^1.2.0"
 
 [tool.poetry.scripts]
 bouquin = "bouquin.__main__:main"

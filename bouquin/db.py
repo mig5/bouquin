@@ -6,6 +6,7 @@ import json
 import os
 
 from dataclasses import dataclass
+from markdownify import markdownify as md
 from pathlib import Path
 from sqlcipher3 import dbapi2 as sqlite
 from typing import List, Sequence, Tuple
@@ -429,6 +430,29 @@ class DBManager:
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("\n".join(parts))
+
+    def export_markdown(
+        self, entries: Sequence[Entry], file_path: str, title: str = "Bouquin export"
+    ) -> None:
+        parts = [
+            "<!doctype html>",
+            '<html lang="en">',
+            "<body>",
+            f"<h1>{html.escape(title)}</h1>",
+        ]
+        for d, c in entries:
+            parts.append(
+                f"<article><header><time>{html.escape(d)}</time></header><section>{c}</section></article>"
+            )
+        parts.append("</body></html>")
+
+        # Convert html to markdown
+        md_items = []
+        for item in parts:
+            md_items.append(md(item, heading_style="ATX"))
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(md_items))
 
     def export_sql(self, file_path: str) -> None:
         """
