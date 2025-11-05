@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 def _html_to_text(s: str) -> str:
     """Lightweight HTML→text for diff (keeps paragraphs/line breaks)."""
+    IMG_RE = re.compile(r"(?is)<img\b[^>]*>")
     STYLE_SCRIPT_RE = re.compile(r"(?is)<(script|style)[^>]*>.*?</\1>")
     COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
     BR_RE = re.compile(r"(?i)<br\s*/?>")
@@ -25,6 +26,7 @@ def _html_to_text(s: str) -> str:
     TAG_RE = re.compile(r"<[^>]+>")
     MULTINL_RE = re.compile(r"\n{3,}")
 
+    s = IMG_RE.sub("[ Image changed - see Preview pane ]", s)
     s = STYLE_SCRIPT_RE.sub("", s)
     s = COMMENT_RE.sub("", s)
     s = BR_RE.sub("\n", s)
