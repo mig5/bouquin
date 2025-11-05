@@ -17,11 +17,12 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction,
+    QBrush,
+    QColor,
     QCursor,
     QDesktopServices,
     QFont,
     QGuiApplication,
-    QTextCharFormat,
     QTextListFormat,
 )
 from PySide6.QtWidgets import (
@@ -132,15 +133,15 @@ class MainWindow(QMainWindow):
 
         self.search = Search(self.db)
         self.search.openDateRequested.connect(self._load_selected_date)
+        self.search.resultDatesChanged.connect(self._on_search_dates_changed)
 
         # Lock the calendar to the left panel at the top to stop it stretching
         # when the main window is resized.
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(8, 8, 8, 8)
-        left_layout.addWidget(self.calendar, alignment=Qt.AlignTop)
-        left_layout.addWidget(self.search, alignment=Qt.AlignBottom)
-        left_layout.addStretch(1)
+        left_layout.addWidget(self.calendar)
+        left_layout.addWidget(self.search)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
         # This is the note-taking editor
@@ -313,22 +314,44 @@ class MainWindow(QMainWindow):
             if self._try_connect():
                 return True
 
+    def _on_search_dates_changed(self, date_strs: list[str]):
+        dates = set()
+        for ds in date_strs or []:
+            qd = QDate.fromString(ds, "yyyy-MM-dd")
+            if qd.isValid():
+                dates.add(qd)
+        self._apply_search_highlights(dates)
+
+    def _apply_search_highlights(self, dates: set):
+        yellow = QBrush(QColor("#fff9c4"))
+        old = getattr(self, "_search_highlighted_dates", set())
+
+        for d in old - dates:  # clear removed
+            fmt = self.calendar.dateTextFormat(d)
+            fmt.setBackground(Qt.transparent)
+            self.calendar.setDateTextFormat(d, fmt)
+
+        for d in dates:  # apply new/current
+            fmt = self.calendar.dateTextFormat(d)
+            fmt.setBackground(yellow)
+            self.calendar.setDateTextFormat(d, fmt)
+
+        self._search_highlighted_dates = dates
+
     def _refresh_calendar_marks(self):
-        """
-        Sets a bold marker on the day to indicate that text exists
-        for that day.
-        """
-        fmt_bold = QTextCharFormat()
-        fmt_bold.setFontWeight(QFont.Weight.Bold)
-        # Clear previous marks
+        """Make days with entries bold, but keep any search highlight backgrounds."""
         for d in getattr(self, "_marked_dates", set()):
-            self.calendar.setDateTextFormat(d, QTextCharFormat())
+            fmt = self.calendar.dateTextFormat(d)
+            fmt.setFontWeight(QFont.Weight.Normal)  # remove bold only
+            self.calendar.setDateTextFormat(d, fmt)
         self._marked_dates = set()
         try:
             for date_iso in self.db.dates_with_content():
                 qd = QDate.fromString(date_iso, "yyyy-MM-dd")
                 if qd.isValid():
-                    self.calendar.setDateTextFormat(qd, fmt_bold)
+                    fmt = self.calendar.dateTextFormat(qd)
+                    fmt.setFontWeight(QFont.Weight.Bold)  # add bold only
+                    self.calendar.setDateTextFormat(qd, fmt)
                     self._marked_dates.add(qd)
         except Exception:
             pass

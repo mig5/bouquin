@@ -6,10 +6,12 @@ from typing import Iterable, Tuple
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QTextCharFormat, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (
+    QFrame,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QSizePolicy,
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
@@ -23,6 +25,7 @@ class Search(QWidget):
     """Encapsulates the search UI + logic and emits a signal when a result is chosen."""
 
     openDateRequested = Signal(str)
+    resultDatesChanged = Signal(list)
 
     def __init__(self, db, parent: QWidget | None = None):
         super().__init__(parent)
@@ -30,17 +33,21 @@ class Search(QWidget):
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search for notes here")
+        self.search.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.search.textChanged.connect(self._search)
 
         self.results = QListWidget()
         self.results.setUniformItemSizes(False)
         self.results.setSelectionMode(self.results.SelectionMode.SingleSelection)
+        self.results.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.results.itemClicked.connect(self._open_selected)
         self.results.hide()
+        self.results.setMinimumHeight(250)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
+        lay.setAlignment(Qt.AlignTop)
         lay.addWidget(self.search)
         lay.addWidget(self.results)
 
@@ -58,6 +65,7 @@ class Search(QWidget):
         if not q:
             self.results.clear()
             self.results.hide()
+            self.resultDatesChanged.emit([])  # clear highlights
             return
 
         try:
@@ -73,8 +81,10 @@ class Search(QWidget):
         rows = list(rows)
         if not rows:
             self.results.hide()
+            self.resultDatesChanged.emit([])  # clear highlights
             return
 
+        self.resultDatesChanged.emit(sorted({d for d, _ in rows}))
         self.results.show()
 
         for date_str, content in rows:
@@ -90,12 +100,13 @@ class Search(QWidget):
             outer.setSpacing(2)
 
             # Date label (plain text)
-            date_lbl = QLabel(date_str)
-            date_lbl.setTextFormat(Qt.TextFormat.PlainText)
+            date_lbl = QLabel()
+            date_lbl.setTextFormat(Qt.TextFormat.RichText)
+            date_lbl.setText(f"<i>{date_str}</i>:")
             date_f = date_lbl.font()
-            date_f.setPointSizeF(date_f.pointSizeF() - 1)
+            date_f.setPointSizeF(date_f.pointSizeF() + 1)
             date_lbl.setFont(date_f)
-            date_lbl.setStyleSheet("color:#666;")
+            date_lbl.setStyleSheet("color:#000;")
             outer.addWidget(date_lbl)
 
             # Preview row with optional ellipses
@@ -126,6 +137,11 @@ class Search(QWidget):
                 h.addWidget(right, 0, Qt.AlignmentFlag.AlignBottom)
 
             outer.addWidget(row)
+
+            line = QFrame()
+            line.setFrameShape(QFrame.HLine)
+            line.setFrameShadow(QFrame.Sunken)
+            outer.addWidget(line)
 
             # ---- Add to list ----
             item = QListWidgetItem()

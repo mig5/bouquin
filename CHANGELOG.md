@@ -1,3 +1,7 @@
+# 0.1.10
+
+ * Improve search results window and highlight in calendar when there are matches.
+
 # 0.1.9
 
  * More styling/toolbar fixes to support toggled-on styles, exclusive styles (e.g it should not be
