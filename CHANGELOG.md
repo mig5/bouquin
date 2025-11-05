@@ -1,6 +1,7 @@
 # 0.1.10
 
  * Improve search results window and highlight in calendar when there are matches.
+ * Fix styling issue with text that comes after a URL, so it doesn't appear as part of the URL.
 
 # 0.1.9
 

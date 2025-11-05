@@ -349,7 +349,7 @@ class Editor(QTextEdit):
         if source.hasImage():
             img = self._to_qimage(source.imageData())
             if img is not None:
-                self._insert_qimage_at_cursor(self, img, autoscale=True)
+                self._insert_qimage_at_cursor(img, autoscale=True)
                 return
 
         # 2) File URLs (drag/drop or paste)
@@ -496,12 +496,21 @@ class Editor(QTextEdit):
         cur_fmt = self.textCursor().charFormat()
 
         # Do nothing unless either side indicates we're in/propagating an anchor
-        if not (ins_fmt.isAnchor() or cur_fmt.isAnchor()):
+        if not (
+            ins_fmt.isAnchor()
+            or cur_fmt.isAnchor()
+            or ins_fmt.fontUnderline()
+            or ins_fmt.foreground().style() != Qt.NoBrush
+        ):
             return
 
         nf = QTextCharFormat(ins_fmt)
+        # stop the link itself
         nf.setAnchor(False)
         nf.setAnchorHref("")
+        # also stop the link *styling*
+        nf.setFontUnderline(False)
+        nf.clearForeground()
 
         self.setCurrentCharFormat(nf)
 

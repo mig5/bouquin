@@ -4,6 +4,8 @@ from PySide6.QtTest import QTest
 
 from bouquin.editor import Editor
 
+import re
+
 
 def _move_cursor_to_first_image(editor: Editor) -> QTextImageFormat | None:
     c = editor.textCursor()
@@ -19,6 +21,57 @@ def _move_cursor_to_first_image(editor: Editor) -> QTextImageFormat | None:
             return QTextImageFormat(fmt)
         c.movePosition(QTextCursor.Right)
     return None
+
+
+def _fmt_at(editor: Editor, pos: int):
+    c = editor.textCursor()
+    c.setPosition(pos)
+    c.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, 1)
+    return c.charFormat()
+
+
+def test_space_breaks_link_anchor_and_styling(qtbot):
+    e = Editor()
+    e.resize(600, 300)
+    e.show()
+    qtbot.waitExposed(e)
+
+    # Type a URL, which should be linkified (anchor + underline + blue)
+    url = "https://mig5.net"
+    QTest.keyClicks(e, url)
+    qtbot.waitUntil(lambda: e.toPlainText() == url)
+
+    # Sanity: characters within the URL are anchors
+    for i in range(len(url)):
+        assert _fmt_at(e, i).isAnchor()
+
+    # Hit Space – Editor.keyPressEvent() should call _break_anchor_for_next_char()
+    QTest.keyClick(e, Qt.Key_Space)
+
+    # Type some normal text; it must not inherit the link formatting
+    tail = "this is a test"
+    QTest.keyClicks(e, tail)
+    qtbot.waitUntil(lambda: e.toPlainText().endswith(tail))
+
+    txt = e.toPlainText()
+    # Find where our 'tail' starts
+    start = txt.index(tail)
+    end = start + len(tail)
+
+    # None of the trailing characters should be part of an anchor or visually underlined
+    for i in range(start, end):
+        fmt = _fmt_at(e, i)
+        assert not fmt.isAnchor(), f"char {i} unexpectedly still has an anchor"
+        assert not fmt.fontUnderline(), f"char {i} unexpectedly still underlined"
+
+    # Optional: ensure the HTML only wraps the URL in <a>, not the trailing text
+    html = e.document().toHtml()
+    assert re.search(
+        r'<a [^>]*href="https?://mig5\.net"[^>]*>(?:<span[^>]*>)?https?://mig5\.net(?:</span>)?</a>\s+this is a test',
+        html,
+        re.S,
+    ), html
+    assert "this is a test</a>" not in html
 
 
 def test_embed_qimage_saved_as_data_url(qtbot):
