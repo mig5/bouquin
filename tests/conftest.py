@@ -8,7 +8,7 @@ from tests.qt_helpers import AutoResponder
 # Force Qt *non-native* file dialog so we can type a filename programmatically.
 os.environ.setdefault("QT_FILE_DIALOG_ALWAYS_USE_NATIVE", "0")
 # For CI headless runs, set QT_QPA_PLATFORM=offscreen in the CI env
-# os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 # Make project importable
