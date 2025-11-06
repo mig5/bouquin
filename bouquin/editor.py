@@ -68,8 +68,12 @@ class Editor(QTextEdit):
         self._retint_anchors_to_palette()
 
         self._themes = theme_manager
+        self._apply_code_theme()  # set initial code colors
         # Refresh on theme change
         self._themes.themeChanged.connect(self._on_theme_changed)
+        self._themes.themeChanged.connect(
+            lambda _t: QTimer.singleShot(0, self._apply_code_theme)
+        )
 
         self._linkifying = False
         self.textChanged.connect(self._linkify_document)
@@ -101,6 +105,129 @@ class Editor(QTextEdit):
                 return f
             f = f.parentFrame()
         return None
+
+    def _looks_like_code_frame(self, frame) -> bool:
+        """
+        Heuristic: treat a frame as 'code' if
+          - it still has our property, OR
+          - it has the classic light code bg (≈245,245,245) or our dark bg, OR
+          - most blocks inside are non-wrapping (NonBreakableLines=True),
+            which we set in apply_code() and which survives HTML round-trip.
+        """
+        ff = frame.frameFormat()
+        if ff.property(self._CODE_FRAME_PROP):
+            return True
+
+        # Background check
+        bg = ff.background()
+        if bg.style() != Qt.NoBrush:
+            c = bg.color()
+            if c.isValid():
+                if (
+                    abs(c.red() - 245) <= 2
+                    and abs(c.green() - 245) <= 2
+                    and abs(c.blue() - 245) <= 2
+                ):
+                    return True
+                if (
+                    abs(c.red() - 43) <= 2
+                    and abs(c.green() - 43) <= 2
+                    and abs(c.blue() - 43) <= 2
+                ):
+                    return True
+
+        # Block formatting check (survives toHtml/fromHtml)
+        doc = self.document()
+        bc = QTextCursor(doc)
+        bc.setPosition(frame.firstPosition())
+        blocks = codeish = 0
+        while bc.position() < frame.lastPosition():
+            b = bc.block()
+            if not b.isValid():
+                break
+            blocks += 1
+            bf = b.blockFormat()
+            if bf.nonBreakableLines():
+                codeish += 1
+            bc.setPosition(b.position() + b.length())
+        return blocks > 0 and (codeish / blocks) >= 0.6
+
+    def _code_theme_colors(self):
+        """Return (bg, fg) for code blocks based on the effective palette."""
+        pal = QApplication.instance().palette()
+        # simple luminance check on the window color
+        win = pal.color(QPalette.Window)
+        is_dark = win.value() < 128
+        if is_dark:
+            bg = QColor(43, 43, 43)  # dark code background
+            fg = pal.windowText().color()  # readable on dark
+        else:
+            bg = QColor(245, 245, 245)  # light code background
+            fg = pal.text().color()  # readable on light
+        return bg, fg
+
+    def _apply_code_theme(self):
+        """Retint all code frames (even those reloaded from HTML) to match the current theme."""
+        bg, fg = self._code_theme_colors()
+        self._CODE_BG = bg  # used by future apply_code() calls
+
+        doc = self.document()
+        cur = QTextCursor(doc)
+        cur.beginEditBlock()
+        try:
+            # Traverse all frames reliably (iterator-based, works after reload)
+            stack = [doc.rootFrame()]
+            while stack:
+                f = stack.pop()
+                it = f.begin()
+                while not it.atEnd():
+                    cf = it.currentFrame()
+                    if cf is not None:
+                        stack.append(cf)
+                    it += 1
+
+                # Retint frames that look like code
+                if f is not doc.rootFrame() and self._looks_like_code_frame(f):
+                    ff = f.frameFormat()
+                    ff.setBackground(bg)
+                    f.setFrameFormat(ff)
+
+                    # Make sure the text inside stays readable and monospaced
+                    mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+                    bc = QTextCursor(doc)
+                    bc.setPosition(f.firstPosition())
+                    while bc.position() < f.lastPosition():
+                        bc.select(QTextCursor.BlockUnderCursor)
+
+                        bf = QTextBlockFormat()
+                        bf.setTopMargin(0)
+                        bf.setBottomMargin(0)
+                        bf.setLeftMargin(12)
+                        bf.setRightMargin(12)
+                        bf.setNonBreakableLines(True)
+
+                        cf = QTextCharFormat()
+                        cf.setFont(mono)
+                        cf.setFontFixedPitch(True)
+                        cf.setForeground(fg)
+
+                        bc.mergeBlockFormat(bf)
+                        bc.mergeBlockCharFormat(cf)
+                        if not bc.movePosition(QTextCursor.NextBlock):
+                            break
+        finally:
+            cur.endEditBlock()
+            self.viewport().update()
+
+    def _safe_select(self, cur: QTextCursor, start: int, end: int):
+        """Select [start, end] inclusive without exceeding document bounds."""
+        doc_max = max(0, self.document().characterCount() - 1)
+        s = max(0, min(start, doc_max))
+        e = max(0, min(end, doc_max))
+        if e < s:
+            s, e = e, s
+        cur.setPosition(s)
+        cur.setPosition(e, QTextCursor.KeepAnchor)
 
     def _trim_url_end(self, url: str) -> str:
         # strip common trailing punctuation not part of the URL
@@ -855,6 +982,7 @@ class Editor(QTextEdit):
     def _on_theme_changed(self, _theme: Theme):
         # Defer one event-loop tick so widgets have the new palette
         QTimer.singleShot(0, self._retint_anchors_to_palette)
+        QTimer.singleShot(0, self._apply_code_theme)
 
     @Slot()
     def _retint_anchors_to_palette(self, *_):
@@ -874,10 +1002,13 @@ class Editor(QTextEdit):
                     if fmt.isAnchor():
                         new_fmt = QTextCharFormat(fmt)
                         new_fmt.setForeground(link_brush)  # force palette link color
-                        cur.setPosition(frag.position())
-                        cur.setPosition(
-                            frag.position() + frag.length(), QTextCursor.KeepAnchor
-                        )
+                        start = frag.position()
+                        cur.setPosition(start)
+                        cur.movePosition(
+                            QTextCursor.NextCharacter,
+                            QTextCursor.KeepAnchor,
+                            frag.length(),
+                        )  # select exactly this fragment
                         cur.setCharFormat(new_fmt)
                 it += 1
             block = block.next()
@@ -895,3 +1026,4 @@ class Editor(QTextEdit):
 
         # Ensure anchors adopt the palette color on startup
         self._retint_anchors_to_palette()
+        self._apply_code_theme()

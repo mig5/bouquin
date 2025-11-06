@@ -1,3 +1,7 @@
+# 0.1.10.2
+
+ * Fix for code blocks in dark mode
+
 # 0.1.10.1
 
  * Small bugfix for a debug message left in

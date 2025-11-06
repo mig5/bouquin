@@ -11,7 +11,7 @@ class _ThemeSpy:
     def __init__(self):
         self.calls = []
 
-    def apply(self, t):
+    def set(self, t):
         self.calls.append(t)
 
 
@@ -78,7 +78,7 @@ def test_save_persists_all_fields(monkeypatch, qtbot, tmp_path):
         def __init__(self):
             self.calls = []
 
-        def apply(self, theme):
+        def set(self, theme):
             self.calls.append(theme)
 
     class _Parent(QWidget):

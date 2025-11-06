@@ -246,7 +246,7 @@ class SettingsDialog(QDialog):
         )
 
         save_db_config(self._cfg)
-        self.parent().themes.apply(selected_theme)
+        self.parent().themes.set(selected_theme)
         self.accept()
 
     def _change_key(self):
