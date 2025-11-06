@@ -886,5 +886,12 @@ class Editor(QTextEdit):
 
     def setHtml(self, html: str) -> None:
         super().setHtml(html)
+
+        doc = self.document()
+        block = doc.firstBlock()
+        while block.isValid():
+            self._style_checkbox_glyph(block)  # Apply checkbox styling to each block
+            block = block.next()
+
         # Ensure anchors adopt the palette color on startup
         self._retint_anchors_to_palette()

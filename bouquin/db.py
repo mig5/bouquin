@@ -20,6 +20,7 @@ class DBConfig:
     key: str
     idle_minutes: int = 15  # 0 = never lock
     theme: str = "system"
+    move_todos: bool = False
 
 
 class DBManager:

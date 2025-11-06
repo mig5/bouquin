@@ -69,6 +69,19 @@ class SettingsDialog(QDialog):
 
         form.addRow(theme_group)
 
+        # Add Behaviour
+        behaviour_group = QGroupBox("Behaviour")
+        behaviour_layout = QVBoxLayout(behaviour_group)
+
+        self.move_todos = QCheckBox(
+            "Move yesterday's unchecked TODOs to today on startup"
+        )
+        self.move_todos.setChecked(current_settings.move_todos)
+        self.move_todos.setCursor(Qt.PointingHandCursor)
+
+        behaviour_layout.addWidget(self.move_todos)
+        form.addRow(behaviour_group)
+
         self.path_edit = QLineEdit(str(self._cfg.path))
         self.path_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         browse_btn = QPushButton("Browse…")
@@ -223,11 +236,13 @@ class SettingsDialog(QDialog):
             selected_theme = Theme.SYSTEM
 
         key_to_save = self.key if self.save_key_btn.isChecked() else ""
+
         self._cfg = DBConfig(
             path=Path(self.path_edit.text()),
             key=key_to_save,
             idle_minutes=self.idle_spin.value(),
             theme=selected_theme.value,
+            move_todos=self.move_todos.isChecked(),
         )
 
         save_db_config(self._cfg)

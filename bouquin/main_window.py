@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import os
 import sys
+import re
 
 from pathlib import Path
 from PySide6.QtCore import (
@@ -224,7 +225,8 @@ class MainWindow(QMainWindow):
         self.editor.textChanged.connect(self._on_text_changed)
 
         # First load + mark dates in calendar with content
-        self._load_selected_date()
+        if not self._load_yesterday_todos():
+            self._load_selected_date()
         self._refresh_calendar_marks()
 
         # Restore window position from settings
@@ -469,17 +471,31 @@ class MainWindow(QMainWindow):
         d = self.calendar.selectedDate()
         return f"{d.year():04d}-{d.month():02d}-{d.day():02d}"
 
-    def _load_selected_date(self, date_iso=False):
+    def _load_selected_date(self, date_iso=False, extra_data=False):
         if not date_iso:
             date_iso = self._current_date_iso()
         try:
             text = self.db.get_entry(date_iso)
+            if extra_data:
+                # Wrap extra_data in a <p> tag for HTML rendering
+                extra_data_html = f"<p>{extra_data}</p>"
+
+                # Inject the extra_data before the closing </body></html>
+                modified = re.sub(r"(<\/body><\/html>)", extra_data_html + r"\1", text)
+                text = modified
+                self.editor.setHtml(text)
+                self._dirty = True
+                self._save_date(date_iso, True)
+
+            print("end")
         except Exception as e:
             QMessageBox.critical(self, "Read Error", str(e))
             return
+
         self.editor.blockSignals(True)
         self.editor.setHtml(text)
         self.editor.blockSignals(False)
+
         self._dirty = False
         # track which date the editor currently represents
         self._active_date_iso = date_iso
@@ -499,6 +515,56 @@ class MainWindow(QMainWindow):
         """Jump to today."""
         today = QDate.currentDate()
         self.calendar.setSelectedDate(today)
+
+    def _load_yesterday_todos(self):
+        try:
+            if not self.cfg.move_todos:
+                return
+            yesterday_str = QDate.currentDate().addDays(-1).toString("yyyy-MM-dd")
+            text = self.db.get_entry(yesterday_str)
+            unchecked_items = []
+
+            # Regex to match the unchecked checkboxes and their associated text
+            checkbox_pattern = re.compile(
+                r"<span[^>]*>(☐)</span>\s*(.*?)</p>", re.DOTALL
+            )
+
+            # Find unchecked items and store them
+            for match in checkbox_pattern.finditer(text):
+                checkbox = match.group(1)  # Either ☐ or ☑
+                item_text = match.group(2).strip()  # The text after the checkbox
+                if checkbox == "☐":  # If it's an unchecked checkbox (☐)
+                    unchecked_items.append("☐ " + item_text)  # Store the unchecked item
+
+            # Remove the unchecked items from yesterday's HTML content
+            if unchecked_items:
+                # This regex will find the entire checkbox line and remove it from the HTML content
+                uncheckbox_pattern = re.compile(
+                    r"<span[^>]*>☐</span>\s*(.*?)</p>", re.DOTALL
+                )
+                modified_text = re.sub(
+                    uncheckbox_pattern, "", text
+                )  # Remove the checkbox lines
+
+                # Save the modified HTML back to the database
+                self.db.save_new_version(
+                    yesterday_str,
+                    modified_text,
+                    "Unchecked checkbox items moved to next day",
+                )
+
+                # Join unchecked items into a formatted string
+                unchecked_str = "\n".join(
+                    [f"<p>{item}</p>" for item in unchecked_items]
+                )
+
+                # Load the unchecked items into the current editor
+                self._load_selected_date(False, unchecked_str)
+            else:
+                return False
+
+        except Exception as e:
+            raise SystemError(e)
 
     def _on_date_changed(self):
         """
@@ -592,6 +658,7 @@ class MainWindow(QMainWindow):
         self.cfg.key = new_cfg.key
         self.cfg.idle_minutes = getattr(new_cfg, "idle_minutes", self.cfg.idle_minutes)
         self.cfg.theme = getattr(new_cfg, "theme", self.cfg.theme)
+        self.cfg.move_todos = getattr(new_cfg, "move_todos", self.cfg.move_todos)
 
         # Persist once
         save_db_config(self.cfg)

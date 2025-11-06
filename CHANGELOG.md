@@ -6,6 +6,7 @@
  * Represent in the History diff pane when an image was the thing that changed
  * Support theme choice in settings (light/dark/system)
  * Add Checkboxes in the editor. Typing 'TODO' at the start of a line will auto-convert into a checkbox.
+ * Add option to automatically move yesterday's unchecked TODOs to today on startup
 
 # 0.1.9
 

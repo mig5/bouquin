@@ -24,7 +24,10 @@ def load_db_config() -> DBConfig:
     key = s.value("db/key", "")
     idle = s.value("ui/idle_minutes", 15, type=int)
     theme = s.value("ui/theme", "system", type=str)
-    return DBConfig(path=path, key=key, idle_minutes=idle, theme=theme)
+    move_todos = s.value("ui/move_todos", False, type=bool)
+    return DBConfig(
+        path=path, key=key, idle_minutes=idle, theme=theme, move_todos=move_todos
+    )
 
 
 def save_db_config(cfg: DBConfig) -> None:
@@ -33,3 +36,4 @@ def save_db_config(cfg: DBConfig) -> None:
     s.setValue("db/key", str(cfg.key))
     s.setValue("ui/idle_minutes", str(cfg.idle_minutes))
     s.setValue("ui/theme", str(cfg.theme))
+    s.setValue("ui/move_todos", str(cfg.move_todos))
