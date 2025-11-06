@@ -12,6 +12,9 @@ os.environ.setdefault("QT_FILE_DIALOG_ALWAYS_USE_NATIVE", "0")
 
 
 # Make project importable
+from PySide6.QtWidgets import QApplication, QWidget
+from bouquin.theme import ThemeManager, ThemeConfig, Theme
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -59,7 +62,10 @@ def open_window(qtbot, temp_home, clean_settings):
     """Launch the app and immediately satisfy first-run/unlock key prompts."""
     from bouquin.main_window import MainWindow
 
-    win = MainWindow()
+    app = QApplication.instance()
+    themes = ThemeManager(app, ThemeConfig())
+    themes.apply(Theme.SYSTEM)
+    win = MainWindow(themes=themes)
     qtbot.addWidget(win)
     win.show()
     qtbot.waitExposed(win)
@@ -75,3 +81,24 @@ def today_iso():
 
     d = date.today()
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
+
+
+@pytest.fixture
+def theme_parent_widget(qtbot):
+    """A minimal parent that provides .themes.apply(...) like MainWindow."""
+
+    class _ThemesStub:
+        def __init__(self):
+            self.applied = []
+
+        def apply(self, theme):
+            self.applied.append(theme)
+
+    class _Parent(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.themes = _ThemesStub()
+
+    parent = _Parent()
+    qtbot.addWidget(parent)
+    return parent

@@ -10,6 +10,8 @@ class Theme(Enum):
     SYSTEM = "system"
     LIGHT = "light"
     DARK = "dark"
+    ORANGE_ANCHOR = "#FFA500"
+    ORANGE_ANCHOR_VISITED = "#B38000"
 
 
 @dataclass
@@ -87,8 +89,8 @@ class ThemeManager(QObject):
         pal.setColor(QPalette.BrightText, QColor(255, 84, 84))
         pal.setColor(QPalette.Highlight, focus)
         pal.setColor(QPalette.HighlightedText, QColor(0, 0, 0))
-        pal.setColor(QPalette.Link, QColor("#FFA500"))
-        pal.setColor(QPalette.LinkVisited, QColor("#B38000"))
+        pal.setColor(QPalette.Link, QColor(Theme.ORANGE_ANCHOR.value))
+        pal.setColor(QPalette.LinkVisited, QColor(Theme.ORANGE_ANCHOR_VISITED.value))
 
         return pal
 

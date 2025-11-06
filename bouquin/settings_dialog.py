@@ -259,6 +259,7 @@ class SettingsDialog(QDialog):
 
     @Slot(bool)
     def _save_key_btn_clicked(self, checked: bool):
+        self.key = ""
         if checked:
             if not self.key:
                 p1 = KeyPrompt(
@@ -270,8 +271,6 @@ class SettingsDialog(QDialog):
                     self.save_key_btn.blockSignals(False)
                     return
                 self.key = p1.key() or ""
-        else:
-            self.key = ""
 
     @Slot(bool)
     def _compact_btn_clicked(self):

@@ -359,8 +359,8 @@ class MainWindow(QMainWindow):
 
     def _apply_link_css(self):
         if self.themes and self.themes.current() == Theme.DARK:
-            anchor = "#FFA500"  # Orange links
-            visited = "#B38000"  # Visited links color
+            anchor = Theme.ORANGE_ANCHOR.value
+            visited = Theme.ORANGE_ANCHOR_VISITED.value
             css = f"""
                 a {{ color: {anchor}; text-decoration: underline; }}
                 a:visited {{ color: {visited}; }}
@@ -385,31 +385,35 @@ class MainWindow(QMainWindow):
         app_pal = QApplication.instance().palette()
 
         if theme == Theme.DARK:
-            orange = QColor("#FFA500")
-            black  = QColor(0, 0, 0)
+            highlight = QColor(Theme.ORANGE_ANCHOR.value)
+            black = QColor(0, 0, 0)
+
+            highlight_css = Theme.ORANGE_ANCHOR.value
 
             # Per-widget palette: selection color inside the date grid
             pal = self.calendar.palette()
-            pal.setColor(QPalette.Highlight, orange)
+            pal.setColor(QPalette.Highlight, highlight)
             pal.setColor(QPalette.HighlightedText, black)
             self.calendar.setPalette(pal)
 
             # Stylesheet: nav bar + selected-day background
-            self.calendar.setStyleSheet("""
-                QWidget#qt_calendar_navigationbar { background-color: #FFA500; }
-                QCalendarWidget QToolButton { color: black; }
-                QCalendarWidget QToolButton:hover { background-color: rgba(255,165,0,0.20); }
+            self.calendar.setStyleSheet(
+                f"""
+                QWidget#qt_calendar_navigationbar {{ background-color: {highlight_css}; }}
+                QCalendarWidget QToolButton {{ color: black; }}
+                QCalendarWidget QToolButton:hover {{ background-color: rgba(255,165,0,0.20); }}
                 /* Selected day color in the table view */
-                QCalendarWidget QTableView:enabled {
-                    selection-background-color: #FFA500;
+                QCalendarWidget QTableView:enabled {{
+                    selection-background-color: {highlight_css};
                     selection-color: black;
-                }
+                }}
                 /* Optional: keep weekday header readable */
-                QCalendarWidget QTableView QHeaderView::section {
+                QCalendarWidget QTableView QHeaderView::section {{
                     background: transparent;
                     color: palette(windowText);
-                }
-            """)
+                }}
+            """
+            )
         else:
             # Back to app defaults in light/system
             self.calendar.setPalette(app_pal)

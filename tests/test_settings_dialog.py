@@ -1,9 +1,24 @@
 from pathlib import Path
 
-from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QWidget
 
 from bouquin.db import DBConfig
 from bouquin.settings_dialog import SettingsDialog
+from bouquin.theme import Theme
+
+
+class _ThemeSpy:
+    def __init__(self):
+        self.calls = []
+
+    def apply(self, t):
+        self.calls.append(t)
+
+
+class _Parent(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.themes = _ThemeSpy()
 
 
 class FakeDB:
@@ -58,7 +73,22 @@ def test_save_persists_all_fields(monkeypatch, qtbot, tmp_path):
     p = AcceptingPrompt().set_key("sekrit")
     monkeypatch.setattr("bouquin.settings_dialog.KeyPrompt", lambda *a, **k: p)
 
-    dlg = SettingsDialog(cfg, db)
+    # Provide a lightweight parent that mimics MainWindow’s `themes` API
+    class _ThemeSpy:
+        def __init__(self):
+            self.calls = []
+
+        def apply(self, theme):
+            self.calls.append(theme)
+
+    class _Parent(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.themes = _ThemeSpy()
+
+    parent = _Parent()
+    qtbot.addWidget(parent)
+    dlg = SettingsDialog(cfg, db, parent=parent)
     qtbot.addWidget(dlg)
     dlg.show()
     qtbot.waitExposed(dlg)
@@ -77,6 +107,7 @@ def test_save_persists_all_fields(monkeypatch, qtbot, tmp_path):
     assert out.path == new_path
     assert out.idle_minutes == 0
     assert out.key == "sekrit"
+    assert parent.themes.calls and parent.themes.calls[-1] == Theme.SYSTEM
 
 
 def test_save_key_checkbox_requires_key_and_reverts_if_cancelled(monkeypatch, qtbot):
@@ -250,3 +281,16 @@ def test_save_key_checkbox_preexisting_key_does_not_crash(monkeypatch, qtbot):
     dlg.save_key_btn.setChecked(True)
     # We should reach here with the original key preserved.
     assert dlg.key == "already"
+
+
+def test_save_unchecked_clears_key_and_applies_theme(qtbot, tmp_path):
+    parent = _Parent()
+    qtbot.addWidget(parent)
+    cfg = DBConfig(tmp_path / "db.sqlite", key="sekrit", idle_minutes=5)
+    dlg = SettingsDialog(cfg, FakeDB(), parent=parent)
+    qtbot.addWidget(dlg)
+    dlg.save_key_btn.setChecked(False)
+    # Trigger save
+    dlg._save()
+    assert dlg.config.key == ""  # cleared
+    assert parent.themes.calls  # applied some theme

@@ -166,7 +166,7 @@ class AutoResponder:
                 continue
 
             wid = id(w)
-            # Handle first-run / unlock / save-name prompts (your existing branches)
+            # Handle first-run / unlock / save-name prompts
             if _looks_like_set_key_dialog(w) or _looks_like_unlock_dialog(w):
                 fill_first_line_edit_and_accept(w, "ci-secret-key")
                 self._seen.add(wid)
