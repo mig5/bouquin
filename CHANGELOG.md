@@ -1,3 +1,7 @@
+# 0.1.11
+
+ * Add missing export extensions to export_by_extension
+
 # 0.1.10.2
 
  * Fix for code blocks in dark mode

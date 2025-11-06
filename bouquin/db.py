@@ -480,6 +480,10 @@ class DBManager:
             self.export_txt(entries, file_path)
         elif ext in {".html", ".htm"}:
             self.export_html(entries, file_path)
+        elif ext in {".sql", ".sqlite"}:
+            self.export_sql(file_path)
+        elif ext == ".md":
+            self.export_markdown(file_path)
         else:
             raise ValueError(f"Unsupported extension: {ext}")
 
