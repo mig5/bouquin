@@ -45,6 +45,11 @@ class Editor(QTextEdit):
     _HEADING_SIZES = (24.0, 18.0, 14.0)
     _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
     _DATA_IMG_RX = re.compile(r'src=["\']data:image/[^;]+;base64,([^"\']+)["\']', re.I)
+    # --- Checkbox hack --- #
+    _CHECK_UNCHECKED = "\u2610"  # ☐
+    _CHECK_CHECKED = "\u2611"  # ☑
+    _CHECK_RX = re.compile(r"^\s*([\u2610\u2611])\s")  # ☐/☑ plus a space
+    _CHECKBOX_SCALE = 1.35
 
     def __init__(self, theme_manager: ThemeManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -451,11 +456,52 @@ class Editor(QTextEdit):
             self.viewport().setCursor(Qt.IBeamCursor)
         super().mouseMoveEvent(e)
 
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and not (e.modifiers() & Qt.ControlModifier):
+            cur = self.cursorForPosition(e.pos())
+            b = cur.block()
+            state, pref = self._checkbox_info_for_block(b)
+            if state is not None:
+                col = cur.position() - b.position()
+                if col <= max(1, pref):  # clicked on ☐/☑ (and the following space)
+                    self._set_block_checkbox_state(b, not state)
+                    return
+        return super().mousePressEvent(e)
+
     def keyPressEvent(self, e):
         key = e.key()
 
-        # Pre-insert: stop link/format bleed for “word boundary” keys
         if key in (Qt.Key_Space, Qt.Key_Tab):
+            c = self.textCursor()
+            b = c.block()
+            pos_in_block = c.position() - b.position()
+
+            if (
+                pos_in_block >= 4
+                and b.text().startswith("TODO")
+                and b.text()[:pos_in_block] == "TODO"
+                and self._checkbox_info_for_block(b)[0] is None
+            ):
+                tcur = QTextCursor(self.document())
+                tcur.setPosition(b.position())  # start of block
+                tcur.setPosition(
+                    b.position() + 4, QTextCursor.KeepAnchor
+                )  # select "TODO"
+                tcur.beginEditBlock()
+                tcur.removeSelectedText()
+                tcur.insertText(self._CHECK_UNCHECKED + " ")  # insert "☐ "
+                tcur.endEditBlock()
+
+                # visuals: size bump
+                if hasattr(self, "_style_checkbox_glyph"):
+                    self._style_checkbox_glyph(b)
+
+                # caret after the inserted prefix; swallow the key (we already added a space)
+                c.setPosition(b.position() + 2)
+                self.setTextCursor(c)
+                return
+
+            # not a TODO-at-start case
             self._break_anchor_for_next_char()
             return super().keyPressEvent(e)
 
@@ -470,6 +516,26 @@ class Editor(QTextEdit):
                     out.setPosition(frame.lastPosition())  # after the frame's contents
                     self.setTextCursor(out)
                     super().insertPlainText("\n")  # start a normal paragraph
+                    return
+
+            # --- CHECKBOX handling: continue on Enter; "escape" on second Enter ---
+            b = c.block()
+            state, pref = self._checkbox_info_for_block(b)
+            if state is not None and not c.hasSelection():
+                text_after = b.text()[pref:].strip()
+                if c.atBlockEnd() and text_after == "":
+                    # Empty checkbox item -> remove the prefix and insert a plain new line
+                    cur = QTextCursor(self.document())
+                    cur.setPosition(b.position())
+                    cur.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, pref)
+                    cur.removeSelectedText()
+                    return super().keyPressEvent(e)
+                else:
+                    # Normal continuation: new checkbox on the next line
+                    super().keyPressEvent(e)  # make the new block
+                    super().insertPlainText(self._CHECK_UNCHECKED + " ")
+                    if hasattr(self, "_style_checkbox_glyph"):
+                        self._style_checkbox_glyph(self.textCursor().block())
                     return
 
             # Follow-on style: if we typed a heading and press Enter at end of block,
@@ -519,6 +585,125 @@ class Editor(QTextEdit):
         if cursor.hasSelection():
             cursor.mergeCharFormat(fmt)
         self.mergeCurrentCharFormat(fmt)
+
+    # ====== Checkbox core ======
+    def _base_point_size_for_block(self, block) -> float:
+        # Try the block’s char format, then editor font
+        sz = block.charFormat().fontPointSize()
+        if sz <= 0:
+            sz = self.fontPointSize()
+        if sz <= 0:
+            sz = self.font().pointSizeF() or 12.0
+        return float(sz)
+
+    def _style_checkbox_glyph(self, block):
+        """Apply larger size (and optional symbol font) to the single ☐/☑ char."""
+        state, _ = self._checkbox_info_for_block(block)
+        if state is None:
+            return
+        doc = self.document()
+        c = QTextCursor(doc)
+        c.setPosition(block.position())
+        c.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, 1)  # select ☐/☑ only
+
+        base = self._base_point_size_for_block(block)
+        fmt = QTextCharFormat()
+        fmt.setFontPointSize(base * self._CHECKBOX_SCALE)
+        # keep the glyph centered on the text baseline
+        fmt.setVerticalAlignment(QTextCharFormat.AlignMiddle)
+
+        c.mergeCharFormat(fmt)
+
+    def _checkbox_info_for_block(self, block):
+        """Return (state, prefix_len): state in {None, False, True}, prefix_len in chars."""
+        text = block.text()
+        m = self._CHECK_RX.match(text)
+        if not m:
+            return None, 0
+        ch = m.group(1)
+        state = True if ch == self._CHECK_CHECKED else False
+        return state, m.end()
+
+    def _set_block_checkbox_present(self, block, present: bool):
+        state, pref = self._checkbox_info_for_block(block)
+        doc = self.document()
+        c = QTextCursor(doc)
+        c.setPosition(block.position())
+        c.beginEditBlock()
+        try:
+            if present and state is None:
+                c.insertText(self._CHECK_UNCHECKED + " ")
+                state = False
+                self._style_checkbox_glyph(block)
+            else:
+                if state is not None:
+                    c.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, pref)
+                    c.removeSelectedText()
+                    state = None
+        finally:
+            c.endEditBlock()
+
+        return state
+
+    def _set_block_checkbox_state(self, block, checked: bool):
+        """Switch ☐/☑ at the start of the block."""
+        state, pref = self._checkbox_info_for_block(block)
+        if state is None:
+            return
+        doc = self.document()
+        c = QTextCursor(doc)
+        c.setPosition(block.position())
+        c.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, 1)  # just the symbol
+        c.beginEditBlock()
+        try:
+            c.removeSelectedText()
+            c.insertText(self._CHECK_CHECKED if checked else self._CHECK_UNCHECKED)
+            self._style_checkbox_glyph(block)
+        finally:
+            c.endEditBlock()
+
+    # Public API used by toolbar
+    def toggle_checkboxes(self):
+        """
+        Toggle checkbox prefix on/off for the current block(s).
+        If all targeted blocks already have a checkbox, remove them; otherwise add.
+        """
+        c = self.textCursor()
+        doc = self.document()
+
+        if c.hasSelection():
+            start = doc.findBlock(c.selectionStart())
+            end = doc.findBlock(c.selectionEnd() - 1)
+        else:
+            start = end = c.block()
+
+        # Decide intent: add or remove?
+        b = start
+        all_have = True
+        while True:
+            state, _ = self._checkbox_info_for_block(b)
+            if state is None:
+                all_have = False
+                break
+            if b == end:
+                break
+            b = b.next()
+
+        # Apply
+        b = start
+        while True:
+            self._set_block_checkbox_present(b, present=not all_have)
+            if b == end:
+                break
+            b = b.next()
+
+    def toggle_current_checkbox_state(self):
+        """Tick/untick the current line if it starts with a checkbox."""
+        b = self.textCursor().block()
+        state, _ = self._checkbox_info_for_block(b)
+        if state is None:
+            return
+        self._set_block_checkbox_state(b, not state)
 
     @Slot()
     def apply_weight(self):

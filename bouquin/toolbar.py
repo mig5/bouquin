@@ -14,6 +14,7 @@ class ToolBar(QToolBar):
     headingRequested = Signal(int)
     bulletsRequested = Signal()
     numbersRequested = Signal()
+    checkboxesRequested = Signal()
     alignRequested = Signal(Qt.AlignmentFlag)
     historyRequested = Signal()
     insertImageRequested = Signal()
@@ -86,6 +87,9 @@ class ToolBar(QToolBar):
         self.actNumbers.setToolTip("Numbered list")
         self.actNumbers.setCheckable(True)
         self.actNumbers.triggered.connect(self.numbersRequested)
+        self.actCheckboxes = QAction("☐", self)
+        self.actCheckboxes.setToolTip("Toggle checkboxes")
+        self.actCheckboxes.triggered.connect(self.checkboxesRequested)
 
         # Images
         self.actInsertImg = QAction("Image", self)
@@ -150,6 +154,7 @@ class ToolBar(QToolBar):
                 self.actNormal,
                 self.actBullets,
                 self.actNumbers,
+                self.actCheckboxes,
                 self.actInsertImg,
                 self.actAlignL,
                 self.actAlignC,

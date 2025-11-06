@@ -32,10 +32,8 @@ from PySide6.QtWidgets import (
     QCalendarWidget,
     QDialog,
     QFileDialog,
-    QLabel,
     QMainWindow,
     QMessageBox,
-    QPushButton,
     QSizePolicy,
     QSplitter,
     QVBoxLayout,
@@ -46,84 +44,13 @@ from .db import DBManager
 from .editor import Editor
 from .history_dialog import HistoryDialog
 from .key_prompt import KeyPrompt
+from .lock_overlay import LockOverlay
 from .save_dialog import SaveDialog
 from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .toolbar import ToolBar
 from .theme import Theme, ThemeManager
-
-
-class _LockOverlay(QWidget):
-    def __init__(self, parent: QWidget, on_unlock: callable):
-        super().__init__(parent)
-        self.setObjectName("LockOverlay")
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setFocusPolicy(Qt.StrongFocus)
-        self.setGeometry(parent.rect())
-
-        lay = QVBoxLayout(self)
-        lay.addStretch(1)
-
-        msg = QLabel("Locked due to inactivity")
-        msg.setAlignment(Qt.AlignCenter)
-
-        self._btn = QPushButton("Unlock")
-        self._btn.setFixedWidth(200)
-        self._btn.setCursor(Qt.PointingHandCursor)
-        self._btn.setAutoDefault(True)
-        self._btn.setDefault(True)
-        self._btn.clicked.connect(on_unlock)
-
-        lay.addWidget(msg, 0, Qt.AlignCenter)
-        lay.addWidget(self._btn, 0, Qt.AlignCenter)
-        lay.addStretch(1)
-
-        self._apply_overlay_style()
-
-        self.hide()  # start hidden
-
-    def _apply_overlay_style(self):
-        pal = self.palette()
-        bg = (
-            pal.window().color().darker(180)
-            if pal.color(QPalette.Window).value() < 128
-            else pal.window().color().lighter(110)
-        )
-        text = pal.windowText().color()
-        btn_bg = pal.button().color()
-        btn_fg = pal.buttonText().color()
-        border = pal.mid().color()
-
-        hover_bg = btn_bg.lighter(106)  # +6%
-        press_bg = btn_bg.darker(106)  # -6%
-
-        self.setStyleSheet(
-            f"""
-    #LockOverlay {{ background-color: {bg.name()}; }}
-    #LockOverlay QLabel {{ color: {text.name()}; font-size: 18px; }}
-    #LockOverlay QPushButton {{
-        background-color: {btn_bg.name()};
-        color: {btn_fg.name()};
-        padding: 6px 14px;
-        border: 1px solid {border.name()};
-        border-radius: 6px;
-        font-size: 14px;
-    }}
-    #LockOverlay QPushButton:hover   {{ background-color: {hover_bg.name()}; }}
-    #LockOverlay QPushButton:pressed {{ background-color: {press_bg.name()}; }}
-    """
-        )
-
-    # keep overlay sized with its parent
-    def eventFilter(self, obj, event):
-        if obj is self.parent() and event.type() in (QEvent.Resize, QEvent.Show):
-            self.setGeometry(obj.rect())
-        return False
-
-    def showEvent(self, e):
-        super().showEvent(e)
-        self._btn.setFocus()
 
 
 class MainWindow(QMainWindow):
@@ -182,6 +109,7 @@ class MainWindow(QMainWindow):
         self.toolBar.headingRequested.connect(self.editor.apply_heading)
         self.toolBar.bulletsRequested.connect(self.editor.toggle_bullets)
         self.toolBar.numbersRequested.connect(self.editor.toggle_numbers)
+        self.toolBar.checkboxesRequested.connect(self.editor.toggle_checkboxes)
         self.toolBar.alignRequested.connect(self.editor.setAlignment)
         self.toolBar.historyRequested.connect(self._open_history)
         self.toolBar.insertImageRequested.connect(self._on_insert_image)
@@ -207,8 +135,7 @@ class MainWindow(QMainWindow):
         self._idle_timer.start()
 
         # full-window overlay that sits on top of the central widget
-        self._lock_overlay = _LockOverlay(self.centralWidget(), self._on_unlock_clicked)
-        self._lock_overlay._apply_overlay_style()
+        self._lock_overlay = LockOverlay(self.centralWidget(), self._on_unlock_clicked)
         self.centralWidget().installEventFilter(self._lock_overlay)
 
         self._locked = False
@@ -375,7 +302,6 @@ class MainWindow(QMainWindow):
             pass
 
         try:
-            # Apply to the search widget (if it's also a rich-text widget)
             self.search.document().setDefaultStyleSheet(css)
         except Exception:
             pass
@@ -562,7 +488,7 @@ class MainWindow(QMainWindow):
 
     def _on_text_changed(self):
         self._dirty = True
-        self._save_timer.start(10000)  # autosave after idle
+        self._save_timer.start(5000)  # autosave after idle
 
     def _adjust_day(self, delta: int):
         """Move selection by delta days (negative for previous)."""
