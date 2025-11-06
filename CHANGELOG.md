@@ -1,3 +1,7 @@
+# 0.1.10.1
+
+ * Small bugfix for a debug message left in
+
 # 0.1.10
 
  * Improve search results window and highlight in calendar when there are matches.

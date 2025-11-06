@@ -487,7 +487,6 @@ class MainWindow(QMainWindow):
                 self._dirty = True
                 self._save_date(date_iso, True)
 
-            print("end")
         except Exception as e:
             QMessageBox.critical(self, "Read Error", str(e))
             return
