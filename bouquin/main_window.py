@@ -707,7 +707,7 @@ class MainWindow(QMainWindow):
             QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
         )
         r = screen.availableGeometry()
-        # Center the window in that screen’s available area
+        # Center the window in that screen's available area
         self.move(r.center() - self.rect().center())
 
     # ----------------- Export handler ----------------- #
@@ -836,7 +836,7 @@ If you want an encrypted backup, choose Backup instead of Export.
             return
         if minutes == 0:
             self._idle_timer.stop()
-            # If you’re currently locked, unlock when user disables the timer:
+            # If currently locked, unlock when user disables the timer:
             if getattr(self, "_locked", False):
                 try:
                     self._locked = False

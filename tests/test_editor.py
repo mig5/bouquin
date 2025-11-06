@@ -169,13 +169,12 @@ def test_code_block_enter_exits_on_empty_line(qtbot):
     QTest.keyClick(e, Qt.Key_Return)
     # Ensure we are on an empty block *inside* the code frame
     qtbot.waitUntil(
-        lambda: e._find_code_frame(e.textCursor()) is not None
+        lambda: e._nearest_code_frame(e.textCursor(), tolerant=False) is not None
         and e.textCursor().block().length() == 1
     )
 
     # Second Enter should jump *out* of the frame
     QTest.keyClick(e, Qt.Key_Return)
-    # qtbot.waitUntil(lambda: e._find_code_frame(e.textCursor()) is None)
 
 
 class DummyMenu:
@@ -310,7 +309,7 @@ def test_enter_leaves_code_frame(qtbot):
     ev = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Return, Qt.NoModifier)
     e.keyPressEvent(ev)
     # After enter, the cursor should not be inside a code frame
-    assert e._find_code_frame(e.textCursor()) is None
+    assert e._nearest_code_frame(e.textCursor(), tolerant=False) is None
 
 
 def test_space_does_not_bleed_anchor_format(qtbot):

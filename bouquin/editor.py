@@ -79,46 +79,35 @@ class Editor(QTextEdit):
         self.textChanged.connect(self._linkify_document)
         self.viewport().setMouseTracking(True)
 
-    def _approx(self, a: float, b: float, eps: float = 0.5) -> bool:
-        return abs(float(a) - float(b)) <= eps
+    # ---------------- Helpers ---------------- #
 
-    def _is_heading_typing(self) -> bool:
-        """Is the current *insertion* format using a heading size?"""
-        bf = self.textCursor().blockFormat()
-        if bf.headingLevel() > 0:
-            return True
+    def _iter_frames(self, root=None):
+        """Depth-first traversal of all frames (including root if passed)."""
+        doc = self.document()
+        stack = [root or doc.rootFrame()]
+        while stack:
+            f = stack.pop()
+            yield f
+            it = f.begin()
+            while not it.atEnd():
+                cf = it.currentFrame()
+                if cf is not None:
+                    stack.append(cf)
+                it += 1
 
-    def _apply_normal_typing(self):
-        """Switch the *insertion* format to Normal (default size, normal weight)."""
-        nf = QTextCharFormat()
-        nf.setFontPointSize(self.font().pointSizeF())
-        nf.setFontWeight(QFont.Weight.Normal)
-        self.mergeCurrentCharFormat(nf)
-
-    def _find_code_frame(self, cursor=None):
-        """Return the nearest ancestor frame that's one of our code frames, else None."""
-        if cursor is None:
-            cursor = self.textCursor()
-        f = cursor.currentFrame()
-        while f:
-            if f.frameFormat().property(self._CODE_FRAME_PROP):
-                return f
-            f = f.parentFrame()
-        return None
-
-    def _looks_like_code_frame(self, frame) -> bool:
+    def _is_code_frame(self, frame, tolerant: bool = False) -> bool:
         """
-        Heuristic: treat a frame as 'code' if
-          - it still has our property, OR
-          - it has the classic light code bg (≈245,245,245) or our dark bg, OR
-          - most blocks inside are non-wrapping (NonBreakableLines=True),
-            which we set in apply_code() and which survives HTML round-trip.
+        True if 'frame' is a code frame.
+        - tolerant=False: require our property marker
+        - tolerant=True: also accept legacy background or non-wrapping heuristic
         """
         ff = frame.frameFormat()
         if ff.property(self._CODE_FRAME_PROP):
             return True
+        if not tolerant:
+            return False
 
-        # Background check
+        # Background colour check
         bg = ff.background()
         if bg.style() != Qt.NoBrush:
             c = bg.color()
@@ -136,7 +125,7 @@ class Editor(QTextEdit):
                 ):
                     return True
 
-        # Block formatting check (survives toHtml/fromHtml)
+        # Heuristic: mostly non-wrapping blocks
         doc = self.document()
         bc = QTextCursor(doc)
         bc.setPosition(frame.firstPosition())
@@ -146,11 +135,111 @@ class Editor(QTextEdit):
             if not b.isValid():
                 break
             blocks += 1
-            bf = b.blockFormat()
-            if bf.nonBreakableLines():
+            if b.blockFormat().nonBreakableLines():
                 codeish += 1
             bc.setPosition(b.position() + b.length())
         return blocks > 0 and (codeish / blocks) >= 0.6
+
+    def _nearest_code_frame(self, cursor=None, tolerant: bool = False):
+        """Walk up parents from the cursor and return the first code frame."""
+        if cursor is None:
+            cursor = self.textCursor()
+        f = cursor.currentFrame()
+        while f:
+            if self._is_code_frame(f, tolerant=tolerant):
+                return f
+            f = f.parentFrame()
+        return None
+
+    def _code_block_formats(self, fg: QColor | None = None):
+        """(QTextBlockFormat, QTextCharFormat) for code blocks."""
+        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+
+        bf = QTextBlockFormat()
+        bf.setTopMargin(0)
+        bf.setBottomMargin(0)
+        bf.setLeftMargin(12)
+        bf.setRightMargin(12)
+        bf.setNonBreakableLines(True)
+
+        cf = QTextCharFormat()
+        cf.setFont(mono)
+        cf.setFontFixedPitch(True)
+        if fg is not None:
+            cf.setForeground(fg)
+        return bf, cf
+
+    def _new_code_frame_format(self, bg: QColor) -> QTextFrameFormat:
+        """Standard frame format for code blocks."""
+        ff = QTextFrameFormat()
+        ff.setBackground(bg)
+        ff.setPadding(6)
+        ff.setBorder(0)
+        ff.setLeftMargin(0)
+        ff.setRightMargin(0)
+        ff.setTopMargin(0)
+        ff.setBottomMargin(0)
+        ff.setProperty(self._CODE_FRAME_PROP, True)
+        return ff
+
+    def _retint_code_frame(self, frame, bg: QColor, fg: QColor | None):
+        """Apply background to frame and standard code formats to all blocks inside."""
+        ff = frame.frameFormat()
+        ff.setBackground(bg)
+        frame.setFrameFormat(ff)
+
+        bf, cf = self._code_block_formats(fg)
+        doc = self.document()
+        bc = QTextCursor(doc)
+        bc.setPosition(frame.firstPosition())
+        while bc.position() < frame.lastPosition():
+            bc.select(QTextCursor.BlockUnderCursor)
+            bc.mergeBlockFormat(bf)
+            bc.mergeBlockCharFormat(cf)
+            if not bc.movePosition(QTextCursor.NextBlock):
+                break
+
+    def _safe_block_insertion_cursor(self):
+        """
+        Return a cursor positioned for inserting an inline object (like an image):
+        - not inside a code frame (moves to after frame if necessary)
+        - at a fresh paragraph (inserts a block if mid-line)
+        Also updates the editor's current cursor to that position.
+        """
+        c = QTextCursor(self.textCursor())
+        frame = self._nearest_code_frame(c, tolerant=False)  # strict: our frames only
+        if frame:
+            out = QTextCursor(self.document())
+            out.setPosition(frame.lastPosition())
+            self.setTextCursor(out)
+            c = self.textCursor()
+        if c.positionInBlock() != 0:
+            c.insertBlock()
+        return c
+
+    def _scale_to_viewport(self, img: QImage, ratio: float = 0.92) -> QImage:
+        """If the image is wider than viewport*ratio, scale it down proportionally."""
+        if self.viewport():
+            max_w = int(self.viewport().width() * ratio)
+            if img.width() > max_w:
+                return img.scaledToWidth(max_w, Qt.SmoothTransformation)
+        return img
+
+    def _approx(self, a: float, b: float, eps: float = 0.5) -> bool:
+        return abs(float(a) - float(b)) <= eps
+
+    def _is_heading_typing(self) -> bool:
+        """Is the current *insertion* format using a heading size?"""
+        bf = self.textCursor().blockFormat()
+        if bf.headingLevel() > 0:
+            return True
+
+    def _apply_normal_typing(self):
+        """Switch the *insertion* format to Normal (default size, normal weight)."""
+        nf = QTextCharFormat()
+        nf.setFontPointSize(self.font().pointSizeF())
+        nf.setFontWeight(QFont.Weight.Normal)
+        self.mergeCurrentCharFormat(nf)
 
     def _code_theme_colors(self):
         """Return (bg, fg) for code blocks based on the effective palette."""
@@ -175,46 +264,9 @@ class Editor(QTextEdit):
         cur = QTextCursor(doc)
         cur.beginEditBlock()
         try:
-            # Traverse all frames reliably (iterator-based, works after reload)
-            stack = [doc.rootFrame()]
-            while stack:
-                f = stack.pop()
-                it = f.begin()
-                while not it.atEnd():
-                    cf = it.currentFrame()
-                    if cf is not None:
-                        stack.append(cf)
-                    it += 1
-
-                # Retint frames that look like code
-                if f is not doc.rootFrame() and self._looks_like_code_frame(f):
-                    ff = f.frameFormat()
-                    ff.setBackground(bg)
-                    f.setFrameFormat(ff)
-
-                    # Make sure the text inside stays readable and monospaced
-                    mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-                    bc = QTextCursor(doc)
-                    bc.setPosition(f.firstPosition())
-                    while bc.position() < f.lastPosition():
-                        bc.select(QTextCursor.BlockUnderCursor)
-
-                        bf = QTextBlockFormat()
-                        bf.setTopMargin(0)
-                        bf.setBottomMargin(0)
-                        bf.setLeftMargin(12)
-                        bf.setRightMargin(12)
-                        bf.setNonBreakableLines(True)
-
-                        cf = QTextCharFormat()
-                        cf.setFont(mono)
-                        cf.setFontFixedPitch(True)
-                        cf.setForeground(fg)
-
-                        bc.mergeBlockFormat(bf)
-                        bc.mergeBlockCharFormat(cf)
-                        if not bc.movePosition(QTextCursor.NextBlock):
-                            break
+            for f in self._iter_frames(doc.rootFrame()):
+                if f is not doc.rootFrame() and self._is_code_frame(f, tolerant=True):
+                    self._retint_code_frame(f, bg, fg)
         finally:
             cur.endEditBlock()
             self.viewport().update()
@@ -276,7 +328,7 @@ class Editor(QTextEdit):
                 fmt.setFontUnderline(True)
                 fmt.setForeground(self.palette().brush(QPalette.Link))
 
-                cur.mergeCharFormat(fmt)  # merge so we don’t clobber other styling
+                cur.mergeCharFormat(fmt)  # merge so we don't clobber other styling
 
             cur.endEditBlock()
         finally:
@@ -336,26 +388,12 @@ class Editor(QTextEdit):
             html = html.replace(f"src='{old}'", f"src='{data_url}'")
         return html
 
+    # ---------------- Image insertion & sizing (DRY’d) ---------------- #
+
     def _insert_qimage_at_cursor(self, img: QImage, autoscale=True):
-        c = self.textCursor()
-
-        # Don’t drop inside a code frame
-        frame = self._find_code_frame(c)
-        if frame:
-            out = QTextCursor(self.document())
-            out.setPosition(frame.lastPosition())
-            self.setTextCursor(out)
-            c = self.textCursor()
-
-        # Start a fresh paragraph if mid-line
-        if c.positionInBlock() != 0:
-            c.insertBlock()
-
-        if autoscale and self.viewport():
-            max_w = int(self.viewport().width() * 0.92)
-            if img.width() > max_w:
-                img = img.scaledToWidth(max_w, Qt.SmoothTransformation)
-
+        c = self._safe_block_insertion_cursor()
+        if autoscale:
+            img = self._scale_to_viewport(img)
         c.insertImage(img)
         c.insertBlock()  # one blank line after the image
 
@@ -465,6 +503,8 @@ class Editor(QTextEdit):
             return
         self._apply_image_size(tc, imgfmt, float(orig.width()), orig)
 
+    # ---------------- Context menu ---------------- #
+
     def contextMenuEvent(self, e):
         menu = self.createStandardContextMenu()
         tc, imgfmt, orig = self._image_info_at_cursor()
@@ -477,6 +517,8 @@ class Editor(QTextEdit):
             sub.addAction("Set width…", self._set_image_width_dialog)
             sub.addAction("Reset to original", self._reset_image_size)
         menu.exec(e.globalPos())
+
+    # ---------------- Clipboard / DnD ---------------- #
 
     def insertFromMimeData(self, source):
         # 1) Direct image from clipboard
@@ -525,7 +567,7 @@ class Editor(QTextEdit):
                     data = base64.b64decode(m.group(1))
                     img = QImage.fromData(data)
                     if not img.isNull():
-                        self._insert_qimage_at_cursor(self, img, autoscale=True)
+                        self._insert_qimage_at_cursor(img, autoscale=True)
                         return
                 except Exception:
                     pass  # fall through
@@ -539,19 +581,7 @@ class Editor(QTextEdit):
         Insert one or more images at the cursor. Large images can be auto-scaled
         to fit the viewport width while preserving aspect ratio.
         """
-        c = self.textCursor()
-
-        # Avoid dropping images inside a code frame
-        frame = self._find_code_frame(c)
-        if frame:
-            out = QTextCursor(self.document())
-            out.setPosition(frame.lastPosition())
-            self.setTextCursor(out)
-            c = self.textCursor()
-
-        # Ensure there's a paragraph break if we're mid-line
-        if c.positionInBlock() != 0:
-            c.insertBlock()
+        c = self._safe_block_insertion_cursor()
 
         for path in paths:
             reader = QImageReader(path)
@@ -559,13 +589,13 @@ class Editor(QTextEdit):
             if img.isNull():
                 continue
 
-            if autoscale and self.viewport():
-                max_w = int(self.viewport().width() * 0.92)  # ~92% of editor width
-                if img.width() > max_w:
-                    img = img.scaledToWidth(max_w, Qt.SmoothTransformation)
+            if autoscale:
+                img = self._scale_to_viewport(img)
 
             c.insertImage(img)
             c.insertBlock()  # put each image on its own line
+
+    # ---------------- Mouse & key handling ---------------- #
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton and (e.modifiers() & Qt.ControlModifier):
@@ -637,7 +667,7 @@ class Editor(QTextEdit):
 
             # If we're on an empty line inside a code frame, consume Enter and jump out
             if c.block().length() == 1:
-                frame = self._find_code_frame(c)
+                frame = self._nearest_code_frame(c, tolerant=False)
                 if frame:
                     out = QTextCursor(self.document())
                     out.setPosition(frame.lastPosition())  # after the frame's contents
@@ -715,7 +745,7 @@ class Editor(QTextEdit):
 
     # ====== Checkbox core ======
     def _base_point_size_for_block(self, block) -> float:
-        # Try the block’s char format, then editor font
+        # Try the block's char format, then editor font
         sz = block.charFormat().fontPointSize()
         if sz <= 0:
             sz = self.fontPointSize()
@@ -871,46 +901,16 @@ class Editor(QTextEdit):
         if not c.hasSelection():
             c.select(QTextCursor.BlockUnderCursor)
 
-        # Wrap the selection in a single frame (no per-block padding/margins).
-        ff = QTextFrameFormat()
-        ff.setBackground(self._CODE_BG)
-        ff.setPadding(6)  # visual padding for the WHOLE block
-        ff.setBorder(0)
-        ff.setLeftMargin(0)
-        ff.setRightMargin(0)
-        ff.setTopMargin(0)
-        ff.setBottomMargin(0)
-        ff.setProperty(self._CODE_FRAME_PROP, True)
-
-        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        ff = self._new_code_frame_format(self._CODE_BG)
 
         c.beginEditBlock()
         try:
             c.insertFrame(ff)  # with a selection, this wraps the selection
 
-            # Format all blocks inside the new frame: zero vertical margins, mono font, no wrapping
-            frame = self._find_code_frame(c)
-            bc = QTextCursor(self.document())
-            bc.setPosition(frame.firstPosition())
-
-            while bc.position() < frame.lastPosition():
-                bc.select(QTextCursor.BlockUnderCursor)
-
-                bf = QTextBlockFormat()
-                bf.setTopMargin(0)
-                bf.setBottomMargin(0)
-                bf.setLeftMargin(12)
-                bf.setRightMargin(12)
-                bf.setNonBreakableLines(True)
-
-                cf = QTextCharFormat()
-                cf.setFont(mono)
-                cf.setFontFixedPitch(True)
-
-                bc.mergeBlockFormat(bf)
-                bc.mergeBlockCharFormat(cf)
-
-                bc.setPosition(bc.block().position() + bc.block().length())
+            # Format all blocks inside the new frame (keep fg=None on creation)
+            frame = self._nearest_code_frame(c, tolerant=False)
+            if frame:
+                self._retint_code_frame(frame, self._CODE_BG, fg=None)
         finally:
             c.endEditBlock()
 
