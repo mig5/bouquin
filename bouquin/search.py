@@ -70,7 +70,6 @@ class Search(QWidget):
         try:
             rows: Iterable[Row] = self._db.search_entries(q)
         except Exception:
-            # be quiet on DB errors here; caller can surface if desired
             rows = []
 
         self._populate_results(q, rows)

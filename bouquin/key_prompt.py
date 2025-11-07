@@ -17,6 +17,12 @@ class KeyPrompt(QDialog):
         title: str = "Enter key",
         message: str = "Enter key",
     ):
+        """
+        Prompt the user for the key required to decrypt the database.
+
+        Used when opening the app, unlocking the idle locked screen,
+        or when rekeying.
+        """
         super().__init__(parent)
         self.setWindowTitle(title)
         v = QVBoxLayout(self)

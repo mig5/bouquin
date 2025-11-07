@@ -5,12 +5,14 @@ from PySide6.QtCore import Qt
 from bouquin.db import DBConfig, DBManager
 from bouquin.history_dialog import HistoryDialog
 
+
 @pytest.fixture(scope="module")
 def app():
     a = QApplication.instance()
     if a is None:
         a = QApplication([])
     return a
+
 
 @pytest.fixture
 def db(tmp_path):
@@ -21,6 +23,7 @@ def db(tmp_path):
     db.save_new_version("2025-02-10", "<p>v1</p>", note="v1", set_current=True)
     db.save_new_version("2025-02-10", "<p>v2</p>", note="v2", set_current=True)
     return db
+
 
 def test_revert_early_returns(app, db, qtbot):
     dlg = HistoryDialog(db, date_iso="2025-02-10")

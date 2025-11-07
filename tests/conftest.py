@@ -102,3 +102,32 @@ def theme_parent_widget(qtbot):
     parent = _Parent()
     qtbot.addWidget(parent)
     return parent
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    yield app
+    # do not quit; pytest might still need it
+    # app.quit()
+
+
+@pytest.fixture
+def temp_db_path(tmp_path):
+    return tmp_path / "notebook.db"
+
+
+@pytest.fixture
+def cfg(temp_db_path):
+    # Use the real DBConfig from the app (SQLCipher-backed)
+    from bouquin.db import DBConfig
+
+    return DBConfig(
+        path=Path(temp_db_path),
+        key="testkey",
+        idle_minutes=0,
+        theme="system",
+        move_todos=True,
+    )

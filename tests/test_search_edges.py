@@ -6,6 +6,7 @@ import pytest
 from bouquin.db import DBConfig, DBManager
 from bouquin.search import Search
 
+
 @pytest.fixture(scope="module")
 def app():
     # Ensure a single QApplication exists
@@ -14,6 +15,7 @@ def app():
         a = QApplication([])
     yield a
 
+
 @pytest.fixture
 def fresh_db(tmp_path):
     cfg = DBConfig(path=tmp_path / "test.db", key="testkey")
@@ -21,9 +23,19 @@ def fresh_db(tmp_path):
     assert db.connect() is True
     # Seed a couple of entries
     db.save_new_version("2025-01-01", "<p>Hello world first day</p>")
-    db.save_new_version("2025-01-02", "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>")
-    db.save_new_version("2025-01-03", "<p>Long content begins " + ("x"*200) + " middle token here " + ("y"*200) + " ends.</p>")
+    db.save_new_version(
+        "2025-01-02", "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>"
+    )
+    db.save_new_version(
+        "2025-01-03",
+        "<p>Long content begins "
+        + ("x" * 200)
+        + " middle token here "
+        + ("y" * 200)
+        + " ends.</p>",
+    )
     return db
+
 
 def test_search_exception_path_closed_db_triggers_quiet_handling(app, fresh_db, qtbot):
     # Close the DB to provoke an exception inside Search._search
@@ -36,6 +48,7 @@ def test_search_exception_path_closed_db_triggers_quiet_handling(app, fresh_db, 
     w._search("anything")
     assert w.results.isHidden()  # remains hidden because there are no rows
     # Also, the "resultDatesChanged" signal should emit an empty list (coverage on that branch)
+
 
 def test_make_html_snippet_ellipses_both_sides(app, fresh_db):
     w = Search(fresh_db)

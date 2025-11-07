@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
         split = QSplitter()
         split.addWidget(left_panel)
         split.addWidget(self.editor)
-        split.setStretchFactor(1, 1)  # editor grows
+        split.setStretchFactor(1, 1)
 
         container = QWidget()
         lay = QVBoxLayout(container)
@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_lock_overlay"):
             self._lock_overlay._apply_overlay_style()
         self._apply_calendar_text_colors()
-        self._apply_link_css()  # Reapply link styles based on the current theme
+        self._apply_link_css()
         self._apply_search_highlights(getattr(self, "_search_highlighted_dates", set()))
         self.calendar.update()
         self.editor.viewport().update()
@@ -298,7 +298,6 @@ class MainWindow(QMainWindow):
             css = ""  # Default to no custom styling for links (system or light theme)
 
         try:
-            # Apply to the editor (QTextEdit or any other relevant widgets)
             self.editor.document().setDefaultStyleSheet(css)
         except Exception:
             pass
@@ -347,7 +346,6 @@ class MainWindow(QMainWindow):
             self.calendar.setPalette(app_pal)
             self.calendar.setStyleSheet("")
 
-        # Keep weekend text color in sync with the current palette
         self._apply_calendar_text_colors()
         self.calendar.update()
 
@@ -855,6 +853,9 @@ If you want an encrypted backup, choose Backup instead of Export.
         return super().eventFilter(obj, event)
 
     def _enter_lock(self):
+        """
+        Trigger the lock overlay and disable widgets
+        """
         if self._locked:
             return
         self._locked = True
@@ -870,6 +871,10 @@ If you want an encrypted backup, choose Backup instead of Export.
 
     @Slot()
     def _on_unlock_clicked(self):
+        """
+        Prompt for key to unlock screen
+        If successful, re-enable widgets
+        """
         try:
             ok = self._prompt_for_key_until_valid(first_time=False)
         except Exception as e:

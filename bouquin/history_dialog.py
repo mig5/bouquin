@@ -156,7 +156,7 @@ class HistoryDialog(QDialog):
         # Diff vs current (textual diff)
         cur = self._db.get_version(version_id=self._current_id)
         self.diff.setHtml(_colored_unified_diff_html(cur["content"], sel["content"]))
-        # Enable revert only if selecting a non-current
+        # Enable revert only if selecting a non-current version
         self.btn_revert.setEnabled(sel_id != self._current_id)
 
     @Slot()
@@ -167,7 +167,7 @@ class HistoryDialog(QDialog):
         sel_id = item.data(Qt.UserRole)
         if sel_id == self._current_id:
             return
-        # Flip head pointer
+        # Flip head pointer to the older version
         try:
             self._db.revert_to_version(self._date, version_id=sel_id)
         except Exception as e:

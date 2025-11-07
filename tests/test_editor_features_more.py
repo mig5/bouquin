@@ -10,12 +10,14 @@ from PySide6.QtTest import QTest
 from bouquin.editor import Editor
 from bouquin.theme import ThemeManager, ThemeConfig
 
+
 @pytest.fixture(scope="module")
 def app():
     a = QApplication.instance()
     if a is None:
         a = QApplication([])
     return a
+
 
 @pytest.fixture
 def editor(app, qtbot):
@@ -24,6 +26,7 @@ def editor(app, qtbot):
     qtbot.addWidget(e)
     e.show()
     return e
+
 
 def test_todo_prefix_converts_to_checkbox_on_space(editor):
     editor.clear()
@@ -34,6 +37,7 @@ def test_todo_prefix_converts_to_checkbox_on_space(editor):
     QTest.keyClick(editor, Qt.Key_Space)
     # Now the line should start with the checkbox glyph and a space
     assert editor.toPlainText().startswith("☐ ")
+
 
 def test_enter_inside_empty_code_frame_jumps_out(editor):
     editor.clear()
@@ -46,13 +50,17 @@ def test_enter_inside_empty_code_frame_jumps_out(editor):
     txt = editor.toPlainText()
     assert "\n" in txt  # a normal paragraph created after exiting the frame
 
+
 def test_insertFromMimeData_with_data_image(editor):
     # Build an in-memory PNG and embed as data URL inside HTML
     img = QImage(8, 8, QImage.Format_ARGB32)
-    img.fill(0xff00ff00)  # green
+    img.fill(0xFF00FF00)  # green
     ba = QByteArray()
     from PySide6.QtCore import QBuffer, QIODevice
-    buf = QBuffer(ba); buf.open(QIODevice.WriteOnly); img.save(buf, "PNG")
+
+    buf = QBuffer(ba)
+    buf.open(QIODevice.WriteOnly)
+    img.save(buf, "PNG")
     data_b64 = base64.b64encode(bytes(ba)).decode("ascii")
     html = f'<img src="data:image/png;base64,{data_b64}"/>'
 
@@ -63,6 +71,7 @@ def test_insertFromMimeData_with_data_image(editor):
     # HTML export with embedded images should contain a data: URL
     h = editor.to_html_with_embedded_images()
     assert "data:image/png;base64," in h
+
 
 def test_toggle_checkboxes_selection(editor):
     editor.clear()
@@ -78,6 +87,7 @@ def test_toggle_checkboxes_selection(editor):
     # Toggle again -> remove ☐
     editor.toggle_checkboxes()
     assert not editor.toPlainText().startswith("☐ ")
+
 
 def test_heading_then_enter_reverts_to_normal(editor):
     editor.clear()

@@ -140,6 +140,11 @@ class ToolBar(QToolBar):
         for a in (self.actAlignL, self.actAlignC, self.actAlignR):
             a.setActionGroup(self.grpAlign)
 
+        self.grpLists = QActionGroup(self)
+        self.grpLists.setExclusive(True)
+        for a in (self.actBullets, self.actNumbers, self.actCheckboxes):
+            a.setActionGroup(self.grpLists)
+
         # Add actions
         self.addActions(
             [

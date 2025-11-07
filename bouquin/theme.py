@@ -49,7 +49,7 @@ class ThemeManager(QObject):
             scheme = getattr(hints, "colorScheme", None)
             if callable(scheme):
                 scheme = hints.colorScheme()
-            # 0=Light, 1=Dark in newer Qt; fall back to Light
+            # 0=Light, 1=Dark; fall back to Light
             theme = Theme.DARK if scheme == 1 else Theme.LIGHT
 
         # Always use Fusion so palette applies consistently cross-platform
@@ -58,7 +58,6 @@ class ThemeManager(QObject):
         if theme == Theme.DARK:
             pal = self._dark_palette()
             self._app.setPalette(pal)
-            # keep stylesheet empty unless you need widget-specific tweaks
             self._app.setStyleSheet("")
         else:
             pal = self._light_palette()

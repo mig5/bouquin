@@ -9,6 +9,7 @@ from bouquin.settings import APP_NAME, APP_ORG
 from bouquin.key_prompt import KeyPrompt
 from bouquin.theme import Theme, ThemeManager, ThemeConfig
 
+
 @pytest.fixture(scope="module")
 def app():
     a = QApplication.instance()
@@ -18,12 +19,14 @@ def app():
     a.setOrganizationName(APP_ORG)
     return a
 
+
 @pytest.fixture
 def db(tmp_path):
     cfg = DBConfig(path=tmp_path / "s.db", key="abc")
     m = DBManager(cfg)
     assert m.connect()
     return m
+
 
 def test_theme_radio_initialisation_dark_and_light(app, db, monkeypatch, qtbot):
     # Dark preselection
@@ -44,6 +47,7 @@ def test_theme_radio_initialisation_dark_and_light(app, db, monkeypatch, qtbot):
     dlg2._save()
     assert dlg2.config.theme == Theme.LIGHT.value
 
+
 def test_change_key_cancel_branches(app, db, monkeypatch, qtbot):
     parent = _ParentWithThemes(app)
     qtbot.addWidget(parent)
@@ -56,16 +60,19 @@ def test_change_key_cancel_branches(app, db, monkeypatch, qtbot):
     assert dlg.key == ""
 
     # First OK, second cancelled -> early return at the second branch
-    state = {'calls': 0}
+    state = {"calls": 0}
+
     def _exec(self):
-        state['calls'] += 1
-        return QDialog.Accepted if state['calls'] == 1 else QDialog.Rejected
-    monkeypatch.setattr(KeyPrompt, 'exec', _exec)
+        state["calls"] += 1
+        return QDialog.Accepted if state["calls"] == 1 else QDialog.Rejected
+
+    monkeypatch.setattr(KeyPrompt, "exec", _exec)
     # Also monkeypatch to control key() values
     monkeypatch.setattr(KeyPrompt, "key", lambda self: "new-secret")
     dlg._change_key()
     # Because the second prompt was rejected, key should remain unchanged
     assert dlg.key == ""
+
 
 def test_save_key_checkbox_cancel_restores_checkbox(app, db, monkeypatch, qtbot):
     parent = _ParentWithThemes(app)
@@ -92,7 +99,9 @@ def test_change_key_exception_path(app, db, monkeypatch, qtbot):
     monkeypatch.setattr(KeyPrompt, "key", lambda self: "boom")
 
     # Force DB rekey to raise to exercise the except-branch
-    monkeypatch.setattr(db, "rekey", lambda new_key: (_ for _ in ()).throw(RuntimeError("fail")))
+    monkeypatch.setattr(
+        db, "rekey", lambda new_key: (_ for _ in ()).throw(RuntimeError("fail"))
+    )
 
     # Should not raise; error is handled internally
     dlg._change_key()
@@ -102,4 +111,3 @@ class _ParentWithThemes(QWidget):
     def __init__(self, app):
         super().__init__()
         self.themes = ThemeManager(app, ThemeConfig())
-

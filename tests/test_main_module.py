@@ -3,6 +3,7 @@ import types
 import sys
 import builtins
 
+
 def test_dunder_main_executes_without_launching_qt(monkeypatch):
     # Replace bouquin.main with a stub that records invocation and returns immediately
     calls = {"called": False}

@@ -296,7 +296,6 @@ class DBManager:
     ) -> None:
         """
         Point the page head (pages.current_version_id) to an existing version.
-        Fast revert: no content is rewritten.
         """
         if self.conn is None:
             raise RuntimeError("Database is not connected")
@@ -356,6 +355,9 @@ class DBManager:
                 json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
     def export_csv(self, entries: Sequence[Entry], file_path: str) -> None:
+        """
+        Export pages to CSV.
+        """
         # utf-8-sig adds a BOM so Excel opens as UTF-8 by default.
         with open(file_path, "w", encoding="utf-8-sig", newline="") as f:
             writer = csv.writer(f)
@@ -369,6 +371,10 @@ class DBManager:
         separator: str = "\n\n— — — — —\n\n",
         strip_html: bool = True,
     ) -> None:
+        """
+        Strip the HTML from the latest version of the pages
+        and save to a text file.
+        """
         import re, html as _html
 
         # Precompiled patterns
@@ -407,6 +413,9 @@ class DBManager:
     def export_html(
         self, entries: Sequence[Entry], file_path: str, title: str = "Bouquin export"
     ) -> None:
+        """
+        Export to HTML with a heading.
+        """
         parts = [
             "<!doctype html>",
             '<html lang="en">',
@@ -429,6 +438,10 @@ class DBManager:
     def export_markdown(
         self, entries: Sequence[Entry], file_path: str, title: str = "Bouquin export"
     ) -> None:
+        """
+        Export to HTML, similar to export_html, but then convert to Markdown
+        using markdownify, and finally save to file.
+        """
         parts = [
             "<!doctype html>",
             '<html lang="en">',
@@ -469,6 +482,10 @@ class DBManager:
         cur.execute("DETACH DATABASE backup")
 
     def export_by_extension(self, file_path: str) -> None:
+        """
+        Fallback catch-all that runs one of the above functions based on
+        the extension of the file name that was chosen by the user.
+        """
         entries = self.get_all_entries()
         ext = os.path.splitext(file_path)[1].lower()
 

@@ -18,6 +18,9 @@ class SaveDialog(QDialog):
         title: str = "Enter a name for this version",
         message: str = "Enter a name for this version?",
     ):
+        """
+        Used for explicitly saving a new version of a page.
+        """
         super().__init__(parent)
         self.setWindowTitle(title)
         v = QVBoxLayout(self)

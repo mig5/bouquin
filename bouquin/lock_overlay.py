@@ -7,6 +7,9 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 
 class LockOverlay(QWidget):
     def __init__(self, parent: QWidget, on_unlock: callable):
+        """
+        Widget that 'locks' the screen after a configured idle time.
+        """
         super().__init__(parent)
         self.setObjectName("LockOverlay")
         self.setAttribute(Qt.WA_StyledBackground, True)
@@ -39,6 +42,9 @@ class LockOverlay(QWidget):
         self.hide()
 
     def _is_dark(self, pal: QPalette) -> bool:
+        """
+        Detect if dark mode is in use.
+        """
         c = pal.color(QPalette.Window)
         luma = 0.2126 * c.redF() + 0.7152 * c.greenF() + 0.0722 * c.blueF()
         return luma < 0.5
@@ -58,7 +64,7 @@ class LockOverlay(QWidget):
 
                 self.setStyleSheet(
                     f"""
-#LockOverlay {{ background-color: rgb(0,0,0); }}   /* opaque, no transparency */
+#LockOverlay {{ background-color: rgb(0,0,0); }}
 #LockOverlay QLabel#lockLabel {{ color: {accent_hex}; font-weight: 600; }}
 
 #LockOverlay QPushButton#unlockButton {{
@@ -113,7 +119,7 @@ class LockOverlay(QWidget):
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
-        # Only re-style on palette flips
+        # Only re-style on palette flips (user changed theme)
         if ev.type() in (QEvent.PaletteChange, QEvent.ApplicationPaletteChange):
             self._apply_overlay_style()
 
