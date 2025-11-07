@@ -24,6 +24,7 @@ from PySide6.QtGui import (
     QDesktopServices,
     QFont,
     QGuiApplication,
+    QKeySequence,
     QPalette,
     QTextCharFormat,
     QTextCursor,
@@ -44,6 +45,7 @@ from PySide6.QtWidgets import (
 
 from .db import DBManager
 from .editor import Editor
+from .find_bar import FindBar
 from .history_dialog import HistoryDialog
 from .key_prompt import KeyPrompt
 from .lock_overlay import LockOverlay
@@ -159,6 +161,11 @@ class MainWindow(QMainWindow):
 
         # Status bar for feedback
         self.statusBar().showMessage("Ready", 800)
+        # Add findBar and add it to the statusBar
+        self.findBar = FindBar(self.editor, shortcut_parent=self, parent=self)
+        self.statusBar().addPermanentWidget(self.findBar)
+        # When the findBar closes, put the caret back in the editor
+        self.findBar.closed.connect(self._focus_editor_now)
 
         # Menu bar (File)
         mb = self.menuBar()
@@ -212,6 +219,24 @@ class MainWindow(QMainWindow):
         act_today.triggered.connect(self._adjust_today)
         nav_menu.addAction(act_today)
         self.addAction(act_today)
+
+        act_find = QAction("Find on page", self)
+        act_find.setShortcut(QKeySequence.Find)
+        act_find.triggered.connect(self.findBar.show_bar)
+        nav_menu.addAction(act_find)
+        self.addAction(act_find)
+
+        act_find_next = QAction("Find Next", self)
+        act_find_next.setShortcut(QKeySequence.FindNext)
+        act_find_next.triggered.connect(self.findBar.find_next)
+        nav_menu.addAction(act_find_next)
+        self.addAction(act_find_next)
+
+        act_find_prev = QAction("Find Previous", self)
+        act_find_prev.setShortcut(QKeySequence.FindPrevious)
+        act_find_prev.triggered.connect(self.findBar.find_prev)
+        nav_menu.addAction(act_find_prev)
+        self.addAction(act_find_prev)
 
         # Help menu with drop-down
         help_menu = mb.addMenu("&Help")
@@ -977,3 +1002,7 @@ If you want an encrypted backup, choose Backup instead of Export.
         )
         cur.setPosition(old_pos, mode)
         ed.setTextCursor(cur)
+
+        # Refresh highlights if the theme changed
+        if hasattr(self, "findBar"):
+            self.findBar.refresh()

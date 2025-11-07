@@ -1,3 +1,7 @@
+# 0.1.12
+
+ * Add find bar for searching for text in the editor
+
 # 0.1.11
 
  * Add missing export extensions to export_by_extension
