@@ -63,4 +63,4 @@ Make sure you have `libxcb-cursor0` installed (it may be called something else o
  * Clone the repo
  * Ensure you have poetry installed
  * Run `poetry install --with test`
- * Run `poetry run pytest -vvvv --cov=bouquin`
+ * Run `./tests.sh`
