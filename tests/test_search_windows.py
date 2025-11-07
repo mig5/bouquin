@@ -1,5 +1,4 @@
 import pytest
-from PySide6.QtWidgets import QWidget
 from bouquin.search import Search
 
 

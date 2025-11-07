@@ -1,7 +1,6 @@
 import runpy
 import types
 import sys
-import builtins
 
 
 def test_dunder_main_executes_without_launching_qt(monkeypatch):

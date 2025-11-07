@@ -1,6 +1,4 @@
-import types
 import pytest
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog, QWidget
 
 from bouquin.db import DBConfig, DBManager

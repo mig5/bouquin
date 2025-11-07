@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import pytest
 
@@ -74,24 +73,13 @@ def test_revert_to_version_by_number_and_id_and_errors(cfg: DBConfig):
     ver2_id, ver2_no = mgr.save_new_version("2025-01-04", "<p>v2</p>", note="edit")
     assert ver1_no == 1 and ver2_no == 2
 
-    # Revert using version_no (exercises branch where version_id is None)
-    mgr.revert_to_version(date_iso="2025-01-04", version_no=1, version_id=None)
-    cur = mgr.conn.cursor()
-    head = cur.execute(
-        "SELECT current_version_id FROM pages WHERE date=?", ("2025-01-04",)
-    ).fetchone()[0]
-    assert head == ver1_id
-
-    # Revert using version_id directly should also work
+    # Revert using version_id
     mgr.revert_to_version(date_iso="2025-01-04", version_id=ver2_id)
+    cur = mgr.conn.cursor()
     head2 = cur.execute(
         "SELECT current_version_id FROM pages WHERE date=?", ("2025-01-04",)
     ).fetchone()[0]
     assert head2 == ver2_id
-
-    # Error: version not found for date (non-existent version_no)
-    with pytest.raises(ValueError):
-        mgr.revert_to_version(date_iso="2025-01-04", version_no=99)
 
     # Error: version_id belongs to a different date
     other_id, _ = mgr.save_new_version("2025-01-05", "<p>other</p>")

@@ -257,67 +257,31 @@ class DBManager:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_version(
-        self,
-        *,
-        date_iso: str | None = None,
-        version_no: int | None = None,
-        version_id: int | None = None,
-    ) -> dict | None:
+    def get_version(self, *, version_id: int) -> dict | None:
         """
-        Fetch a specific version by (date, version_no) OR by version_id.
+        Fetch a specific version by version_id.
         Returns a dict with keys: id, date, version_no, created_at, note, content.
         """
         cur = self.conn.cursor()
-        if version_id is not None:
-            row = cur.execute(
-                "SELECT id, date, version_no, created_at, note, content "
-                "FROM versions WHERE id=?;",
-                (version_id,),
-            ).fetchone()
-        else:
-            if date_iso is None or version_no is None:
-                raise ValueError(
-                    "Provide either version_id OR (date_iso and version_no)"
-                )
-            row = cur.execute(
-                "SELECT id, date, version_no, created_at, note, content "
-                "FROM versions WHERE date=? AND version_no=?;",
-                (date_iso, version_no),
-            ).fetchone()
+        row = cur.execute(
+            "SELECT id, date, version_no, created_at, note, content "
+            "FROM versions WHERE id=?;",
+            (version_id,),
+        ).fetchone()
         return dict(row) if row else None
 
-    def revert_to_version(
-        self,
-        date_iso: str,
-        *,
-        version_no: int | None = None,
-        version_id: int | None = None,
-    ) -> None:
+    def revert_to_version(self, date_iso: str, version_id: int) -> None:
         """
         Point the page head (pages.current_version_id) to an existing version.
         """
-        if self.conn is None:
-            raise RuntimeError("Database is not connected")
         cur = self.conn.cursor()
 
-        if version_id is None:
-            if version_no is None:
-                raise ValueError("Provide version_no or version_id")
-            row = cur.execute(
-                "SELECT id FROM versions WHERE date=? AND version_no=?;",
-                (date_iso, version_no),
-            ).fetchone()
-            if row is None:
-                raise ValueError("Version not found for this date")
-            version_id = int(row["id"])
-        else:
-            # Ensure that version_id belongs to the given date
-            row = cur.execute(
-                "SELECT date FROM versions WHERE id=?;", (version_id,)
-            ).fetchone()
-            if row is None or row["date"] != date_iso:
-                raise ValueError("version_id does not belong to the given date")
+        # Ensure that version_id belongs to the given date
+        row = cur.execute(
+            "SELECT date FROM versions WHERE id=?;", (version_id,)
+        ).fetchone()
+        if row is None or row["date"] != date_iso:
+            raise ValueError("version_id does not belong to the given date")
 
         with self.conn:
             cur.execute(
@@ -341,18 +305,13 @@ class DBManager:
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
-    def export_json(
-        self, entries: Sequence[Entry], file_path: str, pretty: bool = True
-    ) -> None:
+    def export_json(self, entries: Sequence[Entry], file_path: str) -> None:
         """
         Export to json.
         """
         data = [{"date": d, "content": c} for d, c in entries]
         with open(file_path, "w", encoding="utf-8") as f:
-            if pretty:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            else:
-                json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
     def export_csv(self, entries: Sequence[Entry], file_path: str) -> None:
         """
@@ -500,7 +459,7 @@ class DBManager:
         elif ext in {".sql", ".sqlite"}:
             self.export_sql(file_path)
         elif ext == ".md":
-            self.export_markdown(file_path)
+            self.export_markdown(entries, file_path)
         else:
             raise ValueError(f"Unsupported extension: {ext}")
 

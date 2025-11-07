@@ -1,6 +1,4 @@
-import base64
-from pathlib import Path
-from PySide6.QtCore import QUrl, QByteArray
+from PySide6.QtCore import QUrl
 from PySide6.QtGui import QImage, QTextCursor, QTextImageFormat, QColor
 from bouquin.theme import ThemeManager
 from bouquin.editor import Editor

@@ -1,9 +1,8 @@
 import base64
-from io import BytesIO
 
 import pytest
 from PySide6.QtCore import Qt, QMimeData, QByteArray
-from PySide6.QtGui import QImage, QPixmap, QKeyEvent, QTextCursor
+from PySide6.QtGui import QImage, QTextCursor
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
 

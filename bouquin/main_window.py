@@ -26,6 +26,7 @@ from PySide6.QtGui import (
     QGuiApplication,
     QPalette,
     QTextCharFormat,
+    QTextCursor,
     QTextListFormat,
 )
 from PySide6.QtWidgets import (
@@ -145,6 +146,16 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QApplication
 
         QApplication.instance().installEventFilter(self)
+
+        # Focus on the editor
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.editor.setFocusPolicy(Qt.StrongFocus)
+        self.toolBar.setFocusPolicy(Qt.NoFocus)
+        for w in self.toolBar.findChildren(QWidget):
+            w.setFocusPolicy(Qt.NoFocus)
+        QGuiApplication.instance().applicationStateChanged.connect(
+            self._on_app_state_changed
+        )
 
         # Status bar for feedback
         self.statusBar().showMessage("Ready", 800)
@@ -481,7 +492,8 @@ class MainWindow(QMainWindow):
                 # Inject the extra_data before the closing </body></html>
                 modified = re.sub(r"(<\/body><\/html>)", extra_data_html + r"\1", text)
                 text = modified
-                self.editor.setHtml(text)
+                # Force a save now so we don't lose it.
+                self._set_editor_html_preserve_view(text)
                 self._dirty = True
                 self._save_date(date_iso, True)
 
@@ -489,9 +501,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Read Error", str(e))
             return
 
-        self.editor.blockSignals(True)
-        self.editor.setHtml(text)
-        self.editor.blockSignals(False)
+        self._set_editor_html_preserve_view(text)
 
         self._dirty = False
         # track which date the editor currently represents
@@ -850,6 +860,8 @@ If you want an encrypted backup, choose Backup instead of Export.
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress and not self._locked:
             self._idle_timer.start()
+        if event.type() in (QEvent.ApplicationActivate, QEvent.WindowActivate):
+            QTimer.singleShot(0, self._focus_editor_now)
         return super().eventFilter(obj, event)
 
     def _enter_lock(self):
@@ -891,6 +903,7 @@ If you want an encrypted backup, choose Backup instead of Export.
             if tb:
                 tb.setEnabled(True)
             self._idle_timer.start()
+            QTimer.singleShot(0, self._focus_editor_now)
 
     # ----------------- Close handlers ----------------- #
     def closeEvent(self, event):
@@ -906,3 +919,61 @@ If you want an encrypted backup, choose Backup instead of Export.
         except Exception:
             pass
         super().closeEvent(event)
+
+    # ----------------- Below logic helps focus the editor ----------------- #
+
+    def _focus_editor_now(self):
+        """Give focus to the editor and ensure the caret is visible."""
+        if getattr(self, "_locked", False):
+            return
+        if not self.isActiveWindow():
+            return
+        # Belt-and-suspenders: do it now and once more on the next tick
+        self.editor.setFocus(Qt.ActiveWindowFocusReason)
+        self.editor.ensureCursorVisible()
+        QTimer.singleShot(
+            0,
+            lambda: (
+                self.editor.setFocus(Qt.ActiveWindowFocusReason),
+                self.editor.ensureCursorVisible(),
+            ),
+        )
+
+    def _on_app_state_changed(self, state):
+        # Called on macOS/Wayland/Windows when the whole app re-activates
+        if state == Qt.ApplicationActive and self.isActiveWindow():
+            QTimer.singleShot(0, self._focus_editor_now)
+
+    def changeEvent(self, ev):
+        # Called on some platforms when the window's activation state flips
+        super().changeEvent(ev)
+        if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
+            QTimer.singleShot(0, self._focus_editor_now)
+
+    def _set_editor_html_preserve_view(self, html: str):
+        ed = self.editor
+
+        # Save caret/selection and scroll
+        cur = ed.textCursor()
+        old_pos, old_anchor = cur.position(), cur.anchor()
+        v = ed.verticalScrollBar().value()
+        h = ed.horizontalScrollBar().value()
+
+        # Only touch the doc if it actually changed
+        ed.blockSignals(True)
+        if ed.toHtml() != html:
+            ed.setHtml(html)
+        ed.blockSignals(False)
+
+        # Restore scroll first
+        ed.verticalScrollBar().setValue(v)
+        ed.horizontalScrollBar().setValue(h)
+
+        # Restore caret/selection
+        cur = ed.textCursor()
+        cur.setPosition(old_anchor)
+        mode = (
+            QTextCursor.KeepAnchor if old_anchor != old_pos else QTextCursor.MoveAnchor
+        )
+        cur.setPosition(old_pos, mode)
+        ed.setTextCursor(cur)

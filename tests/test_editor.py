@@ -145,10 +145,6 @@ def test_linkify_trims_trailing_punctuation(qtbot):
 
 
 def test_code_block_enter_exits_on_empty_line(qtbot):
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QTextCursor
-    from PySide6.QtTest import QTest
-    from bouquin.editor import Editor
 
     e = _mk_editor()
     qtbot.addWidget(e)

@@ -1,7 +1,4 @@
-import os
-from datetime import date, timedelta
-from pathlib import Path
-from PySide6.QtCore import QDate, QByteArray
+from PySide6.QtCore import QDate
 from bouquin.theme import ThemeManager
 from bouquin.main_window import MainWindow
 from bouquin.settings import save_db_config

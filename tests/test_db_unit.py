@@ -114,7 +114,7 @@ def test_export_by_extension_and_unknown(tmp_path):
     import types
 
     mgr.get_all_entries = types.MethodType(lambda self: entries, mgr)
-    for ext in [".json", ".csv", ".txt", ".html"]:
+    for ext in [".json", ".csv", ".txt", ".html", ".md"]:
         path = tmp_path / f"route{ext}"
         mgr.export_by_extension(str(path))
         assert path.exists()

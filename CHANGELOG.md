@@ -1,6 +1,8 @@
 # 0.1.11
 
  * Add missing export extensions to export_by_extension
+ * Fix focusing on editor after leaving the app and returning
+ * More code coverage and removing obsolete bits of code
 
 # 0.1.10.2
 

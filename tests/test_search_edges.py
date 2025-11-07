@@ -1,5 +1,3 @@
-import os
-import tempfile
 from PySide6.QtWidgets import QApplication
 import pytest
 
@@ -47,7 +45,6 @@ def test_search_exception_path_closed_db_triggers_quiet_handling(app, fresh_db, 
     # Typing should not raise; exception path returns empty results
     w._search("anything")
     assert w.results.isHidden()  # remains hidden because there are no rows
-    # Also, the "resultDatesChanged" signal should emit an empty list (coverage on that branch)
 
 
 def test_make_html_snippet_ellipses_both_sides(app, fresh_db):
@@ -59,3 +56,15 @@ def test_make_html_snippet_ellipses_both_sides(app, fresh_db):
     assert snippet  # non-empty
     assert left_ell is True
     assert right_ell is True
+
+
+def test_search_results_middle(app, fresh_db, qtbot):
+    w = Search(fresh_db)
+    w.show()
+    qtbot.addWidget(w)
+    # Choose a query so that the first match sits well inside a long string,
+    # forcing both left and right ellipses.
+    assert fresh_db.connect()
+
+    w._search("middle")
+    assert w.results.isVisible()

@@ -140,10 +140,8 @@ class Editor(QTextEdit):
             bc.setPosition(b.position() + b.length())
         return blocks > 0 and (codeish / blocks) >= 0.6
 
-    def _nearest_code_frame(self, cursor=None, tolerant: bool = False):
+    def _nearest_code_frame(self, cursor, tolerant: bool = False):
         """Walk up parents from the cursor and return the first code frame."""
-        if cursor is None:
-            cursor = self.textCursor()
         f = cursor.currentFrame()
         while f:
             if self._is_code_frame(f, tolerant=tolerant):
