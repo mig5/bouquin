@@ -271,16 +271,6 @@ class Editor(QTextEdit):
             cur.endEditBlock()
             self.viewport().update()
 
-    def _safe_select(self, cur: QTextCursor, start: int, end: int):
-        """Select [start, end] inclusive without exceeding document bounds."""
-        doc_max = max(0, self.document().characterCount() - 1)
-        s = max(0, min(start, doc_max))
-        e = max(0, min(end, doc_max))
-        if e < s:
-            s, e = e, s
-        cur.setPosition(s)
-        cur.setPosition(e, QTextCursor.KeepAnchor)
-
     def _trim_url_end(self, url: str) -> str:
         # strip common trailing punctuation not part of the URL
         trimmed = url.rstrip(".,;:!?\"'")
@@ -853,14 +843,6 @@ class Editor(QTextEdit):
             if b == end:
                 break
             b = b.next()
-
-    def toggle_current_checkbox_state(self):
-        """Tick/untick the current line if it starts with a checkbox."""
-        b = self.textCursor().block()
-        state, _ = self._checkbox_info_for_block(b)
-        if state is None:
-            return
-        self._set_block_checkbox_state(b, not state)
 
     @Slot()
     def apply_weight(self):
