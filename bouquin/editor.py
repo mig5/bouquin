@@ -690,6 +690,12 @@ class Editor(QTextEdit):
                 self._apply_normal_typing()  # make the *new* paragraph Normal for typing
                 return
 
+            # If we were at end-of-line, make the *new* line plain (don’t keep URL styling)
+            if not c.hasSelection() and c.atBlockEnd():
+                super().keyPressEvent(e)      # insert the new paragraph
+                self._break_anchor_for_next_char()  # clear anchor/underline/color for typing
+                return
+
         # otherwise default handling
         return super().keyPressEvent(e)
 

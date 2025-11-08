@@ -1,3 +1,7 @@
+# 0.1.12.1
+
+ * Fix newline after URL keeps URL style formatting
+
 # 0.1.12
 
  * Add find bar for searching for text in the editor
