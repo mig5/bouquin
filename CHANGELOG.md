@@ -1,3 +1,7 @@
+# 0.2.0
+
+ * Switch back to Markdown editor
+
 # 0.1.12.1
 
  * Fix newline after URL keeps URL style formatting

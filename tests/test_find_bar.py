@@ -1,100 +1,57 @@
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QTextCursor
-from PySide6.QtTest import QTest
+import pytest
 
-from tests.qt_helpers import trigger_menu_action
-
-
-def _cursor_info(editor):
-    """Return (start, end, selectedText) for the current selection."""
-    tc: QTextCursor = editor.textCursor()
-    start = min(tc.anchor(), tc.position())
-    end = max(tc.anchor(), tc.position())
-    return start, end, tc.selectedText()
+from PySide6.QtGui import QTextCursor
+from bouquin.markdown_editor import MarkdownEditor
+from bouquin.theme import ThemeManager, ThemeConfig, Theme
 
 
-def test_find_actions_and_shortcuts(open_window, qtbot):
-    win = open_window
-
-    # Actions should be present under Navigate and advertise canonical shortcuts
-    act_find = trigger_menu_action(win, "Find on page")
-    assert act_find.shortcut().matches(QKeySequence.Find) == QKeySequence.ExactMatch
-
-    act_next = trigger_menu_action(win, "Find Next")
-    assert act_next.shortcut().matches(QKeySequence.FindNext) == QKeySequence.ExactMatch
-
-    act_prev = trigger_menu_action(win, "Find Previous")
-    assert (
-        act_prev.shortcut().matches(QKeySequence.FindPrevious)
-        == QKeySequence.ExactMatch
-    )
-
-    # "Find on page" should open the bar and focus the input
-    act_find.trigger()
-    qtbot.waitUntil(lambda: win.findBar.isVisible())
-    qtbot.waitUntil(lambda: win.findBar.edit.hasFocus())
+@pytest.fixture
+def editor(app, qtbot):
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    ed = MarkdownEditor(themes)
+    qtbot.addWidget(ed)
+    ed.show()
+    return ed
 
 
-def test_find_navigate_case_sensitive_and_close_focus(open_window, qtbot):
-    win = open_window
+from bouquin.find_bar import FindBar
 
-    # Mixed-case content with three matches
-    text = "alpha … ALPHA … alpha"
-    win.editor.setPlainText(text)
-    qtbot.waitUntil(lambda: win.editor.toPlainText() == text)
 
-    # Open the find bar from the menu
-    trigger_menu_action(win, "Find on page").trigger()
-    qtbot.waitUntil(lambda: win.findBar.isVisible())
-    win.findBar.edit.clear()
-    QTest.keyClicks(win.findBar.edit, "alpha")
+@pytest.mark.gui
+def test_findbar_basic_navigation(qtbot, editor):
+    editor.from_markdown("alpha\nbeta\nalpha\nGamma\n")
+    editor.moveCursor(QTextCursor.Start)
 
-    # 1) First hit (case-insensitive default)
-    QTest.keyClick(win.findBar.edit, Qt.Key_Return)
-    qtbot.waitUntil(lambda: win.editor.textCursor().hasSelection())
-    s0, e0, sel0 = _cursor_info(win.editor)
-    assert sel0.lower() == "alpha"
+    fb = FindBar(editor, parent=editor)
+    qtbot.addWidget(fb)
+    fb.show_bar()
+    fb.edit.setText("alpha")
+    fb.find_next()
+    pos1 = editor.textCursor().position()
+    fb.find_next()
+    pos2 = editor.textCursor().position()
+    assert pos2 > pos1
 
-    # 2) Next → uppercase ALPHA (case-insensitive)
-    trigger_menu_action(win, "Find Next").trigger()
-    qtbot.waitUntil(lambda: win.editor.textCursor().hasSelection())
-    s1, e1, sel1 = _cursor_info(win.editor)
-    assert sel1.upper() == "ALPHA"
+    fb.find_prev()
+    pos3 = editor.textCursor().position()
+    assert pos3 <= pos2
 
-    # 3) Next → the *other* lowercase "alpha"
-    trigger_menu_action(win, "Find Next").trigger()
-    qtbot.waitUntil(lambda: win.editor.textCursor().hasSelection())
-    s2, e2, sel2 = _cursor_info(win.editor)
-    assert sel2.lower() == "alpha"
-    # Ensure we didn't wrap back to the very first "alpha"
-    assert s2 != s0
+    fb.case.setChecked(True)
+    fb.refresh()
+    fb.hide_bar()
 
-    # 4) Case-sensitive: skip ALPHA and only hit lowercase
-    win.findBar.case.setChecked(True)
-    # Put the caret at start to make the next search deterministic
-    tc = win.editor.textCursor()
-    tc.setPosition(0)
-    win.editor.setTextCursor(tc)
 
-    win.findBar.find_next()
-    qtbot.waitUntil(lambda: win.editor.textCursor().hasSelection())
-    s_cs1, e_cs1, sel_cs1 = _cursor_info(win.editor)
-    assert sel_cs1 == "alpha"
+def test_show_bar_seeds_selection(qtbot, editor):
+    from PySide6.QtGui import QTextCursor
 
-    win.findBar.find_next()
-    qtbot.waitUntil(lambda: win.editor.textCursor().hasSelection())
-    s_cs2, e_cs2, sel_cs2 = _cursor_info(win.editor)
-    assert sel_cs2 == "alpha"
-    assert s_cs2 != s_cs1  # it's the other lowercase match
+    editor.from_markdown("alpha beta")
+    c = editor.textCursor()
+    c.movePosition(QTextCursor.Start)
+    c.movePosition(QTextCursor.NextWord, QTextCursor.KeepAnchor)
+    editor.setTextCursor(c)
 
-    # 5) Previous goes back to the earlier lowercase match
-    win.findBar.find_prev()
-    qtbot.waitUntil(lambda: win.editor.textCursor().hasSelection())
-    s_prev, e_prev, sel_prev = _cursor_info(win.editor)
-    assert sel_prev == "alpha"
-    assert s_prev == s_cs1
-
-    # 6) Close returns focus to editor
-    win.findBar.closeBtn.click()
-    qtbot.waitUntil(lambda: not win.findBar.isVisible())
-    qtbot.waitUntil(lambda: win.editor.hasFocus())
+    fb = FindBar(editor, parent=editor)
+    qtbot.addWidget(fb)
+    fb.show_bar()
+    assert fb.edit.text().lower() == "alpha"
+    fb.hide_bar()

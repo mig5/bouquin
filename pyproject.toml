@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bouquin"
-version = "0.1.12.1"
+version = "0.2.0"
 description = "Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher."
 authors = ["Miguel Jacq <mig@mig5.net>"]
 readme = "README.md"
@@ -11,7 +11,6 @@ repository = "https://git.mig5.net/mig5/bouquin"
 python = ">=3.9,<3.14"
 pyside6 = ">=6.8.1,<7.0.0"
 sqlcipher3-wheels = "^0.5.5.post0"
-markdownify = "^1.2.0"
 
 [tool.poetry.scripts]
 bouquin = "bouquin.__main__:main"

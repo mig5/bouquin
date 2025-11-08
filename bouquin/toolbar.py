@@ -8,14 +8,12 @@ from PySide6.QtWidgets import QToolBar
 class ToolBar(QToolBar):
     boldRequested = Signal()
     italicRequested = Signal()
-    underlineRequested = Signal()
     strikeRequested = Signal()
     codeRequested = Signal()
     headingRequested = Signal(int)
     bulletsRequested = Signal()
     numbersRequested = Signal()
     checkboxesRequested = Signal()
-    alignRequested = Signal(Qt.AlignmentFlag)
     historyRequested = Signal()
     insertImageRequested = Signal()
 
@@ -38,12 +36,6 @@ class ToolBar(QToolBar):
         self.actItalic.setCheckable(True)
         self.actItalic.setShortcut(QKeySequence.Italic)
         self.actItalic.triggered.connect(self.italicRequested)
-
-        self.actUnderline = QAction("U", self)
-        self.actUnderline.setToolTip("Underline")
-        self.actUnderline.setCheckable(True)
-        self.actUnderline.setShortcut(QKeySequence.Underline)
-        self.actUnderline.triggered.connect(self.underlineRequested)
 
         self.actStrike = QAction("S", self)
         self.actStrike.setToolTip("Strikethrough")
@@ -97,24 +89,6 @@ class ToolBar(QToolBar):
         self.actInsertImg.setShortcut("Ctrl+Shift+I")
         self.actInsertImg.triggered.connect(self.insertImageRequested)
 
-        # Alignment
-        self.actAlignL = QAction("L", self)
-        self.actAlignL.setToolTip("Align Left")
-        self.actAlignL.setCheckable(True)
-        self.actAlignL.triggered.connect(lambda: self.alignRequested.emit(Qt.AlignLeft))
-        self.actAlignC = QAction("C", self)
-        self.actAlignC.setToolTip("Align Center")
-        self.actAlignC.setCheckable(True)
-        self.actAlignC.triggered.connect(
-            lambda: self.alignRequested.emit(Qt.AlignHCenter)
-        )
-        self.actAlignR = QAction("R", self)
-        self.actAlignR.setToolTip("Align Right")
-        self.actAlignR.setCheckable(True)
-        self.actAlignR.triggered.connect(
-            lambda: self.alignRequested.emit(Qt.AlignRight)
-        )
-
         # History button
         self.actHistory = QAction("History", self)
         self.actHistory.triggered.connect(self.historyRequested)
@@ -125,7 +99,6 @@ class ToolBar(QToolBar):
         for a in (
             self.actBold,
             self.actItalic,
-            self.actUnderline,
             self.actStrike,
             self.actH1,
             self.actH2,
@@ -134,11 +107,6 @@ class ToolBar(QToolBar):
         ):
             a.setCheckable(True)
             a.setActionGroup(self.grpHeadings)
-
-        self.grpAlign = QActionGroup(self)
-        self.grpAlign.setExclusive(True)
-        for a in (self.actAlignL, self.actAlignC, self.actAlignR):
-            a.setActionGroup(self.grpAlign)
 
         self.grpLists = QActionGroup(self)
         self.grpLists.setExclusive(True)
@@ -150,7 +118,6 @@ class ToolBar(QToolBar):
             [
                 self.actBold,
                 self.actItalic,
-                self.actUnderline,
                 self.actStrike,
                 self.actCode,
                 self.actH1,
@@ -161,9 +128,6 @@ class ToolBar(QToolBar):
                 self.actNumbers,
                 self.actCheckboxes,
                 self.actInsertImg,
-                self.actAlignL,
-                self.actAlignC,
-                self.actAlignR,
                 self.actHistory,
             ]
         )
@@ -171,7 +135,6 @@ class ToolBar(QToolBar):
     def _apply_toolbar_styles(self):
         self._style_letter_button(self.actBold, "B", bold=True)
         self._style_letter_button(self.actItalic, "I", italic=True)
-        self._style_letter_button(self.actUnderline, "U", underline=True)
         self._style_letter_button(self.actStrike, "S", strike=True)
         # Monospace look for code; use a fixed font
         code_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
@@ -186,11 +149,6 @@ class ToolBar(QToolBar):
         # Lists
         self._style_letter_button(self.actBullets, "•")
         self._style_letter_button(self.actNumbers, "1.")
-
-        # Alignment
-        self._style_letter_button(self.actAlignL, "L")
-        self._style_letter_button(self.actAlignC, "C")
-        self._style_letter_button(self.actAlignR, "R")
 
         # History
         self._style_letter_button(self.actHistory, "View History")

@@ -25,7 +25,7 @@ There is deliberately no network connectivity or syncing intended.
  * Encryption key is prompted for and never stored, unless user chooses to via Settings
  * Every 'page' is linked to the calendar day
  * All changes are version controlled, with ability to view/diff versions and revert
- * Text is HTML with basic styling
+ * Text is Markdown with basic styling
  * Images are supported
  * Search
  * Automatic periodic saving (or explicitly save)

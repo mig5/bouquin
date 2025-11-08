@@ -16,31 +16,33 @@ from PySide6.QtWidgets import (
 )
 
 
-def _html_to_text(s: str) -> str:
-    """Lightweight HTML→text for diff (keeps paragraphs/line breaks)."""
-    IMG_RE = re.compile(r"(?is)<img\b[^>]*>")
-    STYLE_SCRIPT_RE = re.compile(r"(?is)<(script|style)[^>]*>.*?</\1>")
-    COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
-    BR_RE = re.compile(r"(?i)<br\s*/?>")
-    BLOCK_END_RE = re.compile(r"(?i)</(p|div|section|article|li|h[1-6])\s*>")
-    TAG_RE = re.compile(r"<[^>]+>")
-    MULTINL_RE = re.compile(r"\n{3,}")
-
-    s = IMG_RE.sub("[ Image changed - see Preview pane ]", s)
-    s = STYLE_SCRIPT_RE.sub("", s)
-    s = COMMENT_RE.sub("", s)
-    s = BR_RE.sub("\n", s)
-    s = BLOCK_END_RE.sub("\n", s)
-    s = TAG_RE.sub("", s)
-    s = _html.unescape(s)
-    s = MULTINL_RE.sub("\n\n", s)
+def _markdown_to_text(s: str) -> str:
+    """Convert markdown to plain text for diff comparison."""
+    # Remove images
+    s = re.sub(r"!\[.*?\]\(.*?\)", "[ Image ]", s)
+    # Remove inline code formatting
+    s = re.sub(r"`([^`]+)`", r"\1", s)
+    # Remove bold/italic markers
+    s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)
+    s = re.sub(r"__([^_]+)__", r"\1", s)
+    s = re.sub(r"\*([^*]+)\*", r"\1", s)
+    s = re.sub(r"_([^_]+)_", r"\1", s)
+    # Remove strikethrough
+    s = re.sub(r"~~([^~]+)~~", r"\1", s)
+    # Remove heading markers
+    s = re.sub(r"^#{1,6}\s+", "", s, flags=re.MULTILINE)
+    # Remove list markers
+    s = re.sub(r"^\s*[-*+]\s+", "", s, flags=re.MULTILINE)
+    s = re.sub(r"^\s*\d+\.\s+", "", s, flags=re.MULTILINE)
+    # Remove checkbox markers
+    s = re.sub(r"^\s*-\s*\[[x ☐☑]\]\s+", "", s, flags=re.MULTILINE)
     return s.strip()
 
 
-def _colored_unified_diff_html(old_html: str, new_html: str) -> str:
+def _colored_unified_diff_html(old_md: str, new_md: str) -> str:
     """Return HTML with colored unified diff (+ green, - red, context gray)."""
-    a = _html_to_text(old_html).splitlines()
-    b = _html_to_text(new_html).splitlines()
+    a = _markdown_to_text(old_md).splitlines()
+    b = _markdown_to_text(new_md).splitlines()
     ud = difflib.unified_diff(a, b, fromfile="current", tofile="selected", lineterm="")
     lines = []
     for line in ud:
@@ -150,9 +152,13 @@ class HistoryDialog(QDialog):
             self.btn_revert.setEnabled(False)
             return
         sel_id = item.data(Qt.UserRole)
-        # Preview selected as HTML
+        # Preview selected as plain text (markdown)
         sel = self._db.get_version(version_id=sel_id)
-        self.preview.setHtml(sel["content"])
+        # Show markdown as plain text with monospace font for better readability
+        self.preview.setPlainText(sel["content"])
+        self.preview.setStyleSheet(
+            "font-family: Consolas, Menlo, Monaco, monospace; font-size: 13px;"
+        )
         # Diff vs current (textual diff)
         cur = self._db.get_version(version_id=self._current_id)
         self.diff.setHtml(_colored_unified_diff_html(cur["content"], sel["content"]))

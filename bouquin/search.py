@@ -4,7 +4,6 @@ import re
 from typing import Iterable, Tuple
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QTextCharFormat, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -149,10 +148,12 @@ class Search(QWidget):
             self.results.setItemWidget(item, container)
 
     # --- Snippet/highlight helpers -----------------------------------------
-    def _make_html_snippet(self, html_src: str, query: str, *, radius=60, maxlen=180):
-        doc = QTextDocument()
-        doc.setHtml(html_src)
-        plain = doc.toPlainText()
+    def _make_html_snippet(
+        self, markdown_src: str, query: str, *, radius=60, maxlen=180
+    ):
+        # For markdown, we can work directly with the text
+        # Strip markdown formatting for display
+        plain = self._strip_markdown(markdown_src)
         if not plain:
             return "", False, False
 
@@ -179,30 +180,45 @@ class Search(QWidget):
             start = max(0, min(idx - radius, max(0, L - maxlen)))
             end = min(L, max(idx + mlen + radius, start + maxlen))
 
-        # Bold all token matches that fall inside [start, end)
+        # Extract snippet and highlight matches
+        snippet = plain[start:end]
+
+        # Escape HTML and bold matches
+        import html as _html
+
+        snippet_html = _html.escape(snippet)
         if tokens:
-            lower = plain.lower()
-            fmt = QTextCharFormat()
-            fmt.setFontWeight(QFont.Weight.Bold)
             for t in tokens:
-                t_low = t.lower()
-                pos = start
-                while True:
-                    k = lower.find(t_low, pos)
-                    if k == -1 or k >= end:
-                        break
-                    c = QTextCursor(doc)
-                    c.setPosition(k)
-                    c.setPosition(k + len(t), QTextCursor.MoveMode.KeepAnchor)
-                    c.mergeCharFormat(fmt)
-                    pos = k + len(t)
+                # Case-insensitive replacement
+                pattern = re.compile(re.escape(t), re.IGNORECASE)
+                snippet_html = pattern.sub(
+                    lambda m: f"<b>{m.group(0)}</b>", snippet_html
+                )
 
-        # Select the window and export as HTML fragment
-        c = QTextCursor(doc)
-        c.setPosition(start)
-        c.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
-        fragment_html = (
-            c.selection().toHtml()
-        )  # preserves original styles + our bolding
+        return snippet_html, start > 0, end < L
 
-        return fragment_html, start > 0, end < L
+    def _strip_markdown(self, markdown: str) -> str:
+        """Strip markdown formatting for plain text display."""
+        # Remove images
+        text = re.sub(r"!\[.*?\]\(.*?\)", "[Image]", markdown)
+        # Remove links but keep text
+        text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+        # Remove inline code backticks
+        text = re.sub(r"`([^`]+)`", r"\1", text)
+        # Remove bold/italic markers
+        text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+        text = re.sub(r"__([^_]+)__", r"\1", text)
+        text = re.sub(r"\*([^*]+)\*", r"\1", text)
+        text = re.sub(r"_([^_]+)_", r"\1", text)
+        # Remove strikethrough
+        text = re.sub(r"~~([^~]+)~~", r"\1", text)
+        # Remove heading markers
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+        # Remove list markers
+        text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
+        # Remove checkbox markers
+        text = re.sub(r"^\s*-\s*\[[x ☐☑]\]\s+", "", text, flags=re.MULTILINE)
+        # Remove code block fences
+        text = re.sub(r"```[^\n]*\n", "", text)
+        return text.strip()

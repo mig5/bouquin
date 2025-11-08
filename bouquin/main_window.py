@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 )
 
 from .db import DBManager
-from .editor import Editor
+from .markdown_editor import MarkdownEditor
 from .find_bar import FindBar
 from .history_dialog import HistoryDialog
 from .key_prompt import KeyPrompt
@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
         # This is the note-taking editor
-        self.editor = Editor(self.themes)
+        self.editor = MarkdownEditor(self.themes)
 
         # Toolbar for controlling styling
         self.toolBar = ToolBar()
@@ -107,14 +107,14 @@ class MainWindow(QMainWindow):
         # Wire toolbar intents to editor methods
         self.toolBar.boldRequested.connect(self.editor.apply_weight)
         self.toolBar.italicRequested.connect(self.editor.apply_italic)
-        self.toolBar.underlineRequested.connect(self.editor.apply_underline)
+        # Note: Markdown doesn't support underline, so we skip underlineRequested
         self.toolBar.strikeRequested.connect(self.editor.apply_strikethrough)
         self.toolBar.codeRequested.connect(self.editor.apply_code)
         self.toolBar.headingRequested.connect(self.editor.apply_heading)
         self.toolBar.bulletsRequested.connect(self.editor.toggle_bullets)
         self.toolBar.numbersRequested.connect(self.editor.toggle_numbers)
         self.toolBar.checkboxesRequested.connect(self.editor.toggle_checkboxes)
-        self.toolBar.alignRequested.connect(self.editor.setAlignment)
+        # Note: Markdown doesn't natively support alignment, removing alignRequested
         self.toolBar.historyRequested.connect(self._open_history)
         self.toolBar.insertImageRequested.connect(self._on_insert_image)
 
@@ -450,17 +450,14 @@ class MainWindow(QMainWindow):
     def _sync_toolbar(self):
         fmt = self.editor.currentCharFormat()
         c = self.editor.textCursor()
-        bf = c.blockFormat()
 
         # Block signals so setChecked() doesn't re-trigger actions
         QSignalBlocker(self.toolBar.actBold)
         QSignalBlocker(self.toolBar.actItalic)
-        QSignalBlocker(self.toolBar.actUnderline)
         QSignalBlocker(self.toolBar.actStrike)
 
         self.toolBar.actBold.setChecked(fmt.fontWeight() == QFont.Weight.Bold)
         self.toolBar.actItalic.setChecked(fmt.fontItalic())
-        self.toolBar.actUnderline.setChecked(fmt.fontUnderline())
         self.toolBar.actStrike.setChecked(fmt.fontStrikeOut())
 
         # Headings: decide which to check by current point size
@@ -492,15 +489,6 @@ class MainWindow(QMainWindow):
         self.toolBar.actBullets.setChecked(bool(bullets_on))
         self.toolBar.actNumbers.setChecked(bool(numbers_on))
 
-        # Alignment
-        align = bf.alignment() & Qt.AlignHorizontal_Mask
-        QSignalBlocker(self.toolBar.actAlignL)
-        self.toolBar.actAlignL.setChecked(align == Qt.AlignLeft)
-        QSignalBlocker(self.toolBar.actAlignC)
-        self.toolBar.actAlignC.setChecked(align == Qt.AlignHCenter)
-        QSignalBlocker(self.toolBar.actAlignR)
-        self.toolBar.actAlignR.setChecked(align == Qt.AlignRight)
-
     def _current_date_iso(self) -> str:
         d = self.calendar.selectedDate()
         return f"{d.year():04d}-{d.month():02d}-{d.day():02d}"
@@ -511,14 +499,12 @@ class MainWindow(QMainWindow):
         try:
             text = self.db.get_entry(date_iso)
             if extra_data:
-                # Wrap extra_data in a <p> tag for HTML rendering
-                extra_data_html = f"<p>{extra_data}</p>"
-
-                # Inject the extra_data before the closing </body></html>
-                modified = re.sub(r"(<\/body><\/html>)", extra_data_html + r"\1", text)
-                text = modified
+                # Append extra data as markdown
+                if text and not text.endswith("\n"):
+                    text += "\n"
+                text += extra_data
                 # Force a save now so we don't lose it.
-                self._set_editor_html_preserve_view(text)
+                self._set_editor_markdown_preserve_view(text)
                 self._dirty = True
                 self._save_date(date_iso, True)
 
@@ -526,7 +512,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Read Error", str(e))
             return
 
-        self._set_editor_html_preserve_view(text)
+        self._set_editor_markdown_preserve_view(text)
 
         self._dirty = False
         # track which date the editor currently represents
@@ -556,39 +542,33 @@ class MainWindow(QMainWindow):
             text = self.db.get_entry(yesterday_str)
             unchecked_items = []
 
-            # Regex to match the unchecked checkboxes and their associated text
-            checkbox_pattern = re.compile(
-                r"<span[^>]*>(☐)</span>\s*(.*?)</p>", re.DOTALL
-            )
+            # Split into lines and find unchecked checkbox items
+            lines = text.split("\n")
+            remaining_lines = []
 
-            # Find unchecked items and store them
-            for match in checkbox_pattern.finditer(text):
-                checkbox = match.group(1)  # Either ☐ or ☑
-                item_text = match.group(2).strip()  # The text after the checkbox
-                if checkbox == "☐":  # If it's an unchecked checkbox (☐)
-                    unchecked_items.append("☐ " + item_text)  # Store the unchecked item
+            for line in lines:
+                # Check for unchecked markdown checkboxes: - [ ] or - [☐]
+                if re.match(r"^\s*-\s*\[\s*\]\s+", line) or re.match(
+                    r"^\s*-\s*\[☐\]\s+", line
+                ):
+                    # Extract the text after the checkbox
+                    item_text = re.sub(r"^\s*-\s*\[[\s☐]\]\s+", "", line)
+                    unchecked_items.append(f"- [ ] {item_text}")
+                else:
+                    # Keep all other lines
+                    remaining_lines.append(line)
 
-            # Remove the unchecked items from yesterday's HTML content
+            # Save modified content back if we moved items
             if unchecked_items:
-                # This regex will find the entire checkbox line and remove it from the HTML content
-                uncheckbox_pattern = re.compile(
-                    r"<span[^>]*>☐</span>\s*(.*?)</p>", re.DOTALL
-                )
-                modified_text = re.sub(
-                    uncheckbox_pattern, "", text
-                )  # Remove the checkbox lines
-
-                # Save the modified HTML back to the database
+                modified_text = "\n".join(remaining_lines)
                 self.db.save_new_version(
                     yesterday_str,
                     modified_text,
                     "Unchecked checkbox items moved to next day",
                 )
 
-                # Join unchecked items into a formatted string
-                unchecked_str = "\n".join(
-                    [f"<p>{item}</p>" for item in unchecked_items]
-                )
+                # Join unchecked items into markdown format
+                unchecked_str = "\n".join(unchecked_items) + "\n"
 
                 # Load the unchecked items into the current editor
                 self._load_selected_date(False, unchecked_str)
@@ -621,7 +601,7 @@ class MainWindow(QMainWindow):
         """
         if not self._dirty and not explicit:
             return
-        text = self.editor.to_html_with_embedded_images()
+        text = self.editor.to_markdown()
         try:
             self.db.save_new_version(date_iso, text, note)
         except Exception as e:
@@ -674,7 +654,9 @@ class MainWindow(QMainWindow):
         )
         if not paths:
             return
-        self.editor.insert_images(paths)  # call into the editor
+        # Insert each image
+        for path_str in paths:
+            self.editor.insert_image_from_path(Path(path_str))
 
     # ----------- Settings handler ------------#
     def _open_settings(self):
@@ -975,7 +957,7 @@ If you want an encrypted backup, choose Backup instead of Export.
         if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
             QTimer.singleShot(0, self._focus_editor_now)
 
-    def _set_editor_html_preserve_view(self, html: str):
+    def _set_editor_markdown_preserve_view(self, markdown: str):
         ed = self.editor
 
         # Save caret/selection and scroll
@@ -986,15 +968,19 @@ If you want an encrypted backup, choose Backup instead of Export.
 
         # Only touch the doc if it actually changed
         ed.blockSignals(True)
-        if ed.toHtml() != html:
-            ed.setHtml(html)
+        if ed.to_markdown() != markdown:
+            ed.from_markdown(markdown)
         ed.blockSignals(False)
 
         # Restore scroll first
         ed.verticalScrollBar().setValue(v)
         ed.horizontalScrollBar().setValue(h)
 
-        # Restore caret/selection
+        # Restore caret/selection (bounded to new doc length)
+        doc_length = ed.document().characterCount() - 1
+        old_pos = min(old_pos, doc_length)
+        old_anchor = min(old_anchor, doc_length)
+
         cur = ed.textCursor()
         cur.setPosition(old_anchor)
         mode = (
