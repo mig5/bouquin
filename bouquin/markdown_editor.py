@@ -245,53 +245,38 @@ class MarkdownEditor(QTextEdit):
 
         self._updating = True
         try:
-            # Convert checkbox markdown to Unicode for display
-            cursor = self.textCursor()
-            pos = cursor.position()
+            c = self.textCursor()
+            block = c.block()
+            line = block.text()
+            pos_in_block = c.position() - block.position()
 
-            text = self.toPlainText()
-
-            # Convert lines that START with "TODO " into an unchecked checkbox.
-            # Keeps any leading indentation.
-            todo_re = re.compile(r"(?m)^([ \t]*)TODO\s")
-            if todo_re.search(text):
-                modified_text = todo_re.sub(
+            # Transform only this line:
+            #   - "TODO " at start (with optional indent) -> "- ☐ "
+            #   - "- [ ] " -> "- ☐ "   and   "- [x] " -> "- ☑ "
+            def transform_line(s: str) -> str:
+                s = s.replace("- [x] ", f"- {self._CHECK_CHECKED_DISPLAY} ")
+                s = s.replace("- [ ] ", f"- {self._CHECK_UNCHECKED_DISPLAY} ")
+                s = re.sub(
+                    r'^([ \t]*)TODO\b[:\-]?\s+',
                     lambda m: f"{m.group(1)}- {self._CHECK_UNCHECKED_DISPLAY} ",
-                    text,
+                    s,
                 )
-            else:
-                modified_text = text
+                return s
 
-            # Replace checkbox markdown with Unicode (for display only)
-            modified_text = modified_text.replace(
-                "- [x] ", f"- {self._CHECK_CHECKED_DISPLAY} "
-            )
-            modified_text = modified_text.replace(
-                "- [ ] ", f"- {self._CHECK_UNCHECKED_DISPLAY} "
-            )
+            new_line = transform_line(line)
+            if new_line != line:
+                # Replace just the current block
+                bc = QTextCursor(block)
+                bc.beginEditBlock()
+                bc.select(QTextCursor.BlockUnderCursor)
+                bc.insertText(new_line)
+                bc.endEditBlock()
 
-            if modified_text != text:
-                # Count replacements before cursor to adjust position
-                text_before = text[:pos]
-                x_count = text_before.count("- [x] ")
-                space_count = text_before.count("- [ ] ")
-                # Each markdown checkbox -> unicode shortens by 2 chars ([x]/[ ] -> ☑/☐)
-                checkbox_delta = (x_count + space_count) * 2
-                # Each "TODO " -> "- ☐ " shortens by 1 char
-                todo_count = len(list(todo_re.finditer(text_before)))
-                todo_delta = todo_count * 1
-                new_pos = pos - checkbox_delta - todo_delta
-
-                # Update the text
-                self.blockSignals(True)
-                self.setPlainText(modified_text)
-                self.blockSignals(False)
-
-                # Restore cursor position
-                cursor = self.textCursor()
-                cursor.setPosition(max(0, min(new_pos, len(modified_text))))
-                self.setTextCursor(cursor)
-
+                # Restore cursor near its original visual position in the edited line
+                new_pos = min(block.position() + len(new_line),
+                              block.position() + pos_in_block)
+                c.setPosition(new_pos)
+                self.setTextCursor(c)
         finally:
             self._updating = False
 
