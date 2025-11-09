@@ -13,9 +13,11 @@ to disk unless the user configures it to be in the settings.
 
 There is deliberately no network connectivity or syncing intended.
 
-## Screenshot
+## Screenshots
 
-![Screenshot of Bouquin](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshot.png)
+![Screenshot of Bouquin](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/screenshot.png)
+![Screenshot of Bouquin History Preview pane](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_preview.png)
+![Screenshot of Bouquin History Diff pane](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png)
 
 ## Features
 
