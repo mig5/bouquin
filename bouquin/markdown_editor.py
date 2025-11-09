@@ -44,6 +44,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
 
     def _setup_formats(self):
         """Setup text formats for different markdown elements."""
+
         # Bold: **text** or __text__
         self.bold_format = QTextCharFormat()
         self.bold_format.setFontWeight(QFont.Weight.Bold)
@@ -260,6 +261,11 @@ class MarkdownEditor(QTextEdit):
 
         # We accept plain text, not rich text (markdown is plain text)
         self.setAcceptRichText(False)
+
+        # Normal text
+        font = QFont()
+        font.setPointSize(11)
+        self.setFont(font)
 
         # Install syntax highlighter
         self.highlighter = MarkdownHighlighter(self.document(), theme_manager)
