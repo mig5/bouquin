@@ -8,6 +8,7 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QFontDatabase,
+    QFontMetrics,
     QImage,
     QPalette,
     QGuiApplication,
@@ -17,7 +18,7 @@ from PySide6.QtGui import (
     QSyntaxHighlighter,
     QTextImageFormat,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRect
 from PySide6.QtWidgets import QTextEdit
 
 from .theme import ThemeManager, Theme
@@ -525,34 +526,73 @@ class MarkdownEditor(QTextEdit):
         super().keyPressEvent(event)
 
     def mousePressEvent(self, event):
-        """Handle mouse clicks - check for checkbox clicking."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            cursor = self.cursorForPosition(event.pos())
-            cursor.select(QTextCursor.SelectionType.LineUnderCursor)
-            line = cursor.selectedText()
+        """Toggle a checkbox only when the click lands on its icon."""
+        if event.button() == Qt.LeftButton:
+            pt = event.pos()
 
-            # Check if clicking on a checkbox line
-            if (
-                f"{self._CHECK_UNCHECKED_DISPLAY} " in line
-                or f"{self._CHECK_CHECKED_DISPLAY} " in line
-            ):
-                # Toggle the checkbox
-                if f"{self._CHECK_UNCHECKED_DISPLAY} " in line:
-                    new_line = line.replace(
-                        f"{self._CHECK_UNCHECKED_DISPLAY} ",
-                        f"{self._CHECK_CHECKED_DISPLAY} ",
-                    )
+            # Cursor and block under the mouse
+            cur = self.cursorForPosition(pt)
+            block = cur.block()
+            text = block.text()
+
+            # The display tokens, e.g. "☐ " / "☑ " (icon + trailing space)
+            unchecked = f"{self._CHECK_UNCHECKED_DISPLAY} "
+            checked = f"{self._CHECK_CHECKED_DISPLAY} "
+
+            # Helper: rect for a single character at a given doc position
+            def char_rect_at(doc_pos, ch):
+                c = QTextCursor(self.document())
+                c.setPosition(doc_pos)
+                start_rect = self.cursorRect(
+                    c
+                )  # caret rect at char start (viewport coords)
+
+                # Use the actual font at this position for an accurate width
+                fmt_font = (
+                    c.charFormat().font() if c.charFormat().isValid() else self.font()
+                )
+                fm = QFontMetrics(fmt_font)
+                w = max(1, fm.horizontalAdvance(ch))
+                return QRect(start_rect.x(), start_rect.y(), w, start_rect.height())
+
+            # Scan the line for any checkbox icons; toggle the one we clicked
+            i = 0
+            while i < len(text):
+                icon = None
+                if text.startswith(unchecked, i):
+                    icon = self._CHECK_UNCHECKED_DISPLAY
+                elif text.startswith(checked, i):
+                    icon = self._CHECK_CHECKED_DISPLAY
+
+                if icon:
+                    doc_pos = (
+                        block.position() + i
+                    )  # absolute document position of the icon
+                    r = char_rect_at(doc_pos, icon)
+
+                    if r.contains(pt):
+                        # Build the replacement: swap ☐ <-> ☑ (keep trailing space)
+                        new_icon = (
+                            self._CHECK_CHECKED_DISPLAY
+                            if icon == self._CHECK_UNCHECKED_DISPLAY
+                            else self._CHECK_UNCHECKED_DISPLAY
+                        )
+                        edit = QTextCursor(self.document())
+                        edit.beginEditBlock()
+                        edit.setPosition(doc_pos)
+                        edit.movePosition(
+                            QTextCursor.Right, QTextCursor.KeepAnchor, len(icon) + 1
+                        )  # icon + space
+                        edit.insertText(f"{new_icon} ")
+                        edit.endEditBlock()
+                        return  # handled
+
+                    # advance past this token
+                    i += len(icon) + 1
                 else:
-                    new_line = line.replace(
-                        f"{self._CHECK_CHECKED_DISPLAY} ",
-                        f"{self._CHECK_UNCHECKED_DISPLAY} ",
-                    )
+                    i += 1
 
-                cursor.insertText(new_line)
-                # Don't call super() - we handled the click
-                return
-
-        # Default handling for non-checkbox clicks
+        # Default handling for anything else
         super().mousePressEvent(event)
 
     # ------------------------ Toolbar action handlers ------------------------
