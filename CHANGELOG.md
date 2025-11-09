@@ -1,3 +1,8 @@
+# 0.2.1.3
+
+ * Ensure checkbox only can get checked on/off if it is clicked right on its block position, not any click on the whole line
+ * Fix code backticks to not show but still be able to type code easily
+
 # 0.2.1.2
 
  * Ensure tabs are ordered by calendar date

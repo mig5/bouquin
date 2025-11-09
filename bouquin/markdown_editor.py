@@ -34,6 +34,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # Recompute formats whenever the app theme changes
         try:
             self.theme_manager.themeChanged.connect(self._on_theme_changed)
+            self.textChanged.connect(self._refresh_codeblock_margins)
         except Exception:
             pass
 
@@ -65,6 +66,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.code_block_format = QTextCharFormat()
         self.code_block_format.setFont(mono)
         self.code_block_format.setFontFixedPitch(True)
+
         pal = QGuiApplication.palette()
         if self.theme_manager.current() == Theme.DARK:
             # In dark mode, use a darker panel-like background
@@ -97,6 +99,36 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # Also make them very faint in case they still show
         self.syntax_format.setForeground(QColor(250, 250, 250))
 
+    def _refresh_codeblock_margins(self):
+        """Give code blocks a small left/right margin to separate them visually."""
+        doc = self.document()
+        block = doc.begin()
+        in_code = False
+        while block.isValid():
+            txt = block.text().strip()
+            cursor = QTextCursor(block)
+            fmt = block.blockFormat()
+
+            if txt.startswith("```"):
+                # fence lines: small vertical spacing, same left indent
+                need = (12, 6, 6)  # left, top, bottom (px-like)
+                if (fmt.leftMargin(), fmt.topMargin(), fmt.bottomMargin()) != need:
+                    fmt.setLeftMargin(12)
+                    fmt.setRightMargin(6)
+                    fmt.setTopMargin(6)
+                    fmt.setBottomMargin(6)
+                    cursor.setBlockFormat(fmt)
+                in_code = not in_code
+
+            elif in_code:
+                # inside the code block
+                if fmt.leftMargin() != 12 or fmt.rightMargin() != 6:
+                    fmt.setLeftMargin(12)
+                    fmt.setRightMargin(6)
+                    cursor.setBlockFormat(fmt)
+
+            block = block.next()
+
     def highlightBlock(self, text: str):
         """Apply formatting to a block of text based on markdown syntax."""
         if not text:
@@ -108,12 +140,17 @@ class MarkdownHighlighter(QSyntaxHighlighter):
 
         # Check for code block fences
         if text.strip().startswith("```"):
-            # Toggle code block state
+            # background for the whole fence line (so block looks continuous)
+            self.setFormat(0, len(text), self.code_block_format)
+
+            # hide the three backticks themselves
+            idx = text.find("```")
+            if idx != -1:
+                self.setFormat(idx, 3, self.syntax_format)
+
+            # toggle code-block state and stop; next line picks up state
             in_code_block = not in_code_block
             self.setCurrentBlockState(1 if in_code_block else 0)
-            # Format the fence markers - but keep them somewhat visible for editing
-            # Use code format instead of syntax format so cursor is visible
-            self.setFormat(0, len(text), self.code_format)
             return
 
         if in_code_block:
@@ -447,6 +484,36 @@ class MarkdownEditor(QTextEdit):
 
     def keyPressEvent(self, event):
         """Handle special key events for markdown editing."""
+
+        # --- Auto-close code fences when typing the 3rd backtick at line start ---
+        if event.text() == "`":
+            c = self.textCursor()
+            block = c.block()
+            line = block.text()
+            pos_in_block = c.position() - block.position()
+
+            # text before caret on this line
+            before = line[:pos_in_block]
+
+            # If we've typed exactly two backticks at line start (or after whitespace),
+            # treat this backtick as the "third" and expand to a full fenced block.
+            if before.endswith("``") and before.strip() == "``":
+                start = (
+                    block.position() + pos_in_block - 2
+                )  # start of the two backticks
+
+                edit = QTextCursor(self.document())
+                edit.beginEditBlock()
+                edit.setPosition(start)
+                edit.setPosition(start + 2, QTextCursor.KeepAnchor)
+                edit.insertText("```\n\n```")
+                edit.endEditBlock()
+
+                # place caret on the blank line between the fences
+                new_pos = start + 4  # after "```\n"
+                c.setPosition(new_pos)
+                self.setTextCursor(c)
+                return
 
         # Handle Enter key for smart list continuation AND code blocks
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
