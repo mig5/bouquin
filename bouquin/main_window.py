@@ -322,7 +322,61 @@ class MainWindow(QMainWindow):
             if self._try_connect():
                 return True
 
-    # ----------------- Tab management ----------------- #
+    # ----------------- Tab and date management ----------------- #
+
+    def _current_date_iso(self) -> str:
+        d = self.calendar.selectedDate()
+        return f"{d.year():04d}-{d.month():02d}-{d.day():02d}"
+
+    def _date_key(self, qd: QDate) -> tuple[int, int, int]:
+        return (qd.year(), qd.month(), qd.day())
+
+    def _index_for_date_insert(self, date: QDate) -> int:
+        """Return the index where a tab for `date` should be inserted (ascending order)."""
+        key = self._date_key(date)
+        for i in range(self.tab_widget.count()):
+            w = self.tab_widget.widget(i)
+            d = getattr(w, "current_date", None)
+            if isinstance(d, QDate) and d.isValid():
+                if self._date_key(d) > key:
+                    return i
+        return self.tab_widget.count()
+
+    def _reorder_tabs_by_date(self):
+        """Reorder existing tabs by their date (ascending)."""
+        bar = self.tab_widget.tabBar()
+        dated, undated = [], []
+
+        for i in range(self.tab_widget.count()):
+            w = self.tab_widget.widget(i)
+            d = getattr(w, "current_date", None)
+            if isinstance(d, QDate) and d.isValid():
+                dated.append((d, w))
+            else:
+                undated.append(w)
+
+        dated.sort(key=lambda t: self._date_key(t[0]))
+
+        with QSignalBlocker(self.tab_widget):
+            # Update labels to yyyy-MM-dd
+            for d, w in dated:
+                idx = self.tab_widget.indexOf(w)
+                if idx != -1:
+                    self.tab_widget.setTabText(idx, d.toString("yyyy-MM-dd"))
+
+            # Move dated tabs into target positions 0..len(dated)-1
+            for target_pos, (_, w) in enumerate(dated):
+                cur = self.tab_widget.indexOf(w)
+                if cur != -1 and cur != target_pos:
+                    bar.moveTab(cur, target_pos)
+
+            # Keep any undated pages (if they ever exist) after the dated ones
+            start = len(dated)
+            for offset, w in enumerate(undated):
+                cur = self.tab_widget.indexOf(w)
+                target = start + offset
+                if cur != -1 and cur != target:
+                    bar.moveTab(cur, target)
 
     def _tab_index_for_date(self, date: QDate) -> int:
         """Return the index of the tab showing `date`, or -1 if none."""
@@ -369,9 +423,7 @@ class MainWindow(QMainWindow):
         editor.cursorPositionChanged.connect(self._sync_toolbar)
         editor.textChanged.connect(self._on_text_changed)
 
-        # Determine tab title
-        if date is None:
-            date = self.calendar.selectedDate()
+        # Set tab title
         tab_title = date.toString("yyyy-MM-dd")
 
         # Add the tab
@@ -383,6 +435,12 @@ class MainWindow(QMainWindow):
 
         # Store the date with the editor so we can save it later
         editor.current_date = date
+
+        # Insert at sorted position
+        tab_title = date.toString("yyyy-MM-dd")
+        pos = self._index_for_date_insert(date)
+        index = self.tab_widget.insertTab(pos, editor, tab_title)
+        self.tab_widget.setCurrentIndex(index)
 
         return editor
 
@@ -424,36 +482,6 @@ class MainWindow(QMainWindow):
         if ed is None:
             return
         getattr(ed, method_name)(*args)
-
-    def _bind_toolbar(self):
-        if getattr(self, "_toolbar_bound", False):
-            return
-        tb = self.toolBar
-
-        # keep refs so we never create new lambdas (prevents accidental dupes)
-        self._tb_bold = lambda: self._call_editor("apply_weight")
-        self._tb_italic = lambda: self._call_editor("apply_italic")
-        self._tb_strike = lambda: self._call_editor("apply_strikethrough")
-        self._tb_code = lambda: self._call_editor("apply_code")
-        self._tb_heading = lambda level: self._call_editor("apply_heading", level)
-        self._tb_bullets = lambda: self._call_editor("toggle_bullets")
-        self._tb_numbers = lambda: self._call_editor("toggle_numbers")
-        self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
-
-        tb.boldRequested.connect(self._tb_bold)
-        tb.italicRequested.connect(self._tb_italic)
-        tb.strikeRequested.connect(self._tb_strike)
-        tb.codeRequested.connect(self._tb_code)
-        tb.headingRequested.connect(self._tb_heading)
-        tb.bulletsRequested.connect(self._tb_bullets)
-        tb.numbersRequested.connect(self._tb_numbers)
-        tb.checkboxesRequested.connect(self._tb_checkboxes)
-
-        # these aren’t editor methods
-        tb.historyRequested.connect(self._open_history)
-        tb.insertImageRequested.connect(self._on_insert_image)
-
-        self._toolbar_bound = True
 
     def current_editor(self) -> MarkdownEditor | None:
         """Get the currently active editor."""
@@ -564,6 +592,7 @@ class MainWindow(QMainWindow):
         if action == open_in_new_tab_action and clicked_date and clicked_date.isValid():
             self._open_date_in_tab(clicked_date)
 
+    # ----------------- Some theme helpers -------------------#
     def _retheme_overrides(self):
         if hasattr(self, "_lock_overlay"):
             self._lock_overlay._apply_overlay_style()
@@ -698,6 +727,36 @@ class MainWindow(QMainWindow):
 
     # --- UI handlers ---------------------------------------------------------
 
+    def _bind_toolbar(self):
+        if getattr(self, "_toolbar_bound", False):
+            return
+        tb = self.toolBar
+
+        # keep refs so we never create new lambdas (prevents accidental dupes)
+        self._tb_bold = lambda: self._call_editor("apply_weight")
+        self._tb_italic = lambda: self._call_editor("apply_italic")
+        self._tb_strike = lambda: self._call_editor("apply_strikethrough")
+        self._tb_code = lambda: self._call_editor("apply_code")
+        self._tb_heading = lambda level: self._call_editor("apply_heading", level)
+        self._tb_bullets = lambda: self._call_editor("toggle_bullets")
+        self._tb_numbers = lambda: self._call_editor("toggle_numbers")
+        self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
+
+        tb.boldRequested.connect(self._tb_bold)
+        tb.italicRequested.connect(self._tb_italic)
+        tb.strikeRequested.connect(self._tb_strike)
+        tb.codeRequested.connect(self._tb_code)
+        tb.headingRequested.connect(self._tb_heading)
+        tb.bulletsRequested.connect(self._tb_bullets)
+        tb.numbersRequested.connect(self._tb_numbers)
+        tb.checkboxesRequested.connect(self._tb_checkboxes)
+
+        # these aren’t editor methods
+        tb.historyRequested.connect(self._open_history)
+        tb.insertImageRequested.connect(self._on_insert_image)
+
+        self._toolbar_bound = True
+
     def _sync_toolbar(self):
         fmt = self.editor.currentCharFormat()
         c = self.editor.textCursor()
@@ -740,12 +799,8 @@ class MainWindow(QMainWindow):
         self.toolBar.actBullets.setChecked(bool(bullets_on))
         self.toolBar.actNumbers.setChecked(bool(numbers_on))
 
-    def _current_date_iso(self) -> str:
-        d = self.calendar.selectedDate()
-        return f"{d.year():04d}-{d.month():02d}-{d.day():02d}"
-
     def _load_selected_date(self, date_iso=False, extra_data=False):
-        """Load a date into the current editor (backward compatibility)."""
+        """Load a date into the current editor"""
         editor = self.current_editor()
         if not editor:
             return
@@ -761,6 +816,9 @@ class MainWindow(QMainWindow):
         current_index = self.tab_widget.currentIndex()
         if current_index >= 0:
             self.tab_widget.setTabText(current_index, date_iso)
+
+        # Keep tabs sorted by date
+        self._reorder_tabs_by_date()
 
     def _load_date_into_editor(
         self, date: QDate, editor: MarkdownEditor, extra_data=False
@@ -888,6 +946,34 @@ class MainWindow(QMainWindow):
         if current_index >= 0:
             self.tab_widget.setTabText(current_index, new_date.toString("yyyy-MM-dd"))
 
+        # Keep tabs sorted by date
+        self._reorder_tabs_by_date()
+
+    # ----------- History handler ------------#
+    def _open_history(self):
+        date_iso = self._current_date_iso()
+        dlg = HistoryDialog(self.db, date_iso, self)
+        if dlg.exec() == QDialog.Accepted:
+            # refresh editor + calendar (head pointer may have changed)
+            self._load_selected_date(date_iso)
+            self._refresh_calendar_marks()
+
+    # ----------- Image insert handler ------------#
+    def _on_insert_image(self):
+        # Let the user pick one or many images
+        paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Insert image(s)",
+            "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)",
+        )
+        if not paths:
+            return
+        # Insert each image
+        for path_str in paths:
+            self.editor.insert_image_from_path(Path(path_str))
+
+    # --------------- Database saving of content ---------------- #
     def _save_date(self, date_iso: str, explicit: bool = False, note: str = "autosave"):
         """
         Save editor contents into the given date. Shows status on success.
@@ -936,28 +1022,6 @@ class MainWindow(QMainWindow):
             self._save_timer.start()
         except Exception:
             pass
-
-    def _open_history(self):
-        date_iso = self._current_date_iso()
-        dlg = HistoryDialog(self.db, date_iso, self)
-        if dlg.exec() == QDialog.Accepted:
-            # refresh editor + calendar (head pointer may have changed)
-            self._load_selected_date(date_iso)
-            self._refresh_calendar_marks()
-
-    def _on_insert_image(self):
-        # Let the user pick one or many images
-        paths, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Insert image(s)",
-            "",
-            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)",
-        )
-        if not paths:
-            return
-        # Insert each image
-        for path_str in paths:
-            self.editor.insert_image_from_path(Path(path_str))
 
     # ----------- Settings handler ------------#
     def _open_settings(self):

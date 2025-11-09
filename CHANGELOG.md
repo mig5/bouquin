@@ -1,3 +1,8 @@
+# 0.2.1.2
+
+ * Ensure tabs are ordered by calendar date
+ * Some other code cleanups
+
 # 0.2.1.1
 
  * Fix history preview pane to be in markdown
