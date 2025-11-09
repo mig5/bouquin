@@ -15,9 +15,7 @@ There is deliberately no network connectivity or syncing intended.
 
 ## Screenshot
 
-![Screenshot of Bouquin](./screenshot.png)
-
-![Screenshot of Bouquin in dark mode](./screenshot_dark.png)
+![Screenshot of Bouquin](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshot.png)
 
 ## Features
 
@@ -26,8 +24,9 @@ There is deliberately no network connectivity or syncing intended.
  * Every 'page' is linked to the calendar day
  * All changes are version controlled, with ability to view/diff versions and revert
  * Text is Markdown with basic styling
+ * Tabs are supported - right-click on a date from the calendar to open it in a new tab.
  * Images are supported
- * Search
+ * Search all pages, or find text on page (Ctrl+F)
  * Automatic periodic saving (or explicitly save)
  * Transparent integrity checking of the database when it opens
  * Automatic locking of the app after a period of inactivity (default 15 min)

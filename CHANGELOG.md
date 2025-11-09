@@ -1,3 +1,7 @@
+# 0.2.1
+
+ * Introduce tabs!
+
 # 0.2.0.1
 
  * Fix chomping images when TODO is typed and converts to a checkbox

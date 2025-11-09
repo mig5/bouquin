@@ -31,14 +31,19 @@ class FindBar(QWidget):
         shortcut_parent: QWidget | None = None,
         parent: QWidget | None = None,
     ):
-        super().__init__(parent)
-        self.editor = editor
 
-        # UI
+        super().__init__(parent)
+
+        # store how to get the current editor
+        self._editor_getter = editor if callable(editor) else (lambda: editor)
+        self.shortcut_parent = shortcut_parent
+
+        # UI (build ONCE)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 0, 6, 0)
 
         layout.addWidget(QLabel("Find:"))
+
         self.edit = QLineEdit(self)
         self.edit.setPlaceholderText("Type to search…")
         layout.addWidget(self.edit)
@@ -56,11 +61,15 @@ class FindBar(QWidget):
 
         self.setVisible(False)
 
-        # Shortcut escape key to close findBar
-        sp = shortcut_parent if shortcut_parent is not None else (parent or self)
-        self._scEsc = QShortcut(Qt.Key_Escape, sp, activated=self._maybe_hide)
+        # Shortcut (press Esc to hide bar)
+        sp = (
+            self.shortcut_parent
+            if self.shortcut_parent is not None
+            else (self.parent() or self)
+        )
+        QShortcut(Qt.Key_Escape, sp, activated=self._maybe_hide)
 
-        # Signals
+        # Signals (connect ONCE)
         self.edit.returnPressed.connect(self.find_next)
         self.edit.textChanged.connect(self._update_highlight)
         self.case.toggled.connect(self._update_highlight)
@@ -68,10 +77,17 @@ class FindBar(QWidget):
         self.prevBtn.clicked.connect(self.find_prev)
         self.closeBtn.clicked.connect(self.hide_bar)
 
+    @property
+    def editor(self) -> QTextEdit | None:
+        """Get the current editor (no side effects)."""
+        return self._editor_getter()
+
     # ----- Public API -----
 
     def show_bar(self):
         """Show the bar, seed with current selection if sensible, focus the line edit."""
+        if not self.editor:
+            return
         tc = self.editor.textCursor()
         sel = tc.selectedText().strip()
         if sel and "\u2029" not in sel:  # ignore multi-paragraph selections
@@ -105,6 +121,8 @@ class FindBar(QWidget):
         return flags
 
     def find_next(self):
+        if not self.editor:
+            return
         txt = self.edit.text()
         if not txt:
             return
@@ -130,6 +148,8 @@ class FindBar(QWidget):
         self._update_highlight()
 
     def find_prev(self):
+        if not self.editor:
+            return
         txt = self.edit.text()
         if not txt:
             return
@@ -155,6 +175,8 @@ class FindBar(QWidget):
         self._update_highlight()
 
     def _update_highlight(self):
+        if not self.editor:
+            return
         txt = self.edit.text()
         if not txt:
             self._clear_highlight()
@@ -183,4 +205,5 @@ class FindBar(QWidget):
         self.editor.setExtraSelections(selections)
 
     def _clear_highlight(self):
-        self.editor.setExtraSelections([])
+        if self.editor:
+            self.editor.setExtraSelections([])

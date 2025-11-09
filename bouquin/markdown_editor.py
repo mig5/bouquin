@@ -238,6 +238,12 @@ class MarkdownEditor(QTextEdit):
         # Enable mouse tracking for checkbox clicking
         self.viewport().setMouseTracking(True)
 
+    def setDocument(self, doc):
+        super().setDocument(doc)
+        # reattach the highlighter to the new document
+        if hasattr(self, "highlighter") and self.highlighter:
+            self.highlighter.setDocument(self.document())
+
     def _on_text_changed(self):
         """Handle live formatting updates - convert checkbox markdown to Unicode."""
         if self._updating:
@@ -257,7 +263,7 @@ class MarkdownEditor(QTextEdit):
                 s = s.replace("- [x] ", f"- {self._CHECK_CHECKED_DISPLAY} ")
                 s = s.replace("- [ ] ", f"- {self._CHECK_UNCHECKED_DISPLAY} ")
                 s = re.sub(
-                    r'^([ \t]*)TODO\b[:\-]?\s+',
+                    r"^([ \t]*)TODO\b[:\-]?\s+",
                     lambda m: f"{m.group(1)}- {self._CHECK_UNCHECKED_DISPLAY} ",
                     s,
                 )
@@ -273,8 +279,9 @@ class MarkdownEditor(QTextEdit):
                 bc.endEditBlock()
 
                 # Restore cursor near its original visual position in the edited line
-                new_pos = min(block.position() + len(new_line),
-                              block.position() + pos_in_block)
+                new_pos = min(
+                    block.position() + len(new_line), block.position() + pos_in_block
+                )
                 c.setPosition(new_pos)
                 self.setTextCursor(c)
         finally:
@@ -344,6 +351,8 @@ class MarkdownEditor(QTextEdit):
         self._updating = True
         try:
             self.setPlainText(display_text)
+            if hasattr(self, "highlighter") and self.highlighter:
+                self.highlighter.rehighlight()
         finally:
             self._updating = False
 
@@ -445,6 +454,30 @@ class MarkdownEditor(QTextEdit):
 
             # Check if we're in a code block
             current_block = cursor.block()
+            line_text = current_block.text()
+            pos_in_block = cursor.position() - current_block.position()
+
+            moved = False
+            i = 0
+            patterns = ["**", "__", "~~", "`", "*", "_"]  # bold, italic, strike, code
+            # Consume stacked markers like **` if present
+            while True:
+                matched = False
+                for pat in patterns:
+                    L = len(pat)
+                    if line_text[pos_in_block + i : pos_in_block + i + L] == pat:
+                        i += L
+                        matched = True
+                        moved = True
+                        break
+                if not matched:
+                    break
+            if moved:
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, i
+                )
+                self.setTextCursor(cursor)
+
             block_state = current_block.userState()
 
             # If current line is opening code fence, or we're inside a code block

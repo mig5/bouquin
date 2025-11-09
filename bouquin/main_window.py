@@ -36,9 +36,12 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSizePolicy,
     QSplitter,
+    QTableView,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -98,33 +101,36 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.search)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
-        # This is the note-taking editor
-        self.editor = MarkdownEditor(self.themes)
+        # Create tab widget to hold multiple editors
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.tabCloseRequested.connect(self._close_tab)
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
         # Toolbar for controlling styling
         self.toolBar = ToolBar()
         self.addToolBar(self.toolBar)
-        # Wire toolbar intents to editor methods
-        self.toolBar.boldRequested.connect(self.editor.apply_weight)
-        self.toolBar.italicRequested.connect(self.editor.apply_italic)
-        # Note: Markdown doesn't support underline, so we skip underlineRequested
-        self.toolBar.strikeRequested.connect(self.editor.apply_strikethrough)
-        self.toolBar.codeRequested.connect(self.editor.apply_code)
-        self.toolBar.headingRequested.connect(self.editor.apply_heading)
-        self.toolBar.bulletsRequested.connect(self.editor.toggle_bullets)
-        self.toolBar.numbersRequested.connect(self.editor.toggle_numbers)
-        self.toolBar.checkboxesRequested.connect(self.editor.toggle_checkboxes)
-        # Note: Markdown doesn't natively support alignment, removing alignRequested
-        self.toolBar.historyRequested.connect(self._open_history)
-        self.toolBar.insertImageRequested.connect(self._on_insert_image)
+        self._bind_toolbar()
 
-        self.editor.currentCharFormatChanged.connect(lambda _f: self._sync_toolbar())
-        self.editor.cursorPositionChanged.connect(self._sync_toolbar)
+        # Create the first editor tab
+        self._create_new_tab()
 
         split = QSplitter()
         split.addWidget(left_panel)
-        split.addWidget(self.editor)
+        split.addWidget(self.tab_widget)
         split.setStretchFactor(1, 1)
+
+        # Enable context menu on calendar for opening dates in new tabs
+        self.calendar.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.calendar.customContextMenuRequested.connect(
+            self._show_calendar_context_menu
+        )
+
+        # Flag to prevent _on_date_changed when showing context menu
+        self._showing_context_menu = False
+
+        # Install event filter to catch right-clicks before selectionChanged fires
+        self.calendar.installEventFilter(self)
 
         container = QWidget()
         lay = QVBoxLayout(container)
@@ -162,7 +168,10 @@ class MainWindow(QMainWindow):
         # Status bar for feedback
         self.statusBar().showMessage("Ready", 800)
         # Add findBar and add it to the statusBar
-        self.findBar = FindBar(self.editor, shortcut_parent=self, parent=self)
+        # FindBar will get the current editor dynamically via a callable
+        self.findBar = FindBar(
+            lambda: self.current_editor(), shortcut_parent=self, parent=self
+        )
         self.statusBar().addPermanentWidget(self.findBar)
         # When the findBar closes, put the caret back in the editor
         self.findBar.closed.connect(self._focus_editor_now)
@@ -258,7 +267,7 @@ class MainWindow(QMainWindow):
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
         self._save_timer.timeout.connect(self._save_current)
-        self.editor.textChanged.connect(self._on_text_changed)
+        # Note: textChanged will be connected per-editor in _create_new_tab
 
         # First load + mark dates in calendar with content
         if not self._load_yesterday_todos():
@@ -312,6 +321,248 @@ class MainWindow(QMainWindow):
             self.cfg.key = dlg.key()
             if self._try_connect():
                 return True
+
+    # ----------------- Tab management ----------------- #
+
+    def _tab_index_for_date(self, date: QDate) -> int:
+        """Return the index of the tab showing `date`, or -1 if none."""
+        iso = date.toString("yyyy-MM-dd")
+        for i in range(self.tab_widget.count()):
+            w = self.tab_widget.widget(i)
+            if (
+                hasattr(w, "current_date")
+                and w.current_date.toString("yyyy-MM-dd") == iso
+            ):
+                return i
+        return -1
+
+    def _open_date_in_tab(self, date: QDate):
+        """Focus existing tab for `date`, or create it if needed. Returns the editor."""
+        idx = self._tab_index_for_date(date)
+        if idx != -1:
+            self.tab_widget.setCurrentIndex(idx)
+            # keep calendar selection in sync (don’t trigger load)
+            from PySide6.QtCore import QSignalBlocker
+
+            with QSignalBlocker(self.calendar):
+                self.calendar.setSelectedDate(date)
+            QTimer.singleShot(0, self._focus_editor_now)
+            return self.tab_widget.widget(idx)
+        # not open yet -> create
+        return self._create_new_tab(date)
+
+    def _create_new_tab(self, date: QDate | None = None) -> MarkdownEditor:
+        if date is None:
+            date = self.calendar.selectedDate()
+
+        # Deduplicate: if already open, just jump there
+        existing = self._tab_index_for_date(date)
+        if existing != -1:
+            self.tab_widget.setCurrentIndex(existing)
+            return self.tab_widget.widget(existing)
+
+        """Create a new editor tab and return the editor instance."""
+        editor = MarkdownEditor(self.themes)
+
+        # Set up the editor's event connections
+        editor.currentCharFormatChanged.connect(lambda _f: self._sync_toolbar())
+        editor.cursorPositionChanged.connect(self._sync_toolbar)
+        editor.textChanged.connect(self._on_text_changed)
+
+        # Determine tab title
+        if date is None:
+            date = self.calendar.selectedDate()
+        tab_title = date.toString("yyyy-MM-dd")
+
+        # Add the tab
+        index = self.tab_widget.addTab(editor, tab_title)
+        self.tab_widget.setCurrentIndex(index)
+
+        # Load the date's content
+        self._load_date_into_editor(date, editor)
+
+        # Store the date with the editor so we can save it later
+        editor.current_date = date
+
+        return editor
+
+    def _close_tab(self, index: int):
+        """Close a tab at the given index."""
+        if self.tab_widget.count() <= 1:
+            # Don't close the last tab
+            return
+
+        editor = self.tab_widget.widget(index)
+        if editor:
+            # Save before closing
+            self._save_editor_content(editor)
+
+        self.tab_widget.removeTab(index)
+
+    def _on_tab_changed(self, index: int):
+        """Handle tab change - reconnect toolbar and sync UI."""
+        if index < 0:
+            return
+
+        editor = self.tab_widget.widget(index)
+        if editor and hasattr(editor, "current_date"):
+            # Update calendar selection to match the tab
+            with QSignalBlocker(self.calendar):
+                self.calendar.setSelectedDate(editor.current_date)
+
+        # Reconnect toolbar to new active editor
+        self._sync_toolbar()
+
+        # Focus the editor
+        QTimer.singleShot(0, self._focus_editor_now)
+
+    def _call_editor(self, method_name, *args):
+        """
+        Call the relevant method of the MarkdownEditor class on bind
+        """
+        ed = self.current_editor()
+        if ed is None:
+            return
+        getattr(ed, method_name)(*args)
+
+    def _bind_toolbar(self):
+        if getattr(self, "_toolbar_bound", False):
+            return
+        tb = self.toolBar
+
+        # keep refs so we never create new lambdas (prevents accidental dupes)
+        self._tb_bold = lambda: self._call_editor("apply_weight")
+        self._tb_italic = lambda: self._call_editor("apply_italic")
+        self._tb_strike = lambda: self._call_editor("apply_strikethrough")
+        self._tb_code = lambda: self._call_editor("apply_code")
+        self._tb_heading = lambda level: self._call_editor("apply_heading", level)
+        self._tb_bullets = lambda: self._call_editor("toggle_bullets")
+        self._tb_numbers = lambda: self._call_editor("toggle_numbers")
+        self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
+
+        tb.boldRequested.connect(self._tb_bold)
+        tb.italicRequested.connect(self._tb_italic)
+        tb.strikeRequested.connect(self._tb_strike)
+        tb.codeRequested.connect(self._tb_code)
+        tb.headingRequested.connect(self._tb_heading)
+        tb.bulletsRequested.connect(self._tb_bullets)
+        tb.numbersRequested.connect(self._tb_numbers)
+        tb.checkboxesRequested.connect(self._tb_checkboxes)
+
+        # these aren’t editor methods
+        tb.historyRequested.connect(self._open_history)
+        tb.insertImageRequested.connect(self._on_insert_image)
+
+        self._toolbar_bound = True
+
+    def current_editor(self) -> MarkdownEditor | None:
+        """Get the currently active editor."""
+        return self.tab_widget.currentWidget()
+
+    @property
+    def editor(self) -> MarkdownEditor | None:
+        """Compatibility property to get current editor (for existing code)."""
+        return self.current_editor()
+
+    def _date_from_calendar_pos(self, pos) -> QDate | None:
+        """Translate a QCalendarWidget local pos to the QDate under the cursor."""
+        view: QTableView = self.calendar.findChild(
+            QTableView, "qt_calendar_calendarview"
+        )
+        if view is None:
+            return None
+
+        # Map calendar-local pos -> viewport pos
+        vp_pos = view.viewport().mapFrom(self.calendar, pos)
+        idx = view.indexAt(vp_pos)
+        if not idx.isValid():
+            return None
+
+        model = view.model()
+
+        # Account for optional headers
+        start_col = (
+            0
+            if self.calendar.verticalHeaderFormat() == QCalendarWidget.NoVerticalHeader
+            else 1
+        )
+        start_row = (
+            0
+            if self.calendar.horizontalHeaderFormat()
+            == QCalendarWidget.NoHorizontalHeader
+            else 1
+        )
+
+        # Find index of day 1 (first cell belonging to current month)
+        first_index = None
+        for r in range(start_row, model.rowCount()):
+            for c in range(start_col, model.columnCount()):
+                if model.index(r, c).data() == 1:
+                    first_index = model.index(r, c)
+                    break
+            if first_index:
+                break
+        if first_index is None:
+            return None
+
+        # Find index of the last day of the current month
+        last_day = (
+            QDate(self.calendar.yearShown(), self.calendar.monthShown(), 1)
+            .addMonths(1)
+            .addDays(-1)
+            .day()
+        )
+        last_index = None
+        for r in range(model.rowCount() - 1, first_index.row() - 1, -1):
+            for c in range(model.columnCount() - 1, start_col - 1, -1):
+                if model.index(r, c).data() == last_day:
+                    last_index = model.index(r, c)
+                    break
+            if last_index:
+                break
+        if last_index is None:
+            return None
+
+        # Determine if clicked cell belongs to prev/next month or current
+        day = int(idx.data())
+        year = self.calendar.yearShown()
+        month = self.calendar.monthShown()
+
+        before_first = (idx.row() < first_index.row()) or (
+            idx.row() == first_index.row() and idx.column() < first_index.column()
+        )
+        after_last = (idx.row() > last_index.row()) or (
+            idx.row() == last_index.row() and idx.column() > last_index.column()
+        )
+
+        if before_first:
+            if month == 1:
+                month = 12
+                year -= 1
+            else:
+                month -= 1
+        elif after_last:
+            if month == 12:
+                month = 1
+                year += 1
+            else:
+                month += 1
+
+        qd = QDate(year, month, day)
+        return qd if qd.isValid() else None
+
+    def _show_calendar_context_menu(self, pos):
+        self._showing_context_menu = True  # so selectionChanged handler doesn't fire
+        clicked_date = self._date_from_calendar_pos(pos)
+
+        menu = QMenu(self)
+        open_in_new_tab_action = menu.addAction("Open in New Tab")
+        action = menu.exec_(self.calendar.mapToGlobal(pos))
+
+        self._showing_context_menu = False
+
+        if action == open_in_new_tab_action and clicked_date and clicked_date.isValid():
+            self._open_date_in_tab(clicked_date)
 
     def _retheme_overrides(self):
         if hasattr(self, "_lock_overlay"):
@@ -494,8 +745,28 @@ class MainWindow(QMainWindow):
         return f"{d.year():04d}-{d.month():02d}-{d.day():02d}"
 
     def _load_selected_date(self, date_iso=False, extra_data=False):
+        """Load a date into the current editor (backward compatibility)."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
         if not date_iso:
             date_iso = self._current_date_iso()
+
+        qd = QDate.fromString(date_iso, "yyyy-MM-dd")
+        self._load_date_into_editor(qd, editor, extra_data)
+        editor.current_date = qd
+
+        # Update tab title
+        current_index = self.tab_widget.currentIndex()
+        if current_index >= 0:
+            self.tab_widget.setTabText(current_index, date_iso)
+
+    def _load_date_into_editor(
+        self, date: QDate, editor: MarkdownEditor, extra_data=False
+    ):
+        """Load a specific date's content into a given editor."""
+        date_iso = date.toString("yyyy-MM-dd")
         try:
             text = self.db.get_entry(date_iso)
             if extra_data:
@@ -504,21 +775,26 @@ class MainWindow(QMainWindow):
                     text += "\n"
                 text += extra_data
                 # Force a save now so we don't lose it.
-                self._set_editor_markdown_preserve_view(text)
+                self._set_editor_markdown_preserve_view(text, editor)
                 self._dirty = True
                 self._save_date(date_iso, True)
-
         except Exception as e:
             QMessageBox.critical(self, "Read Error", str(e))
             return
 
-        self._set_editor_markdown_preserve_view(text)
-
+        self._set_editor_markdown_preserve_view(text, editor)
         self._dirty = False
-        # track which date the editor currently represents
-        self._active_date_iso = date_iso
-        qd = QDate.fromString(date_iso, "yyyy-MM-dd")
-        self.calendar.setSelectedDate(qd)
+
+    def _save_editor_content(self, editor: MarkdownEditor):
+        """Save a specific editor's content to its associated date."""
+        if not hasattr(editor, "current_date"):
+            return
+        date_iso = editor.current_date.toString("yyyy-MM-dd")
+        try:
+            md = editor.to_markdown()
+            self.db.save_new_version(date_iso, md, note="autosave")
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", str(e))
 
     def _on_text_changed(self):
         self._dirty = True
@@ -581,18 +857,36 @@ class MainWindow(QMainWindow):
     def _on_date_changed(self):
         """
         When the calendar selection changes, save the previous day's note if dirty,
-        so we don't lose that text, then load the newly selected day.
+        so we don't lose that text, then load the newly selected day into current tab.
         """
+        # Skip if we're showing a context menu (right-click shouldn't load dates)
+        if getattr(self, "_showing_context_menu", False):
+            return
+
+        editor = self.current_editor()
+        if not editor:
+            return
+
         # Stop pending autosave and persist current buffer if needed
         try:
             self._save_timer.stop()
         except Exception:
             pass
-        prev = getattr(self, "_active_date_iso", None)
-        if prev and self._dirty:
-            self._save_date(prev, explicit=False)
-        # Now load the newly selected date
-        self._load_selected_date()
+
+        # Save the current editor's content if dirty
+        if hasattr(editor, "current_date") and self._dirty:
+            prev_date_iso = editor.current_date.toString("yyyy-MM-dd")
+            self._save_date(prev_date_iso, explicit=False)
+
+        # Now load the newly selected date into the current tab
+        new_date = self.calendar.selectedDate()
+        self._load_date_into_editor(new_date, editor)
+        editor.current_date = new_date
+
+        # Update tab title
+        current_index = self.tab_widget.currentIndex()
+        if current_index >= 0:
+            self.tab_widget.setTabText(current_index, new_date.toString("yyyy-MM-dd"))
 
     def _save_date(self, date_iso: str, explicit: bool = False, note: str = "autosave"):
         """
@@ -617,10 +911,16 @@ class MainWindow(QMainWindow):
         )
 
     def _save_current(self, explicit: bool = False):
+        """Save the current editor's content."""
         try:
             self._save_timer.stop()
         except Exception:
             pass
+
+        editor = self.current_editor()
+        if not editor or not hasattr(editor, "current_date"):
+            return
+
         if explicit:
             # Prompt for a note
             dlg = SaveDialog(self)
@@ -629,8 +929,9 @@ class MainWindow(QMainWindow):
             note = dlg.note_text()
         else:
             note = "autosave"
-        # Delegate to _save_date for the currently selected date
-        self._save_date(self._current_date_iso(), explicit, note)
+        # Save the current editor's date
+        date_iso = editor.current_date.toString("yyyy-MM-dd")
+        self._save_date(date_iso, explicit, note)
         try:
             self._save_timer.start()
         except Exception:
@@ -865,10 +1166,21 @@ If you want an encrypted backup, choose Backup instead of Export.
                 self._idle_timer.start()
 
     def eventFilter(self, obj, event):
+        # Catch right-clicks on calendar BEFORE selectionChanged can fire
+        if obj == self.calendar and event.type() == QEvent.MouseButtonPress:
+            try:
+                # QMouseEvent in PySide6
+                if event.button() == Qt.RightButton:
+                    self._showing_context_menu = True
+            except Exception:
+                pass
+
         if event.type() == QEvent.KeyPress and not self._locked:
             self._idle_timer.start()
+
         if event.type() in (QEvent.ApplicationActivate, QEvent.WindowActivate):
             QTimer.singleShot(0, self._focus_editor_now)
+
         return super().eventFilter(obj, event)
 
     def _enter_lock(self):
@@ -920,8 +1232,11 @@ If you want an encrypted backup, choose Backup instead of Export.
             self.settings.setValue("main/windowState", self.saveState())
             self.settings.setValue("main/maximized", self.isMaximized())
 
-            # Ensure we save any last pending edits to the db
-            self._save_current()
+            # Ensure we save all tabs before closing
+            for i in range(self.tab_widget.count()):
+                editor = self.tab_widget.widget(i)
+                if editor:
+                    self._save_editor_content(editor)
             self.db.close()
         except Exception:
             pass
@@ -935,14 +1250,17 @@ If you want an encrypted backup, choose Backup instead of Export.
             return
         if not self.isActiveWindow():
             return
+        editor = self.current_editor()
+        if not editor:
+            return
         # Belt-and-suspenders: do it now and once more on the next tick
-        self.editor.setFocus(Qt.ActiveWindowFocusReason)
-        self.editor.ensureCursorVisible()
+        editor.setFocus(Qt.ActiveWindowFocusReason)
+        editor.ensureCursorVisible()
         QTimer.singleShot(
             0,
             lambda: (
-                self.editor.setFocus(Qt.ActiveWindowFocusReason),
-                self.editor.ensureCursorVisible(),
+                editor.setFocus(Qt.ActiveWindowFocusReason) if editor else None,
+                editor.ensureCursorVisible() if editor else None,
             ),
         )
 
@@ -957,8 +1275,15 @@ If you want an encrypted backup, choose Backup instead of Export.
         if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
             QTimer.singleShot(0, self._focus_editor_now)
 
-    def _set_editor_markdown_preserve_view(self, markdown: str):
-        ed = self.editor
+    def _set_editor_markdown_preserve_view(
+        self, markdown: str, editor: MarkdownEditor | None = None
+    ):
+        if editor is None:
+            editor = self.current_editor()
+        if not editor:
+            return
+
+        ed = editor
 
         # Save caret/selection and scroll
         cur = ed.textCursor()
