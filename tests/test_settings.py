@@ -1,17 +1,10 @@
 from pathlib import Path
 from bouquin.settings import (
-    default_db_path,
     get_settings,
     load_db_config,
     save_db_config,
 )
 from bouquin.db import DBConfig
-
-
-def test_default_db_path_returns_writable_path(app, tmp_path):
-    p = default_db_path()
-    assert isinstance(p, Path)
-    p.parent.mkdir(parents=True, exist_ok=True)
 
 
 def test_load_and_save_db_config_roundtrip(app, tmp_path):

@@ -169,9 +169,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready", 800)
         # Add findBar and add it to the statusBar
         # FindBar will get the current editor dynamically via a callable
-        self.findBar = FindBar(
-            lambda: self.current_editor(), shortcut_parent=self, parent=self
-        )
+        self.findBar = FindBar(lambda: self.editor, shortcut_parent=self, parent=self)
         self.statusBar().addPermanentWidget(self.findBar)
         # When the findBar closes, put the caret back in the editor
         self.findBar.closed.connect(self._focus_editor_now)
@@ -431,7 +429,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.setCurrentIndex(index)
 
         # Load the date's content
-        self._load_date_into_editor(date, editor)
+        self._load_date_into_editor(date)
 
         # Store the date with the editor so we can save it later
         editor.current_date = date
@@ -478,19 +476,12 @@ class MainWindow(QMainWindow):
         """
         Call the relevant method of the MarkdownEditor class on bind
         """
-        ed = self.current_editor()
-        if ed is None:
-            return
-        getattr(ed, method_name)(*args)
-
-    def current_editor(self) -> MarkdownEditor | None:
-        """Get the currently active editor."""
-        return self.tab_widget.currentWidget()
+        getattr(self.editor, method_name)(*args)
 
     @property
     def editor(self) -> MarkdownEditor | None:
-        """Compatibility property to get current editor (for existing code)."""
-        return self.current_editor()
+        """Get the currently active editor."""
+        return self.tab_widget.currentWidget()
 
     def _date_from_calendar_pos(self, pos) -> QDate | None:
         """Translate a QCalendarWidget local pos to the QDate under the cursor."""
@@ -801,16 +792,12 @@ class MainWindow(QMainWindow):
 
     def _load_selected_date(self, date_iso=False, extra_data=False):
         """Load a date into the current editor"""
-        editor = self.current_editor()
-        if not editor:
-            return
-
         if not date_iso:
             date_iso = self._current_date_iso()
 
         qd = QDate.fromString(date_iso, "yyyy-MM-dd")
-        self._load_date_into_editor(qd, editor, extra_data)
-        editor.current_date = qd
+        self._load_date_into_editor(qd, extra_data)
+        self.editor.current_date = qd
 
         # Update tab title
         current_index = self.tab_widget.currentIndex()
@@ -820,9 +807,7 @@ class MainWindow(QMainWindow):
         # Keep tabs sorted by date
         self._reorder_tabs_by_date()
 
-    def _load_date_into_editor(
-        self, date: QDate, editor: MarkdownEditor, extra_data=False
-    ):
+    def _load_date_into_editor(self, date: QDate, extra_data=False):
         """Load a specific date's content into a given editor."""
         date_iso = date.toString("yyyy-MM-dd")
         try:
@@ -833,14 +818,14 @@ class MainWindow(QMainWindow):
                     text += "\n"
                 text += extra_data
                 # Force a save now so we don't lose it.
-                self._set_editor_markdown_preserve_view(text, editor)
+                self._set_editor_markdown_preserve_view(text)
                 self._dirty = True
                 self._save_date(date_iso, True)
         except Exception as e:
             QMessageBox.critical(self, "Read Error", str(e))
             return
 
-        self._set_editor_markdown_preserve_view(text, editor)
+        self._set_editor_markdown_preserve_view(text)
         self._dirty = False
 
     def _save_editor_content(self, editor: MarkdownEditor):
@@ -921,10 +906,6 @@ class MainWindow(QMainWindow):
         if getattr(self, "_showing_context_menu", False):
             return
 
-        editor = self.current_editor()
-        if not editor:
-            return
-
         # Stop pending autosave and persist current buffer if needed
         try:
             self._save_timer.stop()
@@ -932,14 +913,14 @@ class MainWindow(QMainWindow):
             pass
 
         # Save the current editor's content if dirty
-        if hasattr(editor, "current_date") and self._dirty:
-            prev_date_iso = editor.current_date.toString("yyyy-MM-dd")
+        if hasattr(self.editor, "current_date") and self._dirty:
+            prev_date_iso = self.editor.current_date.toString("yyyy-MM-dd")
             self._save_date(prev_date_iso, explicit=False)
 
         # Now load the newly selected date into the current tab
         new_date = self.calendar.selectedDate()
-        self._load_date_into_editor(new_date, editor)
-        editor.current_date = new_date
+        self._load_date_into_editor(new_date)
+        self.editor.current_date = new_date
 
         # Update tab title
         current_index = self.tab_widget.currentIndex()
@@ -1003,10 +984,6 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        editor = self.current_editor()
-        if not editor or not hasattr(editor, "current_date"):
-            return
-
         if explicit:
             # Prompt for a note
             dlg = SaveDialog(self)
@@ -1016,7 +993,7 @@ class MainWindow(QMainWindow):
         else:
             note = "autosave"
         # Save the current editor's date
-        date_iso = editor.current_date.toString("yyyy-MM-dd")
+        date_iso = self.editor.current_date.toString("yyyy-MM-dd")
         self._save_date(date_iso, explicit, note)
         try:
             self._save_timer.start()
@@ -1314,17 +1291,18 @@ If you want an encrypted backup, choose Backup instead of Export.
             return
         if not self.isActiveWindow():
             return
-        editor = self.current_editor()
-        if not editor:
-            return
         # Belt-and-suspenders: do it now and once more on the next tick
-        editor.setFocus(Qt.ActiveWindowFocusReason)
-        editor.ensureCursorVisible()
+        self.editor.setFocus(Qt.ActiveWindowFocusReason)
+        self.editor.ensureCursorVisible()
         QTimer.singleShot(
             0,
             lambda: (
-                editor.setFocus(Qt.ActiveWindowFocusReason) if editor else None,
-                editor.ensureCursorVisible() if editor else None,
+                (
+                    self.editor.setFocus(Qt.ActiveWindowFocusReason)
+                    if self.editor
+                    else None
+                ),
+                self.editor.ensureCursorVisible() if self.editor else None,
             ),
         )
 
@@ -1339,44 +1317,36 @@ If you want an encrypted backup, choose Backup instead of Export.
         if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
             QTimer.singleShot(0, self._focus_editor_now)
 
-    def _set_editor_markdown_preserve_view(
-        self, markdown: str, editor: MarkdownEditor | None = None
-    ):
-        if editor is None:
-            editor = self.current_editor()
-        if not editor:
-            return
-
-        ed = editor
+    def _set_editor_markdown_preserve_view(self, markdown: str):
 
         # Save caret/selection and scroll
-        cur = ed.textCursor()
+        cur = self.editor.textCursor()
         old_pos, old_anchor = cur.position(), cur.anchor()
-        v = ed.verticalScrollBar().value()
-        h = ed.horizontalScrollBar().value()
+        v = self.editor.verticalScrollBar().value()
+        h = self.editor.horizontalScrollBar().value()
 
         # Only touch the doc if it actually changed
-        ed.blockSignals(True)
-        if ed.to_markdown() != markdown:
-            ed.from_markdown(markdown)
-        ed.blockSignals(False)
+        self.editor.blockSignals(True)
+        if self.editor.to_markdown() != markdown:
+            self.editor.from_markdown(markdown)
+        self.editor.blockSignals(False)
 
         # Restore scroll first
-        ed.verticalScrollBar().setValue(v)
-        ed.horizontalScrollBar().setValue(h)
+        self.editor.verticalScrollBar().setValue(v)
+        self.editor.horizontalScrollBar().setValue(h)
 
         # Restore caret/selection (bounded to new doc length)
-        doc_length = ed.document().characterCount() - 1
+        doc_length = self.editor.document().characterCount() - 1
         old_pos = min(old_pos, doc_length)
         old_anchor = min(old_anchor, doc_length)
 
-        cur = ed.textCursor()
+        cur = self.editor.textCursor()
         cur.setPosition(old_anchor)
         mode = (
             QTextCursor.KeepAnchor if old_anchor != old_pos else QTextCursor.MoveAnchor
         )
         cur.setPosition(old_pos, mode)
-        ed.setTextCursor(cur)
+        self.editor.setTextCursor(cur)
 
         # Refresh highlights if the theme changed
         if hasattr(self, "findBar"):

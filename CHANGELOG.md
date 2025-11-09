@@ -1,3 +1,8 @@
+# 0.2.1.4
+
+ * Increase font size of normal text
+ * DRY up some code
+
 # 0.2.1.3
 
  * Ensure checkbox only can get checked on/off if it is clicked right on its block position, not any click on the whole line

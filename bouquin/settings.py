@@ -9,18 +9,18 @@ APP_ORG = "Bouquin"
 APP_NAME = "Bouquin"
 
 
-def default_db_path() -> Path:
-    base = Path(QStandardPaths.writableLocation(QStandardPaths.AppDataLocation))
-    return base / "notebook.db"
-
-
 def get_settings() -> QSettings:
     return QSettings(APP_ORG, APP_NAME)
 
 
 def load_db_config() -> DBConfig:
     s = get_settings()
-    path = Path(s.value("db/path", str(default_db_path())))
+    default_db_path = str(
+        Path(QStandardPaths.writableLocation(QStandardPaths.AppDataLocation))
+        / "notebook.db"
+    )
+
+    path = Path(s.value("db/path", default_db_path))
     key = s.value("db/key", "")
     idle = s.value("ui/idle_minutes", 15, type=int)
     theme = s.value("ui/theme", "system", type=str)
