@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self._close_tab)
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        self._prev_editor = None
 
         # Toolbar for controlling styling
         self.toolBar = ToolBar()
@@ -114,6 +115,7 @@ class MainWindow(QMainWindow):
 
         # Create the first editor tab
         self._create_new_tab()
+        self._prev_editor = self.editor
 
         split = QSplitter()
         split.addWidget(left_panel)
@@ -452,6 +454,7 @@ class MainWindow(QMainWindow):
         if editor:
             # Save before closing
             self._save_editor_content(editor)
+            self._dirty = False
 
         self.tab_widget.removeTab(index)
 
@@ -460,9 +463,19 @@ class MainWindow(QMainWindow):
         if index < 0:
             return
 
+        # If we had pending edits, flush them from the tab we're leaving.
+        try:
+            self._save_timer.stop()  # avoid a pending autosave targeting the *new* tab
+        except Exception:
+            pass
+
+        if getattr(self, "_prev_editor", None) is not None and self._dirty:
+            self._save_editor_content(self._prev_editor)
+            self._dirty = False  # we just saved the edited tab
+
+        # Update calendar selection to match the tab
         editor = self.tab_widget.widget(index)
         if editor and hasattr(editor, "current_date"):
-            # Update calendar selection to match the tab
             with QSignalBlocker(self.calendar):
                 self.calendar.setSelectedDate(editor.current_date)
 
@@ -471,6 +484,9 @@ class MainWindow(QMainWindow):
 
         # Focus the editor
         QTimer.singleShot(0, self._focus_editor_now)
+
+        # Remember this as the "previous" editor for next switch
+        self._prev_editor = editor
 
     def _call_editor(self, method_name, *args):
         """
