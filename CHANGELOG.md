@@ -1,6 +1,7 @@
 # 0.2.1.4
 
  * Increase font size of normal text
+ * Fix auto-save of a tab if we are moving to another tab and it has not yet saved
  * DRY up some code
 
 # 0.2.1.3
