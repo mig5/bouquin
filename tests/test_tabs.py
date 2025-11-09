@@ -59,7 +59,6 @@ def test_toolbar_signals_dispatch_once_per_click(
     tb = w.toolBar
 
     # Spy on the first tab's editor
-    ed1 = w.current_editor()
     calls1 = {
         "bold": 0,
         "italic": 0,
@@ -77,14 +76,14 @@ def test_toolbar_signals_dispatch_once_per_click(
 
         return _spy
 
-    ed1.apply_weight = types.MethodType(mk("bold"), ed1)
-    ed1.apply_italic = types.MethodType(mk("italic"), ed1)
-    ed1.apply_strikethrough = types.MethodType(mk("strike"), ed1)
-    ed1.apply_code = types.MethodType(mk("code"), ed1)
-    ed1.apply_heading = types.MethodType(mk("heading"), ed1)
-    ed1.toggle_bullets = types.MethodType(mk("bullets"), ed1)
-    ed1.toggle_numbers = types.MethodType(mk("numbers"), ed1)
-    ed1.toggle_checkboxes = types.MethodType(mk("checkboxes"), ed1)
+    w.editor.apply_weight = types.MethodType(mk("bold"), w.editor)
+    w.editor.apply_italic = types.MethodType(mk("italic"), w.editor)
+    w.editor.apply_strikethrough = types.MethodType(mk("strike"), w.editor)
+    w.editor.apply_code = types.MethodType(mk("code"), w.editor)
+    w.editor.apply_heading = types.MethodType(mk("heading"), w.editor)
+    w.editor.toggle_bullets = types.MethodType(mk("bullets"), w.editor)
+    w.editor.toggle_numbers = types.MethodType(mk("numbers"), w.editor)
+    w.editor.toggle_checkboxes = types.MethodType(mk("checkboxes"), w.editor)
 
     # Click all the things once
     tb.boldRequested.emit()
@@ -101,10 +100,9 @@ def test_toolbar_signals_dispatch_once_per_click(
     # Switch to a new tab and make sure clicks go ONLY to the active editor
     date2 = w.calendar.selectedDate().addDays(1)
     w._open_date_in_tab(date2)
-    ed2 = w.current_editor()
     calls2 = {"bold": 0}
-    ed2.apply_weight = types.MethodType(
-        lambda self: calls2.__setitem__("bold", calls2["bold"] + 1), ed2
+    w.editor.apply_weight = types.MethodType(
+        lambda self: calls2.__setitem__("bold", calls2["bold"] + 1), w.editor
     )
 
     tb.boldRequested.emit()
@@ -145,12 +143,11 @@ def test_history_and_insert_image_not_duplicated(
     dummy = tmp_path / "x.png"
     dummy.write_bytes(b"\x89PNG\r\n\x1a\n")
     inserted = {"count": 0}
-    ed = w.current_editor()
 
     def fake_insert(self, p):
         inserted["count"] += 1
 
-    ed.insert_image_from_path = types.MethodType(fake_insert, ed)
+    w.editor.insert_image_from_path = types.MethodType(fake_insert, w.editor)
     monkeypatch.setattr(
         QFileDialog,
         "getOpenFileNames",
@@ -172,10 +169,9 @@ def test_highlighter_attached_after_text_load(qtbot, app, tmp_db_cfg, fresh_db):
     qtbot.addWidget(w)
     w.show()
 
-    ed = w.current_editor()
-    ed.from_markdown("**bold**\n- [ ] task\n~~strike~~")
-    assert ed.highlighter is not None
-    assert ed.highlighter.document() is ed.document()
+    w.editor.from_markdown("**bold**\n- [ ] task\n~~strike~~")
+    assert w.editor.highlighter is not None
+    assert w.editor.highlighter.document() is w.editor.document()
 
 
 @pytest.mark.gui
@@ -190,18 +186,16 @@ def test_findbar_works_for_current_tab(qtbot, app, tmp_db_cfg, fresh_db):
     w.show()
 
     # Tab 1 content
-    ed1 = w.current_editor()
-    ed1.from_markdown("alpha bravo charlie")
+    w.editor.from_markdown("alpha bravo charlie")
     w.findBar.show_bar()
     w.findBar.edit.setText("bravo")
     w.findBar.find_next()
-    assert ed1.textCursor().selectedText() == "bravo"
+    assert w.editor.textCursor().selectedText() == "bravo"
 
     # Tab 2 content (contains the query too)
     date2 = w.calendar.selectedDate().addDays(1)
     w._open_date_in_tab(date2)
-    ed2 = w.current_editor()
-    ed2.from_markdown("x bravo y bravo z")
-    ed2.moveCursor(QTextCursor.Start)
+    w.editor.from_markdown("x bravo y bravo z")
+    w.editor.moveCursor(QTextCursor.Start)
     w.findBar.find_next()
-    assert ed2.textCursor().selectedText() == "bravo"
+    assert w.editor.textCursor().selectedText() == "bravo"
