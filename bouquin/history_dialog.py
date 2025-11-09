@@ -118,9 +118,9 @@ class HistoryDialog(QDialog):
         return local.strftime("%Y-%m-%d %H:%M:%S %Z")
 
     def _load_versions(self):
-        self._versions = self._db.list_versions(
-            self._date
-        )  # [{id,version_no,created_at,note,is_current}]
+        # [{id,version_no,created_at,note,is_current}]
+        self._versions = self._db.list_versions(self._date)
+
         self._current_id = next(
             (v["id"] for v in self._versions if v["is_current"]), None
         )
@@ -152,13 +152,8 @@ class HistoryDialog(QDialog):
             self.btn_revert.setEnabled(False)
             return
         sel_id = item.data(Qt.UserRole)
-        # Preview selected as plain text (markdown)
         sel = self._db.get_version(version_id=sel_id)
-        # Show markdown as plain text with monospace font for better readability
-        self.preview.setPlainText(sel["content"])
-        self.preview.setStyleSheet(
-            "font-family: Consolas, Menlo, Monaco, monospace; font-size: 13px;"
-        )
+        self.preview.setMarkdown(sel["content"])
         # Diff vs current (textual diff)
         cur = self._db.get_version(version_id=self._current_id)
         self.diff.setHtml(_colored_unified_diff_html(cur["content"], sel["content"]))

@@ -3,7 +3,7 @@ import pytest
 from PySide6.QtGui import QTextCursor
 from bouquin.markdown_editor import MarkdownEditor
 from bouquin.theme import ThemeManager, ThemeConfig, Theme
-
+from bouquin.find_bar import FindBar
 
 @pytest.fixture
 def editor(app, qtbot):
@@ -12,9 +12,6 @@ def editor(app, qtbot):
     qtbot.addWidget(ed)
     ed.show()
     return ed
-
-
-from bouquin.find_bar import FindBar
 
 
 @pytest.mark.gui
@@ -42,7 +39,6 @@ def test_findbar_basic_navigation(qtbot, editor):
 
 
 def test_show_bar_seeds_selection(qtbot, editor):
-    from PySide6.QtGui import QTextCursor
 
     editor.from_markdown("alpha beta")
     c = editor.textCursor()

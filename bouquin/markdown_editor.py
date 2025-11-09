@@ -112,7 +112,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setCurrentBlockState(1 if in_code_block else 0)
             # Format the fence markers - but keep them somewhat visible for editing
             # Use code format instead of syntax format so cursor is visible
-            self.setFormat(0, len(text), self.code_block_format)
+            self.setFormat(0, len(text), self.code_format)
             return
 
         if in_code_block:
@@ -258,13 +258,13 @@ class MarkdownEditor(QTextEdit):
 
             # Transform only this line:
             #   - "TODO " at start (with optional indent) -> "- ☐ "
-            #   - "- [ ] " -> "- ☐ "   and   "- [x] " -> "- ☑ "
+            #   - "- [ ] " -> " ☐ "   and   "- [x] " -> " ☑ "
             def transform_line(s: str) -> str:
-                s = s.replace("- [x] ", f"- {self._CHECK_CHECKED_DISPLAY} ")
-                s = s.replace("- [ ] ", f"- {self._CHECK_UNCHECKED_DISPLAY} ")
+                s = s.replace("- [x] ", f"{self._CHECK_CHECKED_DISPLAY} ")
+                s = s.replace("- [ ] ", f"{self._CHECK_UNCHECKED_DISPLAY} ")
                 s = re.sub(
                     r"^([ \t]*)TODO\b[:\-]?\s+",
-                    lambda m: f"{m.group(1)}- {self._CHECK_UNCHECKED_DISPLAY} ",
+                    lambda m: f"{m.group(1)}\n{self._CHECK_UNCHECKED_DISPLAY} ",
                     s,
                 )
                 return s
@@ -293,8 +293,8 @@ class MarkdownEditor(QTextEdit):
         text = self._extract_images_to_markdown()
 
         # Convert Unicode checkboxes back to markdown syntax
-        text = text.replace(f"- {self._CHECK_CHECKED_DISPLAY} ", "- [x] ")
-        text = text.replace(f"- {self._CHECK_UNCHECKED_DISPLAY} ", "- [ ] ")
+        text = text.replace(f"{self._CHECK_CHECKED_DISPLAY} ", "- [x] ")
+        text = text.replace(f"{self._CHECK_UNCHECKED_DISPLAY} ", "- [ ] ")
 
         return text
 
@@ -336,15 +336,15 @@ class MarkdownEditor(QTextEdit):
         """Load markdown text into the editor (convert markdown checkboxes to Unicode)."""
         # Convert markdown checkboxes to Unicode for display
         display_text = markdown_text.replace(
-            "- [x] ", f"- {self._CHECK_CHECKED_DISPLAY} "
+            "- [x] ", f"{self._CHECK_CHECKED_DISPLAY} "
         )
         display_text = display_text.replace(
-            "- [ ] ", f"- {self._CHECK_UNCHECKED_DISPLAY} "
+            "- [ ] ", f"{self._CHECK_UNCHECKED_DISPLAY} "
         )
         # Also convert any plain 'TODO ' at the start of a line to an unchecked checkbox
         display_text = re.sub(
             r"(?m)^([ \t]*)TODO\s",
-            lambda m: f"{m.group(1)}- {self._CHECK_UNCHECKED_DISPLAY} ",
+            lambda m: f"{m.group(1)}\n{self._CHECK_UNCHECKED_DISPLAY} ",
             display_text,
         )
 
@@ -425,10 +425,10 @@ class MarkdownEditor(QTextEdit):
         line = line.lstrip()
 
         # Checkbox list (Unicode display format)
-        if line.startswith(f"- {self._CHECK_UNCHECKED_DISPLAY} ") or line.startswith(
-            f"- {self._CHECK_CHECKED_DISPLAY} "
+        if line.startswith(f"{self._CHECK_UNCHECKED_DISPLAY} ") or line.startswith(
+            f"{self._CHECK_CHECKED_DISPLAY} "
         ):
-            return ("checkbox", f"- {self._CHECK_UNCHECKED_DISPLAY} ")
+            return ("checkbox", f"{self._CHECK_UNCHECKED_DISPLAY} ")
 
         # Bullet list
         if re.match(r"^[-*+]\s", line):
@@ -533,19 +533,19 @@ class MarkdownEditor(QTextEdit):
 
             # Check if clicking on a checkbox line
             if (
-                f"- {self._CHECK_UNCHECKED_DISPLAY} " in line
-                or f"- {self._CHECK_CHECKED_DISPLAY} " in line
+                f"{self._CHECK_UNCHECKED_DISPLAY} " in line
+                or f"{self._CHECK_CHECKED_DISPLAY} " in line
             ):
                 # Toggle the checkbox
-                if f"- {self._CHECK_UNCHECKED_DISPLAY} " in line:
+                if f"{self._CHECK_UNCHECKED_DISPLAY} " in line:
                     new_line = line.replace(
-                        f"- {self._CHECK_UNCHECKED_DISPLAY} ",
-                        f"- {self._CHECK_CHECKED_DISPLAY} ",
+                        f"{self._CHECK_UNCHECKED_DISPLAY} ",
+                        f"{self._CHECK_CHECKED_DISPLAY} ",
                     )
                 else:
                     new_line = line.replace(
-                        f"- {self._CHECK_CHECKED_DISPLAY} ",
-                        f"- {self._CHECK_UNCHECKED_DISPLAY} ",
+                        f"{self._CHECK_CHECKED_DISPLAY} ",
+                        f"{self._CHECK_UNCHECKED_DISPLAY} ",
                     )
 
                 cursor.insertText(new_line)
@@ -745,18 +745,18 @@ class MarkdownEditor(QTextEdit):
 
         # Check if already has checkbox (Unicode display format)
         if (
-            f"- {self._CHECK_UNCHECKED_DISPLAY} " in line
-            or f"- {self._CHECK_CHECKED_DISPLAY} " in line
+            f"{self._CHECK_UNCHECKED_DISPLAY} " in line
+            or f"{self._CHECK_CHECKED_DISPLAY} " in line
         ):
             # Remove checkbox - use raw string to avoid escape sequence warning
             new_line = re.sub(
-                rf"^\s*-\s*[{self._CHECK_UNCHECKED_DISPLAY}{self._CHECK_CHECKED_DISPLAY}]\s+",
+                rf"^\s*[{self._CHECK_UNCHECKED_DISPLAY}{self._CHECK_CHECKED_DISPLAY}]\s+",
                 "",
                 line,
             )
         else:
             # Add checkbox (Unicode display format)
-            new_line = f"- {self._CHECK_UNCHECKED_DISPLAY} " + line.lstrip()
+            new_line = f"{self._CHECK_UNCHECKED_DISPLAY} " + line.lstrip()
 
         cursor.insertText(new_line)
 

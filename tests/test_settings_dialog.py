@@ -1,9 +1,10 @@
 import pytest
+from bouquin.db import DBManager, DBConfig
+from bouquin.key_prompt import KeyPrompt
 from bouquin.settings_dialog import SettingsDialog
 from bouquin.theme import ThemeManager, ThemeConfig, Theme
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
-
 
 @pytest.mark.gui
 def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db, tmp_path):
@@ -38,12 +39,6 @@ def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db, tmp_path)
 
 
 def test_save_key_toggle_roundtrip(qtbot, tmp_db_cfg, fresh_db, app):
-    from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication, QMessageBox
-    from bouquin.key_prompt import KeyPrompt
-    from bouquin.theme import ThemeManager, ThemeConfig, Theme
-    from PySide6.QtWidgets import QWidget
-
     parent = QWidget()
     parent.themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
 
@@ -81,12 +76,6 @@ def test_save_key_toggle_roundtrip(qtbot, tmp_db_cfg, fresh_db, app):
 
 
 def test_change_key_mismatch_shows_error(qtbot, tmp_db_cfg, tmp_path, app):
-    from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
-    from bouquin.key_prompt import KeyPrompt
-    from bouquin.db import DBManager, DBConfig
-    from bouquin.theme import ThemeManager, ThemeConfig, Theme
-
     cfg = DBConfig(
         path=tmp_path / "iso.db",
         key="oldkey",
@@ -129,12 +118,6 @@ def test_change_key_mismatch_shows_error(qtbot, tmp_db_cfg, tmp_path, app):
 
 
 def test_change_key_success(qtbot, tmp_path, app):
-    from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication, QWidget, QMessageBox
-    from bouquin.key_prompt import KeyPrompt
-    from bouquin.db import DBManager, DBConfig
-    from bouquin.theme import ThemeManager, ThemeConfig, Theme
-
     cfg = DBConfig(
         path=tmp_path / "iso2.db",
         key="oldkey",

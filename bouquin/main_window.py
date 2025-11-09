@@ -808,7 +808,7 @@ class MainWindow(QMainWindow):
     def _adjust_today(self):
         """Jump to today."""
         today = QDate.currentDate()
-        self.calendar.setSelectedDate(today)
+        self._create_new_tab(today)
 
     def _load_yesterday_todos(self):
         try:
@@ -1090,7 +1090,7 @@ If you want an encrypted backup, choose Backup instead of Export.
             elif selected_filter.startswith("SQL"):
                 self.db.export_sql(filename)
             else:
-                self.db.export_by_extension(filename)
+                raise ValueError("Unrecognised extension!")
 
             QMessageBox.information(self, "Export complete", f"Saved to:\n{filename}")
         except Exception as e:

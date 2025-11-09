@@ -427,29 +427,6 @@ class DBManager:
         cur.execute("SELECT sqlcipher_export('backup')")
         cur.execute("DETACH DATABASE backup")
 
-    def export_by_extension(self, file_path: str) -> None:
-        """
-        Fallback catch-all that runs one of the above functions based on
-        the extension of the file name that was chosen by the user.
-        """
-        entries = self.get_all_entries()
-        ext = os.path.splitext(file_path)[1].lower()
-
-        if ext == ".json":
-            self.export_json(entries, file_path)
-        elif ext == ".csv":
-            self.export_csv(entries, file_path)
-        elif ext == ".txt":
-            self.export_txt(entries, file_path)
-        elif ext in {".html", ".htm"}:
-            self.export_html(entries, file_path)
-        elif ext in {".sql", ".sqlite"}:
-            self.export_sql(file_path)
-        elif ext == ".md":
-            self.export_markdown(entries, file_path)
-        else:
-            raise ValueError(f"Unsupported extension: {ext}")
-
     def compact(self) -> None:
         """
         Runs VACUUM on the db.

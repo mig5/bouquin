@@ -8,7 +8,6 @@ from bouquin.key_prompt import KeyPrompt
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-
 @pytest.mark.gui
 def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
@@ -52,10 +51,6 @@ def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
 
 
 def test_load_yesterday_todos_moves_items(qtbot, app, tmp_db_cfg, fresh_db):
-    from PySide6.QtCore import QDate
-    from bouquin.theme import ThemeManager, ThemeConfig, Theme
-    from bouquin.settings import get_settings
-
     s = get_settings()
     s.setValue("db/path", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
@@ -66,7 +61,6 @@ def test_load_yesterday_todos_moves_items(qtbot, app, tmp_db_cfg, fresh_db):
     fresh_db.save_new_version(y, "- [ ] carry me\n- [x] done", "seed")
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    from bouquin.main_window import MainWindow
 
     w = MainWindow(themes=themes)
     qtbot.addWidget(w)

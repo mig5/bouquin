@@ -1,6 +1,8 @@
+import pytest
 import json, csv
 import datetime as dt
 
+from bouquin.db import DBManager
 
 def _today():
     return dt.date.today().isoformat()
@@ -57,7 +59,7 @@ def test_dates_with_content_and_search(fresh_db):
     assert any(d == _tomorrow() for d, _ in hits)
 
 
-def test_get_all_entries_and_export_by_extension(fresh_db, tmp_path):
+def test_get_all_entries_and_export(fresh_db, tmp_path):
     for i in range(3):
         d = (dt.date.today() - dt.timedelta(days=i)).isoformat()
         fresh_db.save_new_version(d, _entry(f"note {i}"), f"note {i}")
@@ -93,18 +95,12 @@ def test_get_all_entries_and_export_by_extension(fresh_db, tmp_path):
     fresh_db.export_sqlcipher(str(sqlc_path))
     assert sqlc_path.exists() and sqlc_path.read_bytes()
 
-    for path in [json_path, csv_path, txt_path, md_path, html_path, sql_path]:
-        path.unlink(missing_ok=True)
-        fresh_db.export_by_extension(str(path))
-        assert path.exists()
-
 
 def test_rekey_and_reopen(fresh_db, tmp_db_cfg):
     fresh_db.save_new_version(_today(), _entry("secure"), "before rekey")
     fresh_db.rekey("new-key-123")
     fresh_db.close()
 
-    from bouquin.db import DBManager
 
     tmp_db_cfg.key = "new-key-123"
     db2 = DBManager(tmp_db_cfg)
@@ -116,12 +112,3 @@ def test_rekey_and_reopen(fresh_db, tmp_db_cfg):
 def test_compact_and_close_dont_crash(fresh_db):
     fresh_db.compact()
     fresh_db.close()
-
-
-import pytest
-
-
-def test_export_by_extension_unsupported(fresh_db, tmp_path):
-    p = tmp_path / "export.xyz"
-    with pytest.raises(ValueError):
-        fresh_db.export_by_extension(str(p))

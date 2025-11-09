@@ -2,6 +2,7 @@ import pytest
 from PySide6.QtWidgets import QWidget
 from bouquin.markdown_editor import MarkdownEditor
 from bouquin.theme import ThemeManager, ThemeConfig, Theme
+from bouquin.toolbar import ToolBar
 
 
 @pytest.fixture
@@ -11,10 +12,6 @@ def editor(app, qtbot):
     qtbot.addWidget(ed)
     ed.show()
     return ed
-
-
-from bouquin.toolbar import ToolBar
-
 
 @pytest.mark.gui
 def test_toolbar_signals_and_styling(qtbot, editor):

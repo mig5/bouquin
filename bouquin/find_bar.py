@@ -21,9 +21,8 @@ from PySide6.QtWidgets import (
 class FindBar(QWidget):
     """Widget for finding text in the Editor"""
 
-    closed = (
-        Signal()
-    )  # emitted when the bar is hidden (Esc/✕), so caller can refocus editor
+    # emitted when the bar is hidden (Esc/✕), so caller can refocus editor
+    closed = Signal()
 
     def __init__(
         self,
@@ -45,7 +44,7 @@ class FindBar(QWidget):
         layout.addWidget(QLabel("Find:"))
 
         self.edit = QLineEdit(self)
-        self.edit.setPlaceholderText("Type to search…")
+        self.edit.setPlaceholderText("Type to search")
         layout.addWidget(self.edit)
 
         self.case = QCheckBox("Match case", self)
@@ -79,7 +78,7 @@ class FindBar(QWidget):
 
     @property
     def editor(self) -> QTextEdit | None:
-        """Get the current editor (no side effects)."""
+        """Get the current editor"""
         return self._editor_getter()
 
     # ----- Public API -----
