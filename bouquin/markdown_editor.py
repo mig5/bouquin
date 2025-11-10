@@ -264,7 +264,7 @@ class MarkdownEditor(QTextEdit):
 
         # Normal text
         font = QFont()
-        font.setPointSize(11)
+        font.setPointSize(10)
         self.setFont(font)
 
         # Install syntax highlighter

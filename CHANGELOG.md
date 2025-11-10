@@ -1,3 +1,8 @@
+# 0.2.1.5
+
+ * Go back to font size 10 (I might add a switcher later)
+ * Fix bug with not syncing the right calendar date on search (History item would then be wrong too)
+
 # 0.2.1.4
 
  * Increase font size of normal text

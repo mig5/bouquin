@@ -758,7 +758,6 @@ class MainWindow(QMainWindow):
         tb.numbersRequested.connect(self._tb_numbers)
         tb.checkboxesRequested.connect(self._tb_checkboxes)
 
-        # these aren’t editor methods
         tb.historyRequested.connect(self._open_history)
         tb.insertImageRequested.connect(self._on_insert_image)
 
@@ -812,6 +811,10 @@ class MainWindow(QMainWindow):
             date_iso = self._current_date_iso()
 
         qd = QDate.fromString(date_iso, "yyyy-MM-dd")
+        # Keep calendar in sync
+        with QSignalBlocker(self.calendar):
+            self.calendar.setSelectedDate(qd)
+
         self._load_date_into_editor(qd, extra_data)
         self.editor.current_date = qd
 
@@ -948,7 +951,11 @@ class MainWindow(QMainWindow):
 
     # ----------- History handler ------------#
     def _open_history(self):
-        date_iso = self._current_date_iso()
+        if hasattr(self.editor, "current_date"):
+            date_iso = self.editor.current_date.toString("yyyy-MM-dd")
+        else:
+            date_iso = self._current_date_iso()
+
         dlg = HistoryDialog(self.db, date_iso, self)
         if dlg.exec() == QDialog.Accepted:
             # refresh editor + calendar (head pointer may have changed)
