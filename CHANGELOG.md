@@ -1,7 +1,7 @@
 # 0.2.1.7
 
  * Fix being able to set bold, italic and strikethrough at the same time.
- * Fixes for system dark theme
+ * Fixes for system dark theme and move stylesheets for Calendar/Lock Overlay into the ThemeManager
  * Add AppImage
 
 # 0.2.1.6
