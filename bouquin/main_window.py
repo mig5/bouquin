@@ -25,13 +25,11 @@ from PySide6.QtGui import (
     QFont,
     QGuiApplication,
     QKeySequence,
-    QPalette,
     QTextCharFormat,
     QTextCursor,
     QTextListFormat,
 )
 from PySide6.QtWidgets import (
-    QApplication,
     QCalendarWidget,
     QDialog,
     QFileDialog,
@@ -57,7 +55,7 @@ from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .toolbar import ToolBar
-from .theme import Theme, ThemeManager
+from .theme import ThemeManager
 
 
 class MainWindow(QMainWindow):
@@ -87,6 +85,7 @@ class MainWindow(QMainWindow):
         self.calendar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.calendar.setGridVisible(True)
         self.calendar.selectionChanged.connect(self._on_date_changed)
+        self.themes.register_calendar(self.calendar)
 
         self.search = Search(self.db)
         self.search.openDateRequested.connect(self._load_selected_date)
@@ -147,7 +146,9 @@ class MainWindow(QMainWindow):
         self._idle_timer.start()
 
         # full-window overlay that sits on top of the central widget
-        self._lock_overlay = LockOverlay(self.centralWidget(), self._on_unlock_clicked)
+        self._lock_overlay = LockOverlay(
+            self.centralWidget(), self._on_unlock_clicked, themes=self.themes
+        )
         self.centralWidget().installEventFilter(self._lock_overlay)
 
         self._locked = False
@@ -278,12 +279,9 @@ class MainWindow(QMainWindow):
         self.settings = QSettings(APP_ORG, APP_NAME)
         self._restore_window_position()
 
-        self._apply_link_css()  # Apply link color on startup
         # re-apply all runtime color tweaks when theme changes
         self.themes.themeChanged.connect(lambda _t: self._retheme_overrides())
-        self.themes.themeChanged.connect(self._apply_calendar_theme)
         self._apply_calendar_text_colors()
-        self._apply_calendar_theme(self.themes.current())
 
         # apply once on startup so links / calendar colors are set immediately
         self._retheme_overrides()
@@ -812,68 +810,10 @@ class MainWindow(QMainWindow):
 
     # ----------------- Some theme helpers -------------------#
     def _retheme_overrides(self):
-        if hasattr(self, "_lock_overlay"):
-            self._lock_overlay._apply_overlay_style()
         self._apply_calendar_text_colors()
-        self._apply_link_css()
         self._apply_search_highlights(getattr(self, "_search_highlighted_dates", set()))
         self.calendar.update()
         self.editor.viewport().update()
-
-    def _apply_link_css(self):
-        if self.themes and self.themes.current() == Theme.DARK:
-            anchor = Theme.ORANGE_ANCHOR.value
-            visited = Theme.ORANGE_ANCHOR_VISITED.value
-            css = f"""
-                a {{ color: {anchor}; text-decoration: underline; }}
-                a:visited {{ color: {visited}; }}
-            """
-        else:
-            css = ""  # Default to no custom styling for links (system or light theme)
-
-        self.editor.document().setDefaultStyleSheet(css)
-
-    def _apply_calendar_theme(self, theme: Theme):
-        """Use orange accents on the calendar in dark mode only."""
-        app_pal = QApplication.instance().palette()
-
-        if theme == Theme.DARK:
-            highlight = QColor(Theme.ORANGE_ANCHOR.value)
-            black = QColor(0, 0, 0)
-
-            highlight_css = Theme.ORANGE_ANCHOR.value
-
-            # Per-widget palette: selection color inside the date grid
-            pal = self.calendar.palette()
-            pal.setColor(QPalette.Highlight, highlight)
-            pal.setColor(QPalette.HighlightedText, black)
-            self.calendar.setPalette(pal)
-
-            # Stylesheet: nav bar + selected-day background
-            self.calendar.setStyleSheet(
-                f"""
-                QWidget#qt_calendar_navigationbar {{ background-color: {highlight_css}; }}
-                QCalendarWidget QToolButton {{ color: black; }}
-                QCalendarWidget QToolButton:hover {{ background-color: rgba(255,165,0,0.20); }}
-                /* Selected day color in the table view */
-                QCalendarWidget QTableView:enabled {{
-                    selection-background-color: {highlight_css};
-                    selection-color: black;
-                }}
-                /* Optional: keep weekday header readable */
-                QCalendarWidget QTableView QHeaderView::section {{
-                    background: transparent;
-                    color: palette(windowText);
-                }}
-            """
-            )
-        else:
-            # Back to app defaults in light/system
-            self.calendar.setPalette(app_pal)
-            self.calendar.setStyleSheet("")
-
-        self._apply_calendar_text_colors()
-        self.calendar.update()
 
     def _apply_calendar_text_colors(self):
         pal = self.palette()

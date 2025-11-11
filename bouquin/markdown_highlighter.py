@@ -62,7 +62,10 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.code_block_format.setFontFixedPitch(True)
 
         pal = QGuiApplication.palette()
-        if self.theme_manager.current() == Theme.DARK:
+        if (
+            self.theme_manager.current() == Theme.DARK
+            or self.theme_manager._is_system_dark
+        ):
             # In dark mode, use a darker panel-like background
             bg = pal.color(QPalette.AlternateBase)
             fg = pal.color(QPalette.Text)
