@@ -1,5 +1,6 @@
 # 0.2.1.7
 
+ * Fix being able to set bold, italic and strikethrough at the same time.
  * Add AppImage
 
 # 0.2.1.6

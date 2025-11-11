@@ -45,6 +45,11 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.strike_format = QTextCharFormat()
         self.strike_format.setFontStrikeOut(True)
 
+        # Allow combination of bold/italic
+        self.bold_italic_format = QTextCharFormat()
+        self.bold_italic_format.setFontWeight(QFont.Weight.Bold)
+        self.bold_italic_format.setFontItalic(True)
+
         # Inline code: `code`
         mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         self.code_format = QTextCharFormat()
@@ -87,6 +92,18 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.syntax_format.setFontPointSize(0.1)
         # Also make them very faint in case they still show
         self.syntax_format.setForeground(QColor(250, 250, 250))
+
+    def _overlay_range(
+        self, start: int, length: int, overlay_fmt: QTextCharFormat
+    ) -> None:
+        """Merge overlay_fmt onto the existing format for each char in [start, start+length)."""
+        end = start + length
+        i = start
+        while i < end:
+            base = QTextCharFormat(self.format(i))  # current format at this position
+            base.merge(overlay_fmt)  # add only the properties we set
+            self.setFormat(i, 1, base)  # write back one char
+            i += 1
 
     def highlightBlock(self, text: str):
         """Apply formatting to a block of text based on markdown syntax."""
@@ -141,51 +158,65 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(marker_len, len(text) - marker_len, heading_fmt)
             return
 
-        # Bold: **text** or __text__
-        for match in re.finditer(r"\*\*(.+?)\*\*|__(.+?)__", text):
-            start, end = match.span()
-            content_start = start + 2
-            content_end = end - 2
+        # Bold+Italic: ***text*** or ___text___
+        # Do these first and remember their spans so later passes don't override them.
+        occupied = []
+        for m in re.finditer(
+            r"(?<!\*)\*\*\*(.+?)(?<!\*)\*\*\*|(?<!_)___(.+?)(?<!_)___", text
+        ):
+            start, end = m.span()
+            content_start, content_end = start + 3, end - 3
+            self.setFormat(start, 3, self.syntax_format)  # hide leading ***
+            self.setFormat(end - 3, 3, self.syntax_format)  # hide trailing ***
+            self.setFormat(
+                content_start, content_end - content_start, self.bold_italic_format
+            )
+            occupied.append((start, end))
 
-            # Gray out the markers
+        def _overlaps(a, b):
+            return not (a[1] <= b[0] or b[1] <= a[0])
+
+        # Bold: **text** or __text__ (but not part of *** or ___)
+        for m in re.finditer(
+            r"(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)|(?<!_)__(?!_)(.+?)(?<!_)__(?!_)",
+            text,
+        ):
+            start, end = m.span()
+            if any(_overlaps((start, end), occ) for occ in occupied):
+                continue
+            content_start, content_end = start + 2, end - 2
             self.setFormat(start, 2, self.syntax_format)
             self.setFormat(end - 2, 2, self.syntax_format)
-
-            # Bold the content
             self.setFormat(content_start, content_end - content_start, self.bold_format)
 
-        # Italic: *text* or _text_ (but not part of bold)
-        for match in re.finditer(
+        # Italic: *text* or _text_ (but not part of bold/** and not inside *** or ___)
+        for m in re.finditer(
             r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", text
         ):
-            start, end = match.span()
-            # Skip if this is part of a bold pattern
+            start, end = m.span()
+            if any(_overlaps((start, end), occ) for occ in occupied):
+                continue
+            # Keep your existing guards that avoid grabbing * from **:
             if start > 0 and text[start - 1 : start + 1] in ("**", "__"):
                 continue
             if end < len(text) and text[end : end + 1] in ("*", "_"):
                 continue
-
-            content_start = start + 1
-            content_end = end - 1
-
-            # Gray out markers
+            content_start, content_end = start + 1, end - 1
             self.setFormat(start, 1, self.syntax_format)
             self.setFormat(end - 1, 1, self.syntax_format)
-
-            # Italicize content
             self.setFormat(
                 content_start, content_end - content_start, self.italic_format
             )
 
         # Strikethrough: ~~text~~
-        for match in re.finditer(r"~~(.+?)~~", text):
-            start, end = match.span()
-            content_start = start + 2
-            content_end = end - 2
-
+        for m in re.finditer(r"~~(.+?)~~", text):
+            start, end = m.span()
+            content_start, content_end = start + 2, end - 2
+            # Fade the markers
             self.setFormat(start, 2, self.syntax_format)
             self.setFormat(end - 2, 2, self.syntax_format)
-            self.setFormat(
+            # Merge strikeout with whatever is already applied (bold, italic, both, links, etc.)
+            self._overlay_range(
                 content_start, content_end - content_start, self.strike_format
             )
 
