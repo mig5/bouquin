@@ -66,10 +66,7 @@ class Search(QWidget):
             self.resultDatesChanged.emit([])  # clear highlights
             return
 
-        try:
-            rows: Iterable[Row] = self._db.search_entries(q)
-        except Exception:
-            rows = []
+        rows: Iterable[Row] = self._db.search_entries(q)
 
         self._populate_results(q, rows)
 

@@ -13,6 +13,7 @@ def editor(app, qtbot):
     ed.show()
     return ed
 
+
 @pytest.mark.gui
 def test_toolbar_signals_and_styling(qtbot, editor):
     host = QWidget()
@@ -39,3 +40,29 @@ def test_toolbar_signals_and_styling(qtbot, editor):
     tb.strikeRequested.emit()
     tb.headingRequested.emit(24)
     assert editor.to_markdown()
+
+
+def test_style_letter_button_paths(app, qtbot):
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    # Create toolbar
+    from bouquin.markdown_editor import MarkdownEditor
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    ed = MarkdownEditor(themes)
+    qtbot.addWidget(ed)
+    tb = ToolBar(parent)
+    qtbot.addWidget(tb)
+
+    # Action not added to toolbar -> no widget, early return
+    from PySide6.QtGui import QAction
+
+    stray = QAction("Stray", tb)
+    tb._style_letter_button(stray, "Z")  # should not raise
+
+    # Now add an action to toolbar and style with tooltip
+    act = tb.addAction("Temp")
+    tb._style_letter_button(act, "T", tooltip="Tip here")
+    btn = tb.widgetForAction(act)
+    assert btn.toolTip() == "Tip here"
+    assert btn.accessibleName() == "Tip here"

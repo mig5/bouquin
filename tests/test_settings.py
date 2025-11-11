@@ -1,4 +1,3 @@
-from pathlib import Path
 from bouquin.settings import (
     get_settings,
     load_db_config,

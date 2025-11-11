@@ -157,7 +157,8 @@ class SettingsDialog(QDialog):
         priv.addWidget(self.idle_spin, 0, Qt.AlignLeft)
         # Explanation for idle option (autolock)
         self.idle_spin_label = QLabel(
-            "Bouquin will automatically lock the notepad after this length of time, after which you'll need to re-enter the key to unlock it. "
+            "Bouquin will automatically lock the notepad after this length of time, "
+            "after which you'll need to re-enter the key to unlock it. "
             "Set to 0 (never) to never lock."
         )
         self.idle_spin_label.setWordWrap(True)
@@ -198,7 +199,7 @@ class SettingsDialog(QDialog):
         self.compact_label.setPalette(cpal)
 
         maint_row = QHBoxLayout()
-        maint_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the button
+        maint_row.setContentsMargins(24, 0, 0, 0)
         maint_row.addWidget(self.compact_label)
         maint.addLayout(maint_row)
 
@@ -270,7 +271,7 @@ class SettingsDialog(QDialog):
                 self, "Key changed", "The notebook was re-encrypted with the new key!"
             )
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not change key:\n{e}")
+            QMessageBox.critical(self, "Error", e)
 
     @Slot(bool)
     def _save_key_btn_clicked(self, checked: bool):
@@ -291,11 +292,9 @@ class SettingsDialog(QDialog):
     def _compact_btn_clicked(self):
         try:
             self._db.compact()
-            QMessageBox.information(
-                self, "Compact complete", "Database compacted successfully!"
-            )
+            QMessageBox.information(self, "Success", "Database compacted successfully!")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not compact database:\n{e}")
+            QMessageBox.critical(self, "Error", e)
 
     @property
     def config(self) -> DBConfig:

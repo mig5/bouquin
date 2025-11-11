@@ -32,11 +32,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.theme_manager = theme_manager
         self._setup_formats()
         # Recompute formats whenever the app theme changes
-        try:
-            self.theme_manager.themeChanged.connect(self._on_theme_changed)
-            self.textChanged.connect(self._refresh_codeblock_margins)
-        except Exception:
-            pass
+        self.theme_manager.themeChanged.connect(self._on_theme_changed)
 
     def _on_theme_changed(self, *_):
         self._setup_formats()
@@ -57,7 +53,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.strike_format = QTextCharFormat()
         self.strike_format.setFontStrikeOut(True)
 
-        # Code: `code`
+        # Inline code: `code`
         mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         self.code_format = QTextCharFormat()
         self.code_format.setFont(mono)
@@ -99,36 +95,6 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.syntax_format.setFontPointSize(0.1)
         # Also make them very faint in case they still show
         self.syntax_format.setForeground(QColor(250, 250, 250))
-
-    def _refresh_codeblock_margins(self):
-        """Give code blocks a small left/right margin to separate them visually."""
-        doc = self.document()
-        block = doc.begin()
-        in_code = False
-        while block.isValid():
-            txt = block.text().strip()
-            cursor = QTextCursor(block)
-            fmt = block.blockFormat()
-
-            if txt.startswith("```"):
-                # fence lines: small vertical spacing, same left indent
-                need = (12, 6, 6)  # left, top, bottom (px-like)
-                if (fmt.leftMargin(), fmt.topMargin(), fmt.bottomMargin()) != need:
-                    fmt.setLeftMargin(12)
-                    fmt.setRightMargin(6)
-                    fmt.setTopMargin(6)
-                    fmt.setBottomMargin(6)
-                    cursor.setBlockFormat(fmt)
-                in_code = not in_code
-
-            elif in_code:
-                # inside the code block
-                if fmt.leftMargin() != 12 or fmt.rightMargin() != 6:
-                    fmt.setLeftMargin(12)
-                    fmt.setRightMargin(6)
-                    cursor.setBlockFormat(fmt)
-
-            block = block.next()
 
     def highlightBlock(self, text: str):
         """Apply formatting to a block of text based on markdown syntax."""
@@ -244,12 +210,6 @@ class MarkdownEditor(QTextEdit):
 
     _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
 
-    # Checkbox characters (Unicode for display, markdown for storage)
-    _CHECK_UNCHECKED_DISPLAY = "☐"
-    _CHECK_CHECKED_DISPLAY = "☑"
-    _CHECK_UNCHECKED_STORAGE = "[ ]"
-    _CHECK_CHECKED_STORAGE = "[x]"
-
     def __init__(self, theme_manager: ThemeManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -266,6 +226,12 @@ class MarkdownEditor(QTextEdit):
         font = QFont()
         font.setPointSize(10)
         self.setFont(font)
+
+        # Checkbox characters (Unicode for display, markdown for storage)
+        self._CHECK_UNCHECKED_DISPLAY = "☐"
+        self._CHECK_CHECKED_DISPLAY = "☑"
+        self._CHECK_UNCHECKED_STORAGE = "[ ]"
+        self._CHECK_CHECKED_STORAGE = "[x]"
 
         # Install syntax highlighter
         self.highlighter = MarkdownHighlighter(self.document(), theme_manager)
@@ -300,12 +266,16 @@ class MarkdownEditor(QTextEdit):
             line = block.text()
             pos_in_block = c.position() - block.position()
 
-            # Transform only this line:
-            #   - "TODO " at start (with optional indent) -> "- ☐ "
-            #   - "- [ ] " -> " ☐ "   and   "- [x] " -> " ☑ "
+            # Transform markldown checkboxes and 'TODO' to unicode checkboxes
             def transform_line(s: str) -> str:
-                s = s.replace("- [x] ", f"{self._CHECK_CHECKED_DISPLAY} ")
-                s = s.replace("- [ ] ", f"{self._CHECK_UNCHECKED_DISPLAY} ")
+                s = s.replace(
+                    f"- {self._CHECK_CHECKED_STORAGE} ",
+                    f"{self._CHECK_CHECKED_DISPLAY} ",
+                )
+                s = s.replace(
+                    f"- {self._CHECK_UNCHECKED_STORAGE} ",
+                    f"{self._CHECK_UNCHECKED_DISPLAY} ",
+                )
                 s = re.sub(
                     r"^([ \t]*)TODO\b[:\-]?\s+",
                     lambda m: f"{m.group(1)}\n{self._CHECK_UNCHECKED_DISPLAY} ",
@@ -332,13 +302,17 @@ class MarkdownEditor(QTextEdit):
             self._updating = False
 
     def to_markdown(self) -> str:
-        """Export current content as markdown (convert Unicode checkboxes back to markdown)."""
+        """Export current content as markdown."""
         # First, extract any embedded images and convert to markdown
         text = self._extract_images_to_markdown()
 
         # Convert Unicode checkboxes back to markdown syntax
-        text = text.replace(f"{self._CHECK_CHECKED_DISPLAY} ", "- [x] ")
-        text = text.replace(f"{self._CHECK_UNCHECKED_DISPLAY} ", "- [ ] ")
+        text = text.replace(
+            f"{self._CHECK_CHECKED_DISPLAY} ", f"- {self._CHECK_CHECKED_STORAGE} "
+        )
+        text = text.replace(
+            f"{self._CHECK_UNCHECKED_DISPLAY} ", f"- {self._CHECK_UNCHECKED_STORAGE} "
+        )
 
         return text
 
@@ -377,13 +351,13 @@ class MarkdownEditor(QTextEdit):
         return "\n".join(result)
 
     def from_markdown(self, markdown_text: str):
-        """Load markdown text into the editor (convert markdown checkboxes to Unicode)."""
+        """Load markdown text into the editor."""
         # Convert markdown checkboxes to Unicode for display
         display_text = markdown_text.replace(
-            "- [x] ", f"{self._CHECK_CHECKED_DISPLAY} "
+            f"- {self._CHECK_CHECKED_STORAGE} ", f"{self._CHECK_CHECKED_DISPLAY} "
         )
         display_text = display_text.replace(
-            "- [ ] ", f"{self._CHECK_UNCHECKED_DISPLAY} "
+            f"- {self._CHECK_UNCHECKED_STORAGE} ", f"{self._CHECK_UNCHECKED_DISPLAY} "
         )
         # Also convert any plain 'TODO ' at the start of a line to an unchecked checkbox
         display_text = re.sub(
@@ -420,39 +394,33 @@ class MarkdownEditor(QTextEdit):
             mime_type = match.group(2)
             b64_data = match.group(3)
 
-            try:
-                # Decode base64 to image
-                img_bytes = base64.b64decode(b64_data)
-                image = QImage.fromData(img_bytes)
+            # Decode base64 to image
+            img_bytes = base64.b64decode(b64_data)
+            image = QImage.fromData(img_bytes)
 
-                if image.isNull():
-                    continue
-
-                # Use original image size - no scaling
-                original_width = image.width()
-                original_height = image.height()
-
-                # Create image format with original base64
-                img_format = QTextImageFormat()
-                img_format.setName(f"data:image/{mime_type};base64,{b64_data}")
-                img_format.setWidth(original_width)
-                img_format.setHeight(original_height)
-
-                # Add image to document resources
-                self.document().addResource(
-                    QTextDocument.ResourceType.ImageResource, img_format.name(), image
-                )
-
-                # Replace markdown with rendered image
-                cursor = QTextCursor(self.document())
-                cursor.setPosition(match.start())
-                cursor.setPosition(match.end(), QTextCursor.MoveMode.KeepAnchor)
-                cursor.insertImage(img_format)
-
-            except Exception as e:
-                # If image fails to render, leave the markdown as-is
-                print(f"Failed to render image: {e}")
+            if image.isNull():
                 continue
+
+            # Use original image size - no scaling
+            original_width = image.width()
+            original_height = image.height()
+
+            # Create image format with original base64
+            img_format = QTextImageFormat()
+            img_format.setName(f"data:image/{mime_type};base64,{b64_data}")
+            img_format.setWidth(original_width)
+            img_format.setHeight(original_height)
+
+            # Add image to document resources
+            self.document().addResource(
+                QTextDocument.ResourceType.ImageResource, img_format.name(), image
+            )
+
+            # Replace markdown with rendered image
+            cursor = QTextCursor(self.document())
+            cursor.setPosition(match.start())
+            cursor.setPosition(match.end(), QTextCursor.MoveMode.KeepAnchor)
+            cursor.insertImage(img_format)
 
     def _get_current_line(self) -> str:
         """Get the text of the current line."""
@@ -616,9 +584,8 @@ class MarkdownEditor(QTextEdit):
             def char_rect_at(doc_pos, ch):
                 c = QTextCursor(self.document())
                 c.setPosition(doc_pos)
-                start_rect = self.cursorRect(
-                    c
-                )  # caret rect at char start (viewport coords)
+                # caret rect at char start (viewport coords)
+                start_rect = self.cursorRect(c)
 
                 # Use the actual font at this position for an accurate width
                 fmt_font = (
@@ -638,9 +605,8 @@ class MarkdownEditor(QTextEdit):
                     icon = self._CHECK_CHECKED_DISPLAY
 
                 if icon:
-                    doc_pos = (
-                        block.position() + i
-                    )  # absolute document position of the icon
+                    # absolute document position of the icon
+                    doc_pos = block.position() + i
                     r = char_rect_at(doc_pos, icon)
 
                     if r.contains(pt):
@@ -653,9 +619,10 @@ class MarkdownEditor(QTextEdit):
                         edit = QTextCursor(self.document())
                         edit.beginEditBlock()
                         edit.setPosition(doc_pos)
+                        # icon + space
                         edit.movePosition(
                             QTextCursor.Right, QTextCursor.KeepAnchor, len(icon) + 1
-                        )  # icon + space
+                        )
                         edit.insertText(f"{new_icon} ")
                         edit.endEditBlock()
                         return  # handled
@@ -745,7 +712,7 @@ class MarkdownEditor(QTextEdit):
         if cursor.hasSelection():
             # Wrap selection in code fence
             selected = cursor.selectedText()
-            # Note: selectedText() uses Unicode paragraph separator, replace with newline
+            # selectedText() uses Unicode paragraph separator, replace with newline
             selected = selected.replace("\u2029", "\n")
             new_text = f"```\n{selected}\n```"
             cursor.insertText(new_text)
@@ -881,7 +848,7 @@ class MarkdownEditor(QTextEdit):
         if not path.exists():
             return
 
-        # Read the ORIGINAL image file bytes for base64 encoding
+        # Read the original image file bytes for base64 encoding
         with open(path, "rb") as f:
             img_data = f.read()
 
@@ -905,17 +872,13 @@ class MarkdownEditor(QTextEdit):
         if image.isNull():
             return
 
-        # Use ORIGINAL size - no scaling!
-        original_width = image.width()
-        original_height = image.height()
-
         # Create image format with original base64
         img_format = QTextImageFormat()
         img_format.setName(f"data:image/{mime_type};base64,{b64_data}")
-        img_format.setWidth(original_width)
-        img_format.setHeight(original_height)
+        img_format.setWidth(image.width())
+        img_format.setHeight(image.height())
 
-        # Add ORIGINAL image to document resources
+        # Add original image to document resources
         self.document().addResource(
             QTextDocument.ResourceType.ImageResource, img_format.name(), image
         )

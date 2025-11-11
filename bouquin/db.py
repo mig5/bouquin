@@ -98,31 +98,6 @@ class DBManager:
             CREATE INDEX IF NOT EXISTS ix_versions_date_created ON versions(date, created_at);
             """
         )
-
-        # If < 0.1.5 'entries' table exists and nothing has been migrated yet, try to migrate.
-        pre_0_1_5 = cur.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entries';"
-        ).fetchone()
-        pages_empty = cur.execute("SELECT 1 FROM pages LIMIT 1;").fetchone() is None
-
-        if pre_0_1_5 and pages_empty:
-            # Seed pages and versions (all as version 1)
-            cur.execute("INSERT OR IGNORE INTO pages(date) SELECT date FROM entries;")
-            cur.execute(
-                "INSERT INTO versions(date, version_no, content) "
-                "SELECT date, 1, content FROM entries;"
-            )
-            # Point head to v1 for each page
-            cur.execute(
-                """
-                UPDATE pages
-                SET current_version_id = (
-                    SELECT v.id FROM versions v
-                    WHERE v.date = pages.date AND v.version_no = 1
-                );
-                """
-            )
-            cur.execute("DROP TABLE IF EXISTS entries;")
         self.conn.commit()
 
     def rekey(self, new_key: str) -> None:
@@ -130,8 +105,6 @@ class DBManager:
         Change the SQLCipher passphrase in-place, then reopen the connection
         with the new key to verify.
         """
-        if self.conn is None:
-            raise RuntimeError("Database is not connected")
         cur = self.conn.cursor()
         # Change the encryption key of the currently open database
         cur.execute(f"PRAGMA rekey = '{new_key}';").fetchone()
@@ -191,7 +164,8 @@ class DBManager:
             """
             SELECT p.date
             FROM pages p
-            JOIN versions v ON v.id = p.current_version_id
+            JOIN versions v
+              ON v.id = p.current_version_id
             WHERE TRIM(v.content) <> ''
             ORDER BY p.date;
             """
@@ -210,8 +184,6 @@ class DBManager:
         Append a new version for this date. Returns (version_id, version_no).
         If set_current=True, flips the page head to this new version.
         """
-        if self.conn is None:
-            raise RuntimeError("Database is not connected")
         with self.conn:  # transaction
             cur = self.conn.cursor()
             # Ensure page row exists
@@ -326,44 +298,13 @@ class DBManager:
         entries: Sequence[Entry],
         file_path: str,
         separator: str = "\n\n— — — — —\n\n",
-        strip_html: bool = True,
     ) -> None:
         """
-        Strip the HTML from the latest version of the pages
-        and save to a text file.
+        Strip the the latest version of the pages to a text file.
         """
-        import re, html as _html
-
-        # Precompiled patterns
-        STYLE_SCRIPT_RE = re.compile(r"(?is)<(script|style)[^>]*>.*?</\1>")
-        COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
-        BR_RE = re.compile(r"(?i)<br\\s*/?>")
-        BLOCK_END_RE = re.compile(r"(?i)</(p|div|section|article|li|h[1-6])\\s*>")
-        TAG_RE = re.compile(r"<[^>]+>")
-        WS_ENDS_RE = re.compile(r"[ \\t]+\\n")
-        MULTINEWLINE_RE = re.compile(r"\\n{3,}")
-
-        def _strip(s: str) -> str:
-            # 1) Remove <style> and <script> blocks *including their contents*
-            s = STYLE_SCRIPT_RE.sub("", s)
-            # 2) Remove HTML comments
-            s = COMMENT_RE.sub("", s)
-            # 3) Turn some block-ish boundaries into newlines before removing tags
-            s = BR_RE.sub("\n", s)
-            s = BLOCK_END_RE.sub("\n", s)
-            # 4) Drop remaining tags
-            s = TAG_RE.sub("", s)
-            # 5) Unescape entities (&nbsp; etc.)
-            s = _html.unescape(s)
-            # 6) Tidy whitespace
-            s = WS_ENDS_RE.sub("\n", s)
-            s = MULTINEWLINE_RE.sub("\n\n", s)
-            return s.strip()
-
         with open(file_path, "w", encoding="utf-8") as f:
             for i, (d, c) in enumerate(entries):
-                body = _strip(c) if strip_html else c
-                f.write(f"{d}\n{body}\n")
+                f.write(f"{d}\n{c}\n")
                 if i < len(entries) - 1:
                     f.write(separator)
 
@@ -396,8 +337,8 @@ class DBManager:
         self, entries: Sequence[Entry], file_path: str, title: str = "Bouquin export"
     ) -> None:
         """
-        Export to HTML, similar to export_html, but then convert to Markdown
-        using markdownify, and finally save to file.
+        Export the data to a markdown file. Since the data is already Markdown,
+        nothing more to do.
         """
         parts = []
         for d, c in entries:

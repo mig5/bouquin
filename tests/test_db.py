@@ -1,8 +1,9 @@
 import pytest
 import json, csv
 import datetime as dt
-
+from sqlcipher3 import dbapi2 as sqlite
 from bouquin.db import DBManager
+
 
 def _today():
     return dt.date.today().isoformat()
@@ -101,7 +102,6 @@ def test_rekey_and_reopen(fresh_db, tmp_db_cfg):
     fresh_db.rekey("new-key-123")
     fresh_db.close()
 
-
     tmp_db_cfg.key = "new-key-123"
     db2 = DBManager(tmp_db_cfg)
     assert db2.connect()
@@ -112,3 +112,57 @@ def test_rekey_and_reopen(fresh_db, tmp_db_cfg):
 def test_compact_and_close_dont_crash(fresh_db):
     fresh_db.compact()
     fresh_db.close()
+
+
+def test_connect_integrity_failure(monkeypatch, tmp_db_cfg):
+    db = DBManager(tmp_db_cfg)
+    # simulate cursor() ok, but integrity check raising
+    called = {"ok": False}
+
+    def bad_integrity(self):
+        called["ok"] = True
+        raise sqlite.Error("bad cipher")
+
+    monkeypatch.setattr(DBManager, "_integrity_ok", bad_integrity, raising=True)
+    ok = db.connect()
+    assert not ok and called["ok"]
+    assert db.conn is None
+
+
+def test_rekey_reopen_failure(monkeypatch, tmp_db_cfg):
+    db = DBManager(tmp_db_cfg)
+    assert db.connect()
+
+    # Monkeypatch connect() on the instance so the reconnect attempt fails
+    def fail_connect():
+        return False
+
+    monkeypatch.setattr(db, "connect", fail_connect, raising=False)
+    with pytest.raises(sqlite.Error):
+        db.rekey("newkey")
+
+
+def test_revert_wrong_date_raises(fresh_db):
+    d1, d2 = "2024-01-01", "2024-01-02"
+    v1_id, _ = fresh_db.save_new_version(d1, "one", "seed")
+    fresh_db.save_new_version(d2, "two", "seed")
+    with pytest.raises(ValueError):
+        fresh_db.revert_to_version(d2, version_id=v1_id)
+
+
+def test_compact_error_path(monkeypatch, tmp_db_cfg):
+    db = DBManager(tmp_db_cfg)
+    assert db.connect()
+
+    # Replace cursor.execute to raise to hit except branch
+    class BadCur:
+        def execute(self, *a, **k):
+            raise RuntimeError("boom")
+
+    class BadConn:
+        def cursor(self):
+            return BadCur()
+
+    db.conn = BadConn()
+    # Should not raise; just print error
+    db.compact()
