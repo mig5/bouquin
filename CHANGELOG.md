@@ -1,3 +1,8 @@
+# 0.2.1.6
+
+ * Some code cleanup and more coverage
+ * Improve code block styling / escaping out of the block in various scenarios
+
 # 0.2.1.5
 
  * Go back to font size 10 (I might add a switcher later)
