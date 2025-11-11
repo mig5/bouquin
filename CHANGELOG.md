@@ -1,3 +1,7 @@
+# 0.2.1.7
+
+ * Add AppImage
+
 # 0.2.1.6
 
  * Some code cleanup and more coverage

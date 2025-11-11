@@ -44,9 +44,15 @@ There is deliberately no network connectivity or syncing intended.
 
 Make sure you have `libxcb-cursor0` installed (it may be called something else on non-Debian distributions).
 
+If downloading from my Forgejo's Releases page, you may wish to verify the GPG signatures with my [GPG key](https://mig5.net/static/mig5.asc).
+
 ### From PyPi/pip
 
  * `pip install bouquin`
+
+### From AppImage
+
+ * Download the Bouquin.AppImage from the Releases page, make it executable with `chmod +x`, and run it.
 
 ### From source
 

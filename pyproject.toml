@@ -21,6 +21,14 @@ pytest-qt = "^4.5.0"
 pytest-mock = "^3.15.1"
 pytest-cov = "^7.0.0"
 
+
+[tool.poetry.group.dev.dependencies]
+pyproject-appimage = "^4.2"
+
+[tool.pyproject-appimage]
+script = "bouquin"
+output = "Bouquin.AppImage"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
