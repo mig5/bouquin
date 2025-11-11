@@ -69,7 +69,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         else:
             # Light mode: keep the existing light gray
             bg = QColor(245, 245, 245)
-            fg = pal.color(QPalette.Text)
+            fg = pal.color(0, 0, 0) # avoiding using QPalette.Text as it can be white on macOS
         self.code_block_format.setBackground(bg)
         self.code_block_format.setForeground(fg)
 
