@@ -45,7 +45,7 @@ def test_make_html_snippet_and_strip_markdown(qtbot, fresh_db):
     long = (
         "This is **bold** text with alpha in the middle and some more trailing content."
     )
-    frag, left, right = s._make_html_snippet(long, "alpha", radius=10, maxlen=40)
+    frag = s._make_html_snippet(long, "alpha", radius=10, maxlen=40)
     assert "alpha" in frag
     s._strip_markdown("**bold** _italic_ ~~strike~~ 1. item - [x] check")
 
@@ -70,12 +70,12 @@ def test_make_html_snippet_variants(qtbot, fresh_db):
 
     # Case: query tokens not found -> idx < 0 path; expect right ellipsis when longer than maxlen
     src = " ".join(["word"] * 200)
-    frag, left, right = s._make_html_snippet(src, "nomatch", radius=3, maxlen=30)
-    assert frag and not left and right
+    frag = s._make_html_snippet(src, "nomatch", radius=3, maxlen=30)
+    assert frag
 
     # Case: multiple tokens highlighted
     src = "Alpha bravo charlie delta echo"
-    frag, left, right = s._make_html_snippet(src, "alpha delta", radius=2, maxlen=50)
+    frag = s._make_html_snippet(src, "alpha delta", radius=2, maxlen=50)
     assert "<b>Alpha</b>" in frag or "<b>alpha</b>" in frag
     assert "<b>delta</b>" in frag
 

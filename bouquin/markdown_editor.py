@@ -5,204 +5,20 @@ import re
 from pathlib import Path
 
 from PySide6.QtGui import (
-    QColor,
     QFont,
-    QFontDatabase,
     QFontMetrics,
     QImage,
-    QPalette,
-    QGuiApplication,
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
-    QSyntaxHighlighter,
+    QTextFormat,
     QTextImageFormat,
 )
-from PySide6.QtCore import Qt, QRect
+from PySide6.QtCore import Qt, QRect, QTimer
 from PySide6.QtWidgets import QTextEdit
 
-from .theme import ThemeManager, Theme
-
-
-class MarkdownHighlighter(QSyntaxHighlighter):
-    """Live syntax highlighter for markdown that applies formatting as you type."""
-
-    def __init__(self, document: QTextDocument, theme_manager: ThemeManager):
-        super().__init__(document)
-        self.theme_manager = theme_manager
-        self._setup_formats()
-        # Recompute formats whenever the app theme changes
-        self.theme_manager.themeChanged.connect(self._on_theme_changed)
-
-    def _on_theme_changed(self, *_):
-        self._setup_formats()
-        self.rehighlight()
-
-    def _setup_formats(self):
-        """Setup text formats for different markdown elements."""
-
-        # Bold: **text** or __text__
-        self.bold_format = QTextCharFormat()
-        self.bold_format.setFontWeight(QFont.Weight.Bold)
-
-        # Italic: *text* or _text_
-        self.italic_format = QTextCharFormat()
-        self.italic_format.setFontItalic(True)
-
-        # Strikethrough: ~~text~~
-        self.strike_format = QTextCharFormat()
-        self.strike_format.setFontStrikeOut(True)
-
-        # Inline code: `code`
-        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        self.code_format = QTextCharFormat()
-        self.code_format.setFont(mono)
-        self.code_format.setFontFixedPitch(True)
-
-        # Code block: ```
-        self.code_block_format = QTextCharFormat()
-        self.code_block_format.setFont(mono)
-        self.code_block_format.setFontFixedPitch(True)
-
-        pal = QGuiApplication.palette()
-        if self.theme_manager.current() == Theme.DARK:
-            # In dark mode, use a darker panel-like background
-            bg = pal.color(QPalette.AlternateBase)
-            fg = pal.color(QPalette.Text)
-        else:
-            # Light mode: keep the existing light gray
-            bg = QColor(245, 245, 245)
-            fg = pal.color(QPalette.Text)
-        self.code_block_format.setBackground(bg)
-        self.code_block_format.setForeground(fg)
-
-        # Headings
-        self.h1_format = QTextCharFormat()
-        self.h1_format.setFontPointSize(24.0)
-        self.h1_format.setFontWeight(QFont.Weight.Bold)
-
-        self.h2_format = QTextCharFormat()
-        self.h2_format.setFontPointSize(18.0)
-        self.h2_format.setFontWeight(QFont.Weight.Bold)
-
-        self.h3_format = QTextCharFormat()
-        self.h3_format.setFontPointSize(14.0)
-        self.h3_format.setFontWeight(QFont.Weight.Bold)
-
-        # Markdown syntax (the markers themselves) - make invisible
-        self.syntax_format = QTextCharFormat()
-        # Make the markers invisible by setting font size to 0.1 points
-        self.syntax_format.setFontPointSize(0.1)
-        # Also make them very faint in case they still show
-        self.syntax_format.setForeground(QColor(250, 250, 250))
-
-    def highlightBlock(self, text: str):
-        """Apply formatting to a block of text based on markdown syntax."""
-        if not text:
-            return
-
-        # Track if we're in a code block (multiline)
-        prev_state = self.previousBlockState()
-        in_code_block = prev_state == 1
-
-        # Check for code block fences
-        if text.strip().startswith("```"):
-            # background for the whole fence line (so block looks continuous)
-            self.setFormat(0, len(text), self.code_block_format)
-
-            # hide the three backticks themselves
-            idx = text.find("```")
-            if idx != -1:
-                self.setFormat(idx, 3, self.syntax_format)
-
-            # toggle code-block state and stop; next line picks up state
-            in_code_block = not in_code_block
-            self.setCurrentBlockState(1 if in_code_block else 0)
-            return
-
-        if in_code_block:
-            # Format entire line as code
-            self.setFormat(0, len(text), self.code_block_format)
-            self.setCurrentBlockState(1)
-            return
-
-        self.setCurrentBlockState(0)
-
-        # Headings (must be at start of line)
-        heading_match = re.match(r"^(#{1,3})\s+", text)
-        if heading_match:
-            level = len(heading_match.group(1))
-            marker_len = len(heading_match.group(0))
-
-            # Format the # markers
-            self.setFormat(0, marker_len, self.syntax_format)
-
-            # Format the heading text
-            heading_fmt = (
-                self.h1_format
-                if level == 1
-                else self.h2_format if level == 2 else self.h3_format
-            )
-            self.setFormat(marker_len, len(text) - marker_len, heading_fmt)
-            return
-
-        # Bold: **text** or __text__
-        for match in re.finditer(r"\*\*(.+?)\*\*|__(.+?)__", text):
-            start, end = match.span()
-            content_start = start + 2
-            content_end = end - 2
-
-            # Gray out the markers
-            self.setFormat(start, 2, self.syntax_format)
-            self.setFormat(end - 2, 2, self.syntax_format)
-
-            # Bold the content
-            self.setFormat(content_start, content_end - content_start, self.bold_format)
-
-        # Italic: *text* or _text_ (but not part of bold)
-        for match in re.finditer(
-            r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", text
-        ):
-            start, end = match.span()
-            # Skip if this is part of a bold pattern
-            if start > 0 and text[start - 1 : start + 1] in ("**", "__"):
-                continue
-            if end < len(text) and text[end : end + 1] in ("*", "_"):
-                continue
-
-            content_start = start + 1
-            content_end = end - 1
-
-            # Gray out markers
-            self.setFormat(start, 1, self.syntax_format)
-            self.setFormat(end - 1, 1, self.syntax_format)
-
-            # Italicize content
-            self.setFormat(
-                content_start, content_end - content_start, self.italic_format
-            )
-
-        # Strikethrough: ~~text~~
-        for match in re.finditer(r"~~(.+?)~~", text):
-            start, end = match.span()
-            content_start = start + 2
-            content_end = end - 2
-
-            self.setFormat(start, 2, self.syntax_format)
-            self.setFormat(end - 2, 2, self.syntax_format)
-            self.setFormat(
-                content_start, content_end - content_start, self.strike_format
-            )
-
-        # Inline code: `code`
-        for match in re.finditer(r"`([^`]+)`", text):
-            start, end = match.span()
-            content_start = start + 1
-            content_end = end - 1
-
-            self.setFormat(start, 1, self.syntax_format)
-            self.setFormat(end - 1, 1, self.syntax_format)
-            self.setFormat(content_start, content_end - content_start, self.code_format)
+from .theme import ThemeManager
+from .markdown_highlighter import MarkdownHighlighter
 
 
 class MarkdownEditor(QTextEdit):
@@ -244,6 +60,10 @@ class MarkdownEditor(QTextEdit):
 
         # Connect to text changes for smart formatting
         self.textChanged.connect(self._on_text_changed)
+        self.textChanged.connect(self._update_code_block_row_backgrounds)
+        self.theme_manager.themeChanged.connect(
+            lambda *_: self._update_code_block_row_backgrounds()
+        )
 
         # Enable mouse tracking for checkbox clicking
         self.viewport().setMouseTracking(True)
@@ -253,6 +73,12 @@ class MarkdownEditor(QTextEdit):
         # reattach the highlighter to the new document
         if hasattr(self, "highlighter") and self.highlighter:
             self.highlighter.setDocument(self.document())
+        QTimer.singleShot(0, self._update_code_block_row_backgrounds)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        # First time the widget is shown, Qt may rebuild layout once more.
+        QTimer.singleShot(0, self._update_code_block_row_backgrounds)
 
     def _on_text_changed(self):
         """Handle live formatting updates - convert checkbox markdown to Unicode."""
@@ -300,6 +126,51 @@ class MarkdownEditor(QTextEdit):
                 self.setTextCursor(c)
         finally:
             self._updating = False
+
+    def _update_code_block_row_backgrounds(self):
+        """Paint a full-width background for each line that is in a fenced code block."""
+        doc = self.document()
+        sels = []
+
+        # Use the same bg color as the highlighter's code block
+        bg_brush = self.highlighter.code_block_format.background()
+
+        inside = False
+        block = doc.begin()
+        while block.isValid():
+            text = block.text()
+            stripped = text.strip()
+            is_fence = stripped.startswith("```")
+
+            paint_this_line = is_fence or inside
+            if paint_this_line:
+                sel = QTextEdit.ExtraSelection()
+                fmt = QTextCharFormat()
+                fmt.setBackground(bg_brush)
+                fmt.setProperty(QTextFormat.FullWidthSelection, True)
+                # mark so we can merge with other selections safely
+                fmt.setProperty(QTextFormat.UserProperty, "codeblock_bg")
+                sel.format = fmt
+
+                cur = QTextCursor(doc)
+                cur.setPosition(
+                    block.position()
+                )  # collapsed cursor = whole line when FullWidthSelection
+                sel.cursor = cur
+
+                sels.append(sel)
+
+            if is_fence:
+                inside = not inside
+
+            block = block.next()
+
+        others = [
+            s
+            for s in self.extraSelections()
+            if s.format.property(QTextFormat.UserProperty) != "codeblock_bg"
+        ]
+        self.setExtraSelections(others + sels)
 
     def to_markdown(self) -> str:
         """Export current content as markdown."""
@@ -376,6 +247,9 @@ class MarkdownEditor(QTextEdit):
 
         # Render any embedded images
         self._render_images()
+
+        self._update_code_block_row_backgrounds()
+        QTimer.singleShot(0, self._update_code_block_row_backgrounds)
 
     def _render_images(self):
         """Find and render base64 images in the document."""

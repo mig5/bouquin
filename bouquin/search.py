@@ -83,10 +83,7 @@ class Search(QWidget):
 
         for date_str, content in rows:
             # Build an HTML fragment around the match and whether to show ellipses
-            frag_html, left_ell, right_ell = self._make_html_snippet(
-                content, query, radius=30, maxlen=90
-            )
-
+            frag_html = self._make_html_snippet(content, query, radius=30, maxlen=90)
             # ---- Per-item widget: date on top, preview row below (with ellipses) ----
             container = QWidget()
             outer = QVBoxLayout(container)
@@ -108,11 +105,6 @@ class Search(QWidget):
             h.setContentsMargins(0, 0, 0, 0)
             h.setSpacing(4)
 
-            if left_ell:
-                left = QLabel("…")
-                left.setStyleSheet("color:#888;")
-                h.addWidget(left, 0, Qt.AlignmentFlag.AlignTop)
-
             preview = QLabel()
             preview.setTextFormat(Qt.TextFormat.RichText)
             preview.setWordWrap(True)
@@ -123,11 +115,6 @@ class Search(QWidget):
                 else "<span style='color:#888'>(no preview)</span>"
             )
             h.addWidget(preview, 1)
-
-            if right_ell:
-                right = QLabel("…")
-                right.setStyleSheet("color:#888;")
-                h.addWidget(right, 0, Qt.AlignmentFlag.AlignBottom)
 
             outer.addWidget(row)
 
@@ -145,9 +132,7 @@ class Search(QWidget):
             self.results.setItemWidget(item, container)
 
     # --- Snippet/highlight helpers -----------------------------------------
-    def _make_html_snippet(
-        self, markdown_src: str, query: str, *, radius=60, maxlen=180
-    ):
+    def _make_html_snippet(self, markdown_src: str, query: str, radius=60, maxlen=180):
         # For markdown, we can work directly with the text
         # Strip markdown formatting for display
         plain = self._strip_markdown(markdown_src)
@@ -192,7 +177,7 @@ class Search(QWidget):
                     lambda m: f"<b>{m.group(0)}</b>", snippet_html
                 )
 
-        return snippet_html, start > 0, end < L
+        return snippet_html
 
     def _strip_markdown(self, markdown: str) -> str:
         """Strip markdown formatting for plain text display."""
