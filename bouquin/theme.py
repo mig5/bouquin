@@ -35,6 +35,11 @@ class ThemeManager(QObject):
                 and self.apply(self._cfg.theme)
             )
 
+    def _is_system_dark(self) -> bool:
+        pal = QGuiApplication.palette()
+        # Heuristic: dark windows/backgrounds mean dark system theme
+        return pal.color(QPalette.Window).lightness() < 128
+
     def current(self) -> Theme:
         return self._cfg.theme
 
@@ -43,27 +48,21 @@ class ThemeManager(QObject):
         self.apply(theme)
 
     def apply(self, theme: Theme):
-        # Resolve "system"
+        # Resolve "system" into a concrete theme
+        resolved = theme
         if theme == Theme.SYSTEM:
-            hints = QGuiApplication.styleHints()
-            scheme = getattr(hints, "colorScheme", None)
-            if callable(scheme):
-                scheme = hints.colorScheme()
-            # 0=Light, 1=Dark; fall back to Light
-            theme = Theme.DARK if scheme == 1 else Theme.LIGHT
+            resolved = Theme.DARK if self._is_system_dark() else Theme.LIGHT
 
-        # Always use Fusion so palette applies consistently cross-platform
-        self._app.setStyle("Fusion")
-
-        if theme == Theme.DARK:
+        if resolved == Theme.DARK:
             pal = self._dark_palette()
-            self._app.setPalette(pal)
-            self._app.setStyleSheet("")
         else:
             pal = self._light_palette()
-            self._app.setPalette(pal)
-            self._app.setStyleSheet("")
 
+        # Always use Fusion so palette applies consistently cross-platform
+        QApplication.setStyle("Fusion")
+
+        self._app.setPalette(pal)
+        self._current = resolved
         self.themeChanged.emit(theme)
 
     # ----- Palettes -----
@@ -75,17 +74,24 @@ class ThemeManager(QObject):
         disabled = QColor(127, 127, 127)
         focus = QColor(42, 130, 218)
 
+        # Base surfaces
         pal.setColor(QPalette.Window, window)
-        pal.setColor(QPalette.WindowText, text)
         pal.setColor(QPalette.Base, base)
         pal.setColor(QPalette.AlternateBase, window)
+
+        # Text
+        pal.setColor(QPalette.WindowText, text)
         pal.setColor(QPalette.ToolTipBase, window)
         pal.setColor(QPalette.ToolTipText, text)
         pal.setColor(QPalette.Text, text)
         pal.setColor(QPalette.PlaceholderText, disabled)
-        pal.setColor(QPalette.Button, window)
         pal.setColor(QPalette.ButtonText, text)
+
+        # Buttons/frames
+        pal.setColor(QPalette.Button, window)
         pal.setColor(QPalette.BrightText, QColor(255, 84, 84))
+
+        # Links / selection
         pal.setColor(QPalette.Highlight, focus)
         pal.setColor(QPalette.HighlightedText, QColor(0, 0, 0))
         pal.setColor(QPalette.Link, QColor(Theme.ORANGE_ANCHOR.value))
@@ -94,11 +100,26 @@ class ThemeManager(QObject):
         return pal
 
     def _light_palette(self) -> QPalette:
-        # Let Qt provide its default light palette, but nudge a couple roles
-        pal = self._app.style().standardPalette()
-        pal.setColor(QPalette.Highlight, QColor(0, 120, 215))
-        pal.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-        pal.setColor(
-            QPalette.Link, QColor("#1a73e8")
-        )  # Light blue for links in light mode
+        pal = QPalette()
+
+        # Base surfaces
+        pal.setColor(QPalette.Window, QColor("#ffffff"))
+        pal.setColor(QPalette.Base, QColor("#ffffff"))
+        pal.setColor(QPalette.AlternateBase, QColor("#f5f5f5"))
+
+        # Text
+        pal.setColor(QPalette.WindowText, QColor("#000000"))
+        pal.setColor(QPalette.Text, QColor("#000000"))
+        pal.setColor(QPalette.ButtonText, QColor("#000000"))
+
+        # Buttons/frames
+        pal.setColor(QPalette.Button, QColor("#f0f0f0"))
+        pal.setColor(QPalette.Mid, QColor("#9e9e9e"))
+
+        # Links / selection
+        pal.setColor(QPalette.Highlight, QColor("#1a73e8"))
+        pal.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+        pal.setColor(QPalette.Link, QColor("#1a73e8"))
+        pal.setColor(QPalette.LinkVisited, QColor("#6b4ca5"))
+
         return pal

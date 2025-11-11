@@ -119,7 +119,7 @@ class SettingsDialog(QDialog):
         self.save_key_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         # make it look secondary
         pal = self.save_key_label.palette()
-        pal.setColor(self.save_key_label.foregroundRole(), pal.color(QPalette.Mid))
+        self.save_key_label.setForegroundRole(QPalette.PlaceholderText)
         self.save_key_label.setPalette(pal)
 
         exp_row = QHBoxLayout()
@@ -165,7 +165,7 @@ class SettingsDialog(QDialog):
         self.idle_spin_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         # make it look secondary
         spal = self.idle_spin_label.palette()
-        spal.setColor(self.idle_spin_label.foregroundRole(), spal.color(QPalette.Mid))
+        self.idle_spin_label.setForegroundRole(QPalette.PlaceholderText)
         self.idle_spin_label.setPalette(spal)
 
         spin_row = QHBoxLayout()
@@ -195,7 +195,7 @@ class SettingsDialog(QDialog):
         self.compact_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         # make it look secondary
         cpal = self.compact_label.palette()
-        cpal.setColor(self.compact_label.foregroundRole(), cpal.color(QPalette.Mid))
+        self.compact_label.setForegroundRole(QPalette.PlaceholderText)
         self.compact_label.setPalette(cpal)
 
         maint_row = QHBoxLayout()
