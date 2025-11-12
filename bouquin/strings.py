@@ -8,7 +8,7 @@ strings = {}
 translations = {}
 
 
-def load_strings(current_locale: str | None = None) -> None:
+def load_strings(current_locale: str) -> None:
     global strings, translations
     translations = {}
 
@@ -17,15 +17,6 @@ def load_strings(current_locale: str | None = None) -> None:
     for loc in _AVAILABLE:
         data = (root / f"{loc}.json").read_text(encoding="utf-8")
         translations[loc] = json.loads(data)
-
-    # Load in the system's locale if not passed in somehow from settings
-    if not current_locale:
-        try:
-            from PySide6.QtCore import QLocale
-
-            current_locale = QLocale.system().name().split("_")[0]
-        except Exception:
-            current_locale = _DEFAULT
 
     if current_locale not in translations:
         current_locale = _DEFAULT
