@@ -4,6 +4,8 @@ from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QAction, QKeySequence, QFont, QFontDatabase, QActionGroup
 from PySide6.QtWidgets import QToolBar
 
+from . import strings
+
 
 class ToolBar(QToolBar):
     boldRequested = Signal()
@@ -18,79 +20,79 @@ class ToolBar(QToolBar):
     insertImageRequested = Signal()
 
     def __init__(self, parent=None):
-        super().__init__("Format", parent)
-        self.setObjectName("Format")
+        super().__init__(strings._("toolbar_format"), parent)
+        self.setObjectName(strings._("toolbar_format"))
         self.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self._build_actions()
         self._apply_toolbar_styles()
 
     def _build_actions(self):
         self.actBold = QAction("B", self)
-        self.actBold.setToolTip("Bold")
+        self.actBold.setToolTip(strings._("toolbar_bold"))
         self.actBold.setCheckable(True)
         self.actBold.setShortcut(QKeySequence.Bold)
         self.actBold.triggered.connect(self.boldRequested)
 
         self.actItalic = QAction("I", self)
-        self.actItalic.setToolTip("Italic")
+        self.actItalic.setToolTip(strings._("toolbar_italic"))
         self.actItalic.setCheckable(True)
         self.actItalic.setShortcut(QKeySequence.Italic)
         self.actItalic.triggered.connect(self.italicRequested)
 
         self.actStrike = QAction("S", self)
-        self.actStrike.setToolTip("Strikethrough")
+        self.actStrike.setToolTip(strings._("toolbar_strikethrough"))
         self.actStrike.setCheckable(True)
         self.actStrike.setShortcut("Ctrl+-")
         self.actStrike.triggered.connect(self.strikeRequested)
 
         self.actCode = QAction("</>", self)
-        self.actCode.setToolTip("Code block")
+        self.actCode.setToolTip(strings._("toolbar_code_block"))
         self.actCode.setShortcut("Ctrl+`")
         self.actCode.triggered.connect(self.codeRequested)
 
         # Headings
         self.actH1 = QAction("H1", self)
-        self.actH1.setToolTip("Heading 1")
+        self.actH1.setToolTip(strings._("toolbar_heading") + " 1")
         self.actH1.setCheckable(True)
         self.actH1.setShortcut("Ctrl+1")
         self.actH1.triggered.connect(lambda: self.headingRequested.emit(24))
         self.actH2 = QAction("H2", self)
-        self.actH2.setToolTip("Heading 2")
+        self.actH2.setToolTip(strings._("toolbar_heading") + " 2")
         self.actH2.setCheckable(True)
         self.actH2.setShortcut("Ctrl+2")
         self.actH2.triggered.connect(lambda: self.headingRequested.emit(18))
         self.actH3 = QAction("H3", self)
-        self.actH3.setToolTip("Heading 3")
+        self.actH3.setToolTip(strings._("toolbar_heading") + " 3")
         self.actH3.setCheckable(True)
         self.actH3.setShortcut("Ctrl+3")
         self.actH3.triggered.connect(lambda: self.headingRequested.emit(14))
         self.actNormal = QAction("N", self)
-        self.actNormal.setToolTip("Normal paragraph text")
+        self.actNormal.setToolTip(strings._("toolbar_normal_paragraph_text"))
         self.actNormal.setCheckable(True)
         self.actNormal.setShortcut("Ctrl+N")
         self.actNormal.triggered.connect(lambda: self.headingRequested.emit(0))
 
         # Lists
         self.actBullets = QAction("•", self)
-        self.actBullets.setToolTip("Bulleted list")
+        self.actBullets.setToolTip(strings._("toolbar_bulleted_list"))
         self.actBullets.setCheckable(True)
         self.actBullets.triggered.connect(self.bulletsRequested)
         self.actNumbers = QAction("1.", self)
-        self.actNumbers.setToolTip("Numbered list")
+        self.actNumbers.setToolTip(strings._("toolbar_numbered_list"))
         self.actNumbers.setCheckable(True)
         self.actNumbers.triggered.connect(self.numbersRequested)
         self.actCheckboxes = QAction("☐", self)
-        self.actCheckboxes.setToolTip("Toggle checkboxes")
+        self.actCheckboxes.setToolTip(strings._("toolbar_toggle_checkboxes"))
         self.actCheckboxes.triggered.connect(self.checkboxesRequested)
 
         # Images
-        self.actInsertImg = QAction("Image", self)
-        self.actInsertImg.setToolTip("Insert image")
+        self.actInsertImg = QAction(strings._("images"), self)
+        self.actInsertImg.setToolTip(strings._("insert_images"))
         self.actInsertImg.setShortcut("Ctrl+Shift+I")
         self.actInsertImg.triggered.connect(self.insertImageRequested)
 
         # History button
-        self.actHistory = QAction("History", self)
+        self.actHistory = QAction(strings._("history"), self)
         self.actHistory.triggered.connect(self.historyRequested)
 
         # Set exclusive buttons in QActionGroups
@@ -151,7 +153,7 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actNumbers, "1.")
 
         # History
-        self._style_letter_button(self.actHistory, "View History")
+        self._style_letter_button(self.actHistory, strings._("view_history"))
 
     def _style_letter_button(
         self,

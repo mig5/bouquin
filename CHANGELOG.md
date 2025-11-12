@@ -1,3 +1,7 @@
+# 0.2.1.8
+
+ * Translate all strings, add French, add locale choice in settings
+
 # 0.2.1.7
 
  * Fix being able to set bold, italic and strikethrough at the same time.

@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 
+from . import strings
 from .theme import ThemeManager
 
 
@@ -22,11 +23,11 @@ class LockOverlay(QWidget):
         lay = QVBoxLayout(self)
         lay.addStretch(1)
 
-        msg = QLabel("Locked due to inactivity", self)
+        msg = QLabel(strings._("lock_overlay_locked_due_to_inactivity"), self)
         msg.setObjectName("lockLabel")
         msg.setAlignment(Qt.AlignCenter)
 
-        self._btn = QPushButton("Unlock", self)
+        self._btn = QPushButton(strings._("lock_overlay_unlock"), self)
         self._btn.setObjectName("unlockButton")
         self._btn.setFixedWidth(200)
         self._btn.setCursor(Qt.PointingHandCursor)

@@ -9,6 +9,8 @@ from pathlib import Path
 from sqlcipher3 import dbapi2 as sqlite
 from typing import List, Sequence, Tuple
 
+from . import strings
+
 Entry = Tuple[str, str]
 
 
@@ -19,6 +21,7 @@ class DBConfig:
     idle_minutes: int = 15  # 0 = never lock
     theme: str = "system"
     move_todos: bool = False
+    locale: str = "en"
 
 
 class DBManager:
@@ -62,8 +65,12 @@ class DBManager:
         # Not OK: rows of problems returned
         details = "; ".join(str(r[0]) for r in rows if r and r[0] is not None)
         raise sqlite.IntegrityError(
-            "SQLCipher integrity check failed"
-            + (f": {details}" if details else f" ({len(rows)} issue(s) reported)")
+            strings._("db_sqlcipher_integrity_check_failed")
+            + (
+                f": {details}"
+                if details
+                else f" ({len(rows)} {strings._('db_issues_reported')})"
+            )
         )
 
     def _ensure_schema(self) -> None:
@@ -115,7 +122,7 @@ class DBManager:
         self.conn = None
         self.cfg.key = new_key
         if not self.connect():
-            raise sqlite.Error("Re-open failed after rekey")
+            raise sqlite.Error(strings._("db_reopen_failed_after_rekey"))
 
     def get_entry(self, date_iso: str) -> str:
         """
@@ -251,7 +258,9 @@ class DBManager:
             "SELECT date FROM versions WHERE id=?;", (version_id,)
         ).fetchone()
         if row is None or row["date"] != date_iso:
-            raise ValueError("version_id does not belong to the given date")
+            raise ValueError(
+                strings._("db_version_id_does_not_belong_to_the_given_date")
+            )
 
         with self.conn:
             cur.execute(
@@ -375,7 +384,7 @@ class DBManager:
             cur = self.conn.cursor()
             cur.execute("VACUUM")
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"{strings._('error')}: {e}")
 
     def close(self) -> None:
         if self.conn is not None:

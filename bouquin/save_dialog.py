@@ -10,24 +10,24 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
 )
 
+from . import strings
+
 
 class SaveDialog(QDialog):
     def __init__(
         self,
         parent=None,
-        title: str = "Enter a name for this version",
-        message: str = "Enter a name for this version?",
     ):
         """
         Used for explicitly saving a new version of a page.
         """
         super().__init__(parent)
-        self.setWindowTitle(title)
+        self.setWindowTitle(strings._("enter_a_name_for_this_version"))
         v = QVBoxLayout(self)
-        v.addWidget(QLabel(message))
+        v.addWidget(QLabel(strings._("enter_a_name_for_this_version")))
         self.note = QLineEdit()
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.note.setText(f"New version I saved at {now}")
+        self.note.setText(strings._("new_version_i_saved_at") + f" {now}")
         v.addWidget(self.note)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)

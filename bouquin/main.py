@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication
 from .settings import APP_NAME, APP_ORG, get_settings
 from .main_window import MainWindow
 from .theme import Theme, ThemeConfig, ThemeManager
+from . import strings
 
 
 def main():
@@ -19,6 +20,7 @@ def main():
     themes = ThemeManager(app, cfg)
     themes.apply(cfg.theme)
 
+    strings.load_strings(s.value("ui/locale", "en"))
     win = MainWindow(themes=themes)
     win.show()
     sys.exit(app.exec())

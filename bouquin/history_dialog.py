@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 
+from . import strings
+
 
 def _markdown_to_text(s: str) -> str:
     """Convert markdown to plain text for diff comparison."""
@@ -43,7 +45,9 @@ def _colored_unified_diff_html(old_md: str, new_md: str) -> str:
     """Return HTML with colored unified diff (+ green, - red, context gray)."""
     a = _markdown_to_text(old_md).splitlines()
     b = _markdown_to_text(new_md).splitlines()
-    ud = difflib.unified_diff(a, b, fromfile="current", tofile="selected", lineterm="")
+    ud = difflib.unified_diff(
+        a, b, fromfile=strings._("current"), tofile=strings._("selected"), lineterm=""
+    )
     lines = []
     for line in ud:
         if line.startswith("+") and not line.startswith("+++"):
@@ -67,7 +71,7 @@ class HistoryDialog(QDialog):
 
     def __init__(self, db, date_iso: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"History — {date_iso}")
+        self.setWindowTitle(f"{strings._('history')} — {date_iso}")
         self._db = db
         self._date = date_iso
         self._versions = []  # list[dict] from DB
@@ -88,8 +92,8 @@ class HistoryDialog(QDialog):
         self.preview.setOpenExternalLinks(True)
         self.diff = QTextBrowser()
         self.diff.setOpenExternalLinks(False)
-        self.tabs.addTab(self.preview, "Preview")
-        self.tabs.addTab(self.diff, "Diff")
+        self.tabs.addTab(self.preview, strings._("history_dialog_preview"))
+        self.tabs.addTab(self.diff, strings._("history_dialog_diff"))
         self.tabs.setMinimumSize(500, 650)
         top.addWidget(self.tabs, 2)
 
@@ -98,9 +102,9 @@ class HistoryDialog(QDialog):
         # Buttons
         row = QHBoxLayout()
         row.addStretch(1)
-        self.btn_revert = QPushButton("Revert to Selected")
+        self.btn_revert = QPushButton(strings._("history_dialog_revert_to_selected"))
         self.btn_revert.clicked.connect(self._revert)
-        self.btn_close = QPushButton("Close")
+        self.btn_close = QPushButton(strings._("close"))
         self.btn_close.clicked.connect(self.reject)
         row.addWidget(self.btn_revert)
         row.addWidget(self.btn_close)
@@ -126,7 +130,7 @@ class HistoryDialog(QDialog):
             if v.get("note"):
                 label += f"  ·  {v['note']}"
             if v["is_current"]:
-                label += "  **(current)**"
+                label += "  **(" + strings._("current") + ")**"
             it = QListWidgetItem(label)
             it.setData(Qt.UserRole, v["id"])
             self.list.addItem(it)
@@ -168,6 +172,8 @@ class HistoryDialog(QDialog):
         try:
             self._db.revert_to_version(self._date, version_id=sel_id)
         except Exception as e:
-            QMessageBox.critical(self, "Revert failed", str(e))
+            QMessageBox.critical(
+                self, strings._("history_dialog_revert_failed"), str(e)
+            )
             return
         self.accept()

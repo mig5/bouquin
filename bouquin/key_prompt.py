@@ -9,13 +9,15 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
 )
 
+from . import strings
+
 
 class KeyPrompt(QDialog):
     def __init__(
         self,
         parent=None,
-        title: str = "Enter key",
-        message: str = "Enter key",
+        title: str = strings._("key_prompt_enter_key"),
+        message: str = strings._("key_prompt_enter_key"),
     ):
         """
         Prompt the user for the key required to decrypt the database.
@@ -30,7 +32,7 @@ class KeyPrompt(QDialog):
         self.edit = QLineEdit()
         self.edit.setEchoMode(QLineEdit.Password)
         v.addWidget(self.edit)
-        toggle = QPushButton("Show")
+        toggle = QPushButton(strings._("show"))
         toggle.setCheckable(True)
         toggle.toggled.connect(
             lambda c: self.edit.setEchoMode(

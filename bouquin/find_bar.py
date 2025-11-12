@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QTextEdit,
 )
 
+from . import strings
+
 
 class FindBar(QWidget):
     """Widget for finding text in the Editor"""
@@ -41,17 +43,17 @@ class FindBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 0, 6, 0)
 
-        layout.addWidget(QLabel("Find:"))
+        layout.addWidget(QLabel(strings._("find")))
 
         self.edit = QLineEdit(self)
-        self.edit.setPlaceholderText("Type to search")
+        self.edit.setPlaceholderText(strings._("find_bar_type_to_search"))
         layout.addWidget(self.edit)
 
-        self.case = QCheckBox("Match case", self)
+        self.case = QCheckBox(strings._("find_bar_match_case"), self)
         layout.addWidget(self.case)
 
-        self.prevBtn = QPushButton("Prev", self)
-        self.nextBtn = QPushButton("Next", self)
+        self.prevBtn = QPushButton(strings._("previous"), self)
+        self.nextBtn = QPushButton(strings._("next"), self)
         self.closeBtn = QPushButton("✕", self)
         self.closeBtn.setFlat(True)
         layout.addWidget(self.prevBtn)

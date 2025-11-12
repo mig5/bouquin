@@ -1,11 +1,13 @@
 [tool.poetry]
 name = "bouquin"
-version = "0.2.1.7"
+version = "0.2.1.8"
 description = "Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher."
 authors = ["Miguel Jacq <mig@mig5.net>"]
 readme = "README.md"
 license = "GPL-3.0-or-later"
 repository = "https://git.mig5.net/mig5/bouquin"
+packages = [{ include = "bouquin" }]
+include = ["bouquin/locales/*.json"]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.14"

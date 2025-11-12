@@ -54,6 +54,7 @@ from .save_dialog import SaveDialog
 from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
+from . import strings
 from .toolbar import ToolBar
 from .theme import ThemeManager
 
@@ -169,7 +170,7 @@ class MainWindow(QMainWindow):
         )
 
         # Status bar for feedback
-        self.statusBar().showMessage("Ready", 800)
+        self.statusBar().showMessage(strings._("main_window_ready"), 800)
         # Add findBar and add it to the statusBar
         # FindBar will get the current editor dynamically via a callable
         self.findBar = FindBar(lambda: self.editor, shortcut_parent=self, parent=self)
@@ -179,84 +180,84 @@ class MainWindow(QMainWindow):
 
         # Menu bar (File)
         mb = self.menuBar()
-        file_menu = mb.addMenu("&File")
-        act_save = QAction("&Save a version", self)
+        file_menu = mb.addMenu("&" + strings._("file"))
+        act_save = QAction("&" + strings._("main_window_save_a_version"), self)
         act_save.setShortcut("Ctrl+S")
         act_save.triggered.connect(lambda: self._save_current(explicit=True))
         file_menu.addAction(act_save)
-        act_history = QAction("History", self)
+        act_history = QAction("&" + strings._("history"), self)
         act_history.setShortcut("Ctrl+H")
         act_history.setShortcutContext(Qt.ApplicationShortcut)
         act_history.triggered.connect(self._open_history)
         file_menu.addAction(act_history)
-        act_settings = QAction("Settin&gs", self)
+        act_settings = QAction(strings._("main_window_settings_accessible_flag"), self)
         act_settings.setShortcut("Ctrl+G")
         act_settings.triggered.connect(self._open_settings)
         file_menu.addAction(act_settings)
-        act_export = QAction("&Export", self)
+        act_export = QAction(strings._("export_accessible_flag"), self)
         act_export.setShortcut("Ctrl+E")
         act_export.triggered.connect(self._export)
         file_menu.addAction(act_export)
-        act_backup = QAction("&Backup", self)
+        act_backup = QAction("&" + strings._("backup"), self)
         act_backup.setShortcut("Ctrl+Shift+B")
         act_backup.triggered.connect(self._backup)
         file_menu.addAction(act_backup)
         file_menu.addSeparator()
-        act_quit = QAction("&Quit", self)
+        act_quit = QAction("&" + strings._("quit"), self)
         act_quit.setShortcut("Ctrl+Q")
         act_quit.triggered.connect(self.close)
         file_menu.addAction(act_quit)
 
         # Navigate menu with next/previous/today
-        nav_menu = mb.addMenu("&Navigate")
-        act_prev = QAction("Previous Day", self)
+        nav_menu = mb.addMenu("&" + strings._("navigate"))
+        act_prev = QAction(strings._("previous_day"), self)
         act_prev.setShortcut("Ctrl+Shift+P")
         act_prev.setShortcutContext(Qt.ApplicationShortcut)
         act_prev.triggered.connect(lambda: self._adjust_day(-1))
         nav_menu.addAction(act_prev)
         self.addAction(act_prev)
 
-        act_next = QAction("Next Day", self)
+        act_next = QAction(strings._("next_day"), self)
         act_next.setShortcut("Ctrl+Shift+N")
         act_next.setShortcutContext(Qt.ApplicationShortcut)
         act_next.triggered.connect(lambda: self._adjust_day(1))
         nav_menu.addAction(act_next)
         self.addAction(act_next)
 
-        act_today = QAction("Today", self)
+        act_today = QAction(strings._("today"), self)
         act_today.setShortcut("Ctrl+Shift+T")
         act_today.setShortcutContext(Qt.ApplicationShortcut)
         act_today.triggered.connect(self._adjust_today)
         nav_menu.addAction(act_today)
         self.addAction(act_today)
 
-        act_find = QAction("Find on page", self)
+        act_find = QAction(strings._("find_on_page"), self)
         act_find.setShortcut(QKeySequence.Find)
         act_find.triggered.connect(self.findBar.show_bar)
         nav_menu.addAction(act_find)
         self.addAction(act_find)
 
-        act_find_next = QAction("Find Next", self)
+        act_find_next = QAction(strings._("find_next"), self)
         act_find_next.setShortcut(QKeySequence.FindNext)
         act_find_next.triggered.connect(self.findBar.find_next)
         nav_menu.addAction(act_find_next)
         self.addAction(act_find_next)
 
-        act_find_prev = QAction("Find Previous", self)
+        act_find_prev = QAction(strings._("find_previous"), self)
         act_find_prev.setShortcut(QKeySequence.FindPrevious)
         act_find_prev.triggered.connect(self.findBar.find_prev)
         nav_menu.addAction(act_find_prev)
         self.addAction(act_find_prev)
 
         # Help menu with drop-down
-        help_menu = mb.addMenu("&Help")
-        act_docs = QAction("Documentation", self)
+        help_menu = mb.addMenu("&" + strings._("help"))
+        act_docs = QAction(strings._("documentation"), self)
         act_docs.setShortcut("Ctrl+D")
         act_docs.setShortcutContext(Qt.ApplicationShortcut)
         act_docs.triggered.connect(self._open_docs)
         help_menu.addAction(act_docs)
         self.addAction(act_docs)
-        act_bugs = QAction("Report a bug", self)
+        act_bugs = QAction(strings._("report_a_bug"), self)
         act_bugs.setShortcut("Ctrl+R")
         act_bugs.setShortcutContext(Qt.ApplicationShortcut)
         act_bugs.triggered.connect(self._open_bugs)
@@ -308,10 +309,10 @@ class MainWindow(QMainWindow):
             ok = self.db.connect()
         except Exception as e:
             if str(e) == "file is not a database":
-                error = "The key is probably incorrect."
+                error = strings._("db_key_incorrect")
             else:
                 error = str(e)
-            QMessageBox.critical(self, "Database Error", error)
+            QMessageBox.critical(self, strings._("db_database_error"), error)
             return False
         return ok
 
@@ -320,11 +321,11 @@ class MainWindow(QMainWindow):
         Prompt for the SQLCipher key.
         """
         if first_time:
-            title = "Set an encryption key"
-            message = "Bouquin encrypts your data.\n\nPlease create a strong passphrase to encrypt the notebook.\n\nYou can always change it later!"
+            title = strings._("set_an_encryption_key")
+            message = strings._("set_an_encryption_key_explanation")
         else:
-            title = "Unlock encrypted notebook"
-            message = "Enter your key to unlock the notebook"
+            title = strings._("unlock_encrypted_notebook")
+            message = strings._("unlock_encrypted_notebook_explanation")
         while True:
             dlg = KeyPrompt(self, title, message)
             if dlg.exec() != QDialog.Accepted:
@@ -591,7 +592,7 @@ class MainWindow(QMainWindow):
         clicked_date = self._date_from_calendar_pos(pos)
 
         menu = QMenu(self)
-        open_in_new_tab_action = menu.addAction("Open in New Tab")
+        open_in_new_tab_action = menu.addAction(strings._("open_in_new_tab"))
         action = menu.exec_(self.calendar.mapToGlobal(pos))
 
         self._showing_context_menu = False
@@ -678,7 +679,7 @@ class MainWindow(QMainWindow):
             return
         date_iso = editor.current_date.toString("yyyy-MM-dd")
         md = editor.to_markdown()
-        self.db.save_new_version(date_iso, md, note="autosave")
+        self.db.save_new_version(date_iso, md, note=strings._("autosave"))
 
     def _on_text_changed(self):
         self._dirty = True
@@ -723,7 +724,7 @@ class MainWindow(QMainWindow):
             self.db.save_new_version(
                 yesterday_str,
                 modified_text,
-                "Unchecked checkbox items moved to next day",
+                strings._("unchecked_checkbox_items_moved_to_next_day"),
             )
 
             # Join unchecked items into markdown format
@@ -782,7 +783,7 @@ class MainWindow(QMainWindow):
         from datetime import datetime as _dt
 
         self.statusBar().showMessage(
-            f"Saved {date_iso} at {_dt.now().strftime('%H:%M:%S')}", 2000
+            strings._("saved") + f" {date_iso}: {_dt.now().strftime('%H:%M:%S')}", 2000
         )
 
     def _save_current(self, explicit: bool = False):
@@ -799,7 +800,7 @@ class MainWindow(QMainWindow):
                 return
             note = dlg.note_text()
         else:
-            note = "autosave"
+            note = strings._("autosave")
         # Save the current editor's date
         date_iso = self.editor.current_date.toString("yyyy-MM-dd")
         self._save_date(date_iso, explicit, note)
@@ -965,9 +966,9 @@ class MainWindow(QMainWindow):
         # Let the user pick one or many images
         paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Insert image(s)",
+            strings._("insert_images"),
             "",
-            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)",
+            strings._("images") + "(*.png *.jpg *.jpeg *.bmp *.gif *.webp)",
         )
         if not paths:
             return
@@ -990,6 +991,7 @@ class MainWindow(QMainWindow):
         self.cfg.idle_minutes = getattr(new_cfg, "idle_minutes", self.cfg.idle_minutes)
         self.cfg.theme = getattr(new_cfg, "theme", self.cfg.theme)
         self.cfg.move_todos = getattr(new_cfg, "move_todos", self.cfg.move_todos)
+        self.cfg.locale = getattr(new_cfg, "locale", self.cfg.locale)
 
         # Persist once
         save_db_config(self.cfg)
@@ -1002,7 +1004,9 @@ class MainWindow(QMainWindow):
             self.db.close()
             if not self._prompt_for_key_until_valid(first_time=False):
                 QMessageBox.warning(
-                    self, "Reopen failed", "Could not unlock database at new path."
+                    self,
+                    strings._("reopen_failed"),
+                    strings._("could_not_unlock_database_at_new_path"),
                 )
                 return
             self._load_selected_date()
@@ -1045,14 +1049,8 @@ class MainWindow(QMainWindow):
     # ----------------- Export handler ----------------- #
     @Slot()
     def _export(self):
-        warning_title = "Unencrypted export"
-        warning_message = """
-Exporting the database will be unencrypted!
-
-Are you sure you want to continue?
-
-If you want an encrypted backup, choose Backup instead of Export.
-"""
+        warning_title = strings._("unencrypted_export")
+        warning_message = strings._("unencrypted_export_warning")
         dlg = QMessageBox()
         dlg.setWindowTitle(warning_title)
         dlg.setText(warning_message)
@@ -1074,7 +1072,7 @@ If you want an encrypted backup, choose Backup instead of Export.
 
         start_dir = os.path.join(os.path.expanduser("~"), "Documents")
         filename, selected_filter = QFileDialog.getSaveFileName(
-            self, "Export entries", start_dir, filters
+            self, strings._("export_entries"), start_dir, filters
         )
         if not filename:
             return  # user cancelled
@@ -1106,11 +1104,15 @@ If you want an encrypted backup, choose Backup instead of Export.
             elif selected_filter.startswith("SQL"):
                 self.db.export_sql(filename)
             else:
-                raise ValueError("Unrecognised extension!")
+                raise ValueError(strings._("unrecognised_extension"))
 
-            QMessageBox.information(self, "Export complete", f"Saved to:\n{filename}")
+            QMessageBox.information(
+                self,
+                strings._("export_complete"),
+                strings._("saved_to") + f" {filename}",
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Export failed", str(e))
+            QMessageBox.critical(self, strings._("export_failed"), str(e))
 
     # ----------------- Backup handler ----------------- #
     @Slot()
@@ -1122,7 +1124,7 @@ If you want an encrypted backup, choose Backup instead of Export.
             os.path.expanduser("~"), "Documents", f"bouquin_backup_{now}.db"
         )
         filename, selected_filter = QFileDialog.getSaveFileName(
-            self, "Backup encrypted notebook", start_dir, filters
+            self, strings._("backup_encrypted_notebook"), start_dir, filters
         )
         if not filename:
             return  # user cancelled
@@ -1138,10 +1140,12 @@ If you want an encrypted backup, choose Backup instead of Export.
             if selected_filter.startswith("SQL"):
                 self.db.export_sqlcipher(filename)
                 QMessageBox.information(
-                    self, "Backup complete", f"Saved to:\n{filename}"
+                    self,
+                    strings._("backup_complete"),
+                    strings._("saved_to") + f" {filename}",
                 )
         except Exception as e:
-            QMessageBox.critical(self, "Backup failed", str(e))
+            QMessageBox.critical(self, strings._("backup_failed"), str(e))
 
     # ----------------- Help handlers ----------------- #
 
@@ -1150,7 +1154,9 @@ If you want an encrypted backup, choose Backup instead of Export.
         url = QUrl.fromUserInput(url_str)
         if not QDesktopServices.openUrl(url):
             QMessageBox.warning(
-                self, "Open Documentation", f"Couldn't open:\n{url.toDisplayString()}"
+                self,
+                strings._("documentation"),
+                strings._("couldnt_open") + url.toDisplayString(),
             )
 
     def _open_bugs(self):
@@ -1158,7 +1164,9 @@ If you want an encrypted backup, choose Backup instead of Export.
         url = QUrl.fromUserInput(url_str)
         if not QDesktopServices.openUrl(url):
             QMessageBox.warning(
-                self, "Open Documentation", f"Couldn't open:\n{url.toDisplayString()}"
+                self,
+                strings._("report_a_bug"),
+                strings._("couldnt_open") + url.toDisplayString(),
             )
 
     # ----------------- Idle handlers ----------------- #
@@ -1219,7 +1227,7 @@ If you want an encrypted backup, choose Backup instead of Export.
         try:
             ok = self._prompt_for_key_until_valid(first_time=False)
         except Exception as e:
-            QMessageBox.critical(self, "Unlock failed", str(e))
+            QMessageBox.critical(self, strings._("unlock_failed"), str(e))
             return
         if ok:
             self._locked = False

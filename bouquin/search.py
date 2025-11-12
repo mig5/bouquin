@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import strings
+
 Row = Tuple[str, str]
 
 
@@ -30,7 +32,7 @@ class Search(QWidget):
         self._db = db
 
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Search for notes here")
+        self.search.setPlaceholderText(strings._("search_for_notes_here"))
         self.search.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.search.textChanged.connect(self._search)
 
