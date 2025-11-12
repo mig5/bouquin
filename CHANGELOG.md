@@ -1,6 +1,7 @@
 # 0.2.1.8
 
  * Translate all strings, add French, add locale choice in settings
+ * Fix hiding status bar (including find bar) when locked
 
 # 0.2.1.7
 

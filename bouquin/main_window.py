@@ -1212,9 +1212,11 @@ class MainWindow(QMainWindow):
             self.menuBar().setEnabled(False)
         if self.statusBar():
             self.statusBar().setEnabled(False)
+            self.statusBar().hide()
         tb = getattr(self, "toolBar", None)
         if tb:
             tb.setEnabled(False)
+            tb.hide()
         self._lock_overlay.show()
         self._lock_overlay.raise_()
 
@@ -1236,9 +1238,11 @@ class MainWindow(QMainWindow):
                 self.menuBar().setEnabled(True)
             if self.statusBar():
                 self.statusBar().setEnabled(True)
+                self.statusBar().show()
             tb = getattr(self, "toolBar", None)
             if tb:
                 tb.setEnabled(True)
+                tb.show()
             self._idle_timer.start()
             QTimer.singleShot(0, self._focus_editor_now)
 
