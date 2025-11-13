@@ -19,7 +19,7 @@ jobs:
 
       - name: Run linters
         run: |
-          black bouquin/*
-          black tests/*
+          black --diff --check bouquin/*
+          black --diff --check tests/*
           pyflakes3 bouquin/*
           pyflakes3 tests/*
