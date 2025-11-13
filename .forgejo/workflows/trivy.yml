@@ -1,0 +1,23 @@
+name: Trivy
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+
+jobs:
+  test:
+    runs-on: docker
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          ignore-unfixed: true
+          format: 'table'
+          exit-code: '0'
+          limit-severity: 'CRITICAL'        
