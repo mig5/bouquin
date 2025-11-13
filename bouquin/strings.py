@@ -14,6 +14,7 @@ _DEFAULT = "en"
 strings = {}
 translations = {}
 
+
 def load_strings(current_locale: str) -> None:
     global strings, translations
     translations = {}

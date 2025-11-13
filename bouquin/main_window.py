@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import importlib.metadata
 import os
 import sys
 import re
@@ -263,6 +264,12 @@ class MainWindow(QMainWindow):
         act_bugs.triggered.connect(self._open_bugs)
         help_menu.addAction(act_bugs)
         self.addAction(act_bugs)
+        act_version = QAction(strings._("version"), self)
+        act_version.setShortcut("Ctrl+V")
+        act_version.setShortcutContext(Qt.ApplicationShortcut)
+        act_version.triggered.connect(self._open_version)
+        help_menu.addAction(act_version)
+        self.addAction(act_version)
 
         # Autosave
         self._dirty = False
@@ -1176,6 +1183,11 @@ class MainWindow(QMainWindow):
                 strings._("report_a_bug"),
                 strings._("couldnt_open") + url.toDisplayString(),
             )
+
+    def _open_version(self):
+        version = importlib.metadata.version("bouquin")
+        version_formatted = f"{APP_NAME} {version}"
+        QMessageBox.information(self, strings._("version"), version_formatted)
 
     # ----------------- Idle handlers ----------------- #
     def _apply_idle_minutes(self, minutes: int):

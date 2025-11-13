@@ -1,4 +1,6 @@
 import pytest
+import importlib.metadata
+
 from pathlib import Path
 
 import bouquin.main_window as mwmod
@@ -906,7 +908,31 @@ def test_open_docs_and_bugs_show_warning_on_failure(
     )
     w._open_docs()
     w._open_bugs()
+
     assert seen["docs"] and seen["bugs"]
+
+
+def test_open_version(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    called = {"title": None, "text": None}
+
+    def fake_information(parent, title, text, *a, **k):
+        called["title"] = title
+        called["text"] = text
+        # Return value of QMessageBox.information is an int; 0 is fine.
+        return 0
+
+    # Patch whichever one you actually use in _open_version
+    monkeypatch.setattr(QMessageBox, "information", fake_information)
+
+    w._open_version()
+
+    assert called["title"] is not None
+    assert "version" in called["title"].lower()
+    version = importlib.metadata.version("bouquin")
+    assert version in called["text"]
 
 
 # ---- Idle/lock/event filter helpers (1176, 1181-1187, 1193-1202, 1231-1233) ----
