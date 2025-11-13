@@ -9,12 +9,14 @@ jobs:
   test:
     runs-on: docker
 
+    container:
+      - aquasec/trivy
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Run Trivy scanner
-        uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
