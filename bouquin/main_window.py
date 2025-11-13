@@ -56,6 +56,7 @@ from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from . import strings
+from .tags_widget import PageTagsWidget
 from .toolbar import ToolBar
 from .theme import ThemeManager
 
@@ -93,6 +94,8 @@ class MainWindow(QMainWindow):
         self.search.openDateRequested.connect(self._load_selected_date)
         self.search.resultDatesChanged.connect(self._on_search_dates_changed)
 
+        self.tags = PageTagsWidget(self.db)
+
         # Lock the calendar to the left panel at the top to stop it stretching
         # when the main window is resized.
         left_panel = QWidget()
@@ -100,6 +103,7 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(8, 8, 8, 8)
         left_layout.addWidget(self.calendar)
         left_layout.addWidget(self.search)
+        left_layout.addWidget(self.tags)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
         # Create tab widget to hold multiple editors
@@ -498,6 +502,12 @@ class MainWindow(QMainWindow):
             with QSignalBlocker(self.calendar):
                 self.calendar.setSelectedDate(editor.current_date)
 
+
+            # update per-page tags for the active tab
+            if hasattr(self, "tags"):
+                date_iso = editor.current_date.toString("yyyy-MM-dd")
+                self.tags.set_current_date(date_iso)
+
         # Reconnect toolbar to new active editor
         self._sync_toolbar()
 
@@ -627,6 +637,10 @@ class MainWindow(QMainWindow):
 
         # Keep tabs sorted by date
         self._reorder_tabs_by_date()
+
+        # sync tags
+        if hasattr(self, "tags"):
+            self.tags.set_current_date(date_iso)        
 
     def _load_date_into_editor(self, date: QDate, extra_data=False):
         """Load a specific date's content into a given editor."""

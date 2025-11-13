@@ -110,5 +110,13 @@
     "toolbar_numbered_list": "Numbered list",
     "toolbar_code_block": "Code block",
     "toolbar_heading": "Heading",
-    "toolbar_toggle_checkboxes": "Toggle checkboxes"
+    "toolbar_toggle_checkboxes": "Toggle checkboxes",
+    "tags": "Tags",
+    "manage_tags": "Manage tags…",
+    "add_tag_placeholder": "Add tag and press Enter…",
+    "tag_name": "Tag name",
+    "tag_color_hex": "Hex colour",
+    "pick_color": "Pick colour…",
+    "invalid_color_title": "Invalid colour",
+    "invalid_color_message": "Please enter a valid hex colour like #RRGGBB."    
 }
