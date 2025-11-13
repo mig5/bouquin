@@ -163,8 +163,6 @@ class HistoryDialog(QDialog):
     @Slot()
     def _revert(self):
         item = self.list.currentItem()
-        if not item:
-            return
         sel_id = item.data(Qt.UserRole)
         if sel_id == self._current_id:
             return

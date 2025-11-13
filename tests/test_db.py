@@ -166,3 +166,42 @@ def test_compact_error_path(monkeypatch, tmp_db_cfg):
     db.conn = BadConn()
     # Should not raise; just print error
     db.compact()
+
+
+class _Cur:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def execute(self, *a, **k):
+        return self
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+class _Conn:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def cursor(self):
+        return _Cur(self._rows)
+
+
+def test_integrity_check_raises_with_details(tmp_db_cfg):
+    db = DBManager(tmp_db_cfg)
+    assert db.connect()
+    # Force the integrity check to report problems with text details
+    db.conn = _Conn([("bad page checksum",), (None,)])
+    with pytest.raises(sqlite.IntegrityError) as ei:
+        db._integrity_ok()
+    # Message should contain the detail string
+    assert "bad page checksum" in str(ei.value)
+
+
+def test_integrity_check_raises_without_details(tmp_db_cfg):
+    db = DBManager(tmp_db_cfg)
+    assert db.connect()
+    # Force the integrity check to report problems but without textual details
+    db.conn = _Conn([(None,), (None,)])
+    with pytest.raises(sqlite.IntegrityError):
+        db._integrity_ok()

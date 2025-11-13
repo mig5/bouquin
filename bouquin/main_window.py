@@ -675,6 +675,9 @@ class MainWindow(QMainWindow):
 
     def _save_editor_content(self, editor: MarkdownEditor):
         """Save a specific editor's content to its associated date."""
+        # Skip if DB is missing or not connected somehow.
+        if not getattr(self, "db", None) or getattr(self.db, "conn", None) is None:
+            return
         if not hasattr(editor, "current_date"):
             return
         date_iso = editor.current_date.toString("yyyy-MM-dd")
@@ -773,9 +776,13 @@ class MainWindow(QMainWindow):
         Save editor contents into the given date. Shows status on success.
         explicit=True means user invoked Save: show feedback even if nothing changed.
         """
+        # Bail out if there is no DB connection (can happen during construction/teardown)
+        if not getattr(self.db, "conn", None):
+            return
+
         if not self._dirty and not explicit:
             return
-        text = self.editor.to_markdown()
+        text = self.editor.to_markdown() if hasattr(self, "editor") else ""
         self.db.save_new_version(date_iso, text, note)
         self._dirty = False
         self._refresh_calendar_marks()
@@ -867,13 +874,14 @@ class MainWindow(QMainWindow):
             fmt.setFontWeight(QFont.Weight.Normal)  # remove bold only
             self.calendar.setDateTextFormat(d, fmt)
         self._marked_dates = set()
-        for date_iso in self.db.dates_with_content():
-            qd = QDate.fromString(date_iso, "yyyy-MM-dd")
-            if qd.isValid():
-                fmt = self.calendar.dateTextFormat(qd)
-                fmt.setFontWeight(QFont.Weight.Bold)  # add bold only
-                self.calendar.setDateTextFormat(qd, fmt)
-                self._marked_dates.add(qd)
+        if self.db.conn is not None:
+            for date_iso in self.db.dates_with_content():
+                qd = QDate.fromString(date_iso, "yyyy-MM-dd")
+                if qd.isValid():
+                    fmt = self.calendar.dateTextFormat(qd)
+                    fmt.setFontWeight(QFont.Weight.Bold)  # add bold only
+                    self.calendar.setDateTextFormat(qd, fmt)
+                    self._marked_dates.add(qd)
 
     # -------------------- UI handlers ------------------- #
 
@@ -1248,17 +1256,39 @@ class MainWindow(QMainWindow):
 
     # ----------------- Close handlers ----------------- #
     def closeEvent(self, event):
-        # Save window position
-        self.settings.setValue("main/geometry", self.saveGeometry())
-        self.settings.setValue("main/windowState", self.saveState())
-        self.settings.setValue("main/maximized", self.isMaximized())
+        # Persist geometry if settings exist (window might be half-initialized).
+        if getattr(self, "settings", None) is not None:
+            try:
+                self.settings.setValue("main/geometry", self.saveGeometry())
+                self.settings.setValue("main/windowState", self.saveState())
+                self.settings.setValue("main/maximized", self.isMaximized())
+            except Exception:
+                pass
 
-        # Ensure we save all tabs before closing
-        for i in range(self.tab_widget.count()):
-            editor = self.tab_widget.widget(i)
-            if editor:
-                self._save_editor_content(editor)
-        self.db.close()
+        # Stop timers if present to avoid late autosaves firing during teardown.
+        for _t in ("_autosave_timer", "_idle_timer"):
+            t = getattr(self, _t, None)
+            if t:
+                t.stop()
+
+        # Save content from tabs if the database is still connected
+        db = getattr(self, "db", None)
+        conn = getattr(db, "conn", None)
+        tw = getattr(self, "tab_widget", None)
+        if db is not None and conn is not None and tw is not None:
+            try:
+                for i in range(tw.count()):
+                    editor = tw.widget(i)
+                    if editor is not None:
+                        self._save_editor_content(editor)
+            except Exception:
+                # Don't let teardown crash if one tab fails to save.
+                pass
+            try:
+                db.close()
+            except Exception:
+                pass
+
         super().closeEvent(event)
 
     # ----------------- Below logic helps focus the editor ----------------- #

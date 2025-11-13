@@ -41,14 +41,14 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.italic_format = QTextCharFormat()
         self.italic_format.setFontItalic(True)
 
-        # Strikethrough: ~~text~~
-        self.strike_format = QTextCharFormat()
-        self.strike_format.setFontStrikeOut(True)
-
         # Allow combination of bold/italic
         self.bold_italic_format = QTextCharFormat()
         self.bold_italic_format.setFontWeight(QFont.Weight.Bold)
         self.bold_italic_format.setFontItalic(True)
+
+        # Strikethrough: ~~text~~
+        self.strike_format = QTextCharFormat()
+        self.strike_format.setFontStrikeOut(True)
 
         # Inline code: `code`
         mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
@@ -163,25 +163,30 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(marker_len, len(text) - marker_len, heading_fmt)
             return
 
-        # Bold+Italic: ***text*** or ___text___
-        # Do these first and remember their spans so later passes don't override them.
-        occupied = []
+        # Bold+Italic (*** or ___): do these first and record occupied spans.
+        # --- Triple emphasis: detect first, hide markers now, but DEFER applying content style
+        triple_contents: list[tuple[int, int]] = []  # (start, length) for content only
+        occupied: list[tuple[int, int]] = (
+            []
+        )  # full spans including markers, for overlap checks
+
         for m in re.finditer(
             r"(?<!\*)\*\*\*(.+?)(?<!\*)\*\*\*|(?<!_)___(.+?)(?<!_)___", text
         ):
             start, end = m.span()
             content_start, content_end = start + 3, end - 3
-            self.setFormat(start, 3, self.syntax_format)  # hide leading ***
-            self.setFormat(end - 3, 3, self.syntax_format)  # hide trailing ***
-            self.setFormat(
-                content_start, content_end - content_start, self.bold_italic_format
-            )
-            occupied.append((start, end))
+            # hide the *** / ___ markers now
+            self.setFormat(start, 3, self.syntax_format)
+            self.setFormat(end - 3, 3, self.syntax_format)
 
-        def _overlaps(a, b):
+            # remember the full occupied span and the content span
+            occupied.append((start, end))
+            triple_contents.append((content_start, content_end - content_start))
+
+        def _overlaps(a, b):  # a, b are (start, end)
             return not (a[1] <= b[0] or b[1] <= a[0])
 
-        # Bold: **text** or __text__ (but not part of *** or ___)
+        # --- Bold (**) or (__): skip if it overlaps any triple
         for m in re.finditer(
             r"(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)|(?<!_)__(?!_)(.+?)(?<!_)__(?!_)",
             text,
@@ -194,14 +199,14 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(end - 2, 2, self.syntax_format)
             self.setFormat(content_start, content_end - content_start, self.bold_format)
 
-        # Italic: *text* or _text_ (but not part of bold/** and not inside *** or ___)
+        # --- Italic (*) or (_): skip if it overlaps any triple, keep your guards
         for m in re.finditer(
             r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", text
         ):
             start, end = m.span()
             if any(_overlaps((start, end), occ) for occ in occupied):
                 continue
-            # Keep your existing guards that avoid grabbing * from **:
+            # avoid stealing a single marker that is part of a double
             if start > 0 and text[start - 1 : start + 1] in ("**", "__"):
                 continue
             if end < len(text) and text[end : end + 1] in ("*", "_"):
@@ -212,6 +217,10 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(
                 content_start, content_end - content_start, self.italic_format
             )
+
+        # --- NOW overlay bold+italic for triple contents LAST (so nothing clobbers it)
+        for cs, length in triple_contents:
+            self._overlay_range(cs, length, self.bold_italic_format)
 
         # Strikethrough: ~~text~~
         for m in re.finditer(r"~~(.+?)~~", text):

@@ -122,8 +122,6 @@ class FindBar(QWidget):
         return flags
 
     def find_next(self):
-        if not self.editor:
-            return
         txt = self.edit.text()
         if not txt:
             return
@@ -149,8 +147,6 @@ class FindBar(QWidget):
         self._update_highlight()
 
     def find_prev(self):
-        if not self.editor:
-            return
         txt = self.edit.text()
         if not txt:
             return

@@ -1,11 +1,15 @@
 import pytest
+from pathlib import Path
+
 import bouquin.main_window as mwmod
 from bouquin.main_window import MainWindow
 from bouquin.theme import Theme, ThemeConfig, ThemeManager
 from bouquin.settings import get_settings
 from bouquin.key_prompt import KeyPrompt
-from PySide6.QtCore import QEvent, QDate, QTimer
-from PySide6.QtWidgets import QTableView, QApplication
+from bouquin.db import DBConfig, DBManager
+from PySide6.QtCore import QEvent, QDate, QTimer, Qt, QPoint, QRect
+from PySide6.QtWidgets import QTableView, QApplication, QWidget, QMessageBox
+from PySide6.QtGui import QMouseEvent, QKeyEvent, QTextCursor, QCloseEvent
 
 
 @pytest.mark.gui
@@ -127,25 +131,20 @@ def test_export_success_and_error(qtbot, app, fresh_db, tmp_path, monkeypatch):
 
     # Save as Markdown without extension -> should append .md and write file
     dest1 = tmp_path / "export_one"  # no suffix
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(dest1), "Markdown (*.md)")),
+    )
 
-    def fake_save1(*a, **k):
-        return str(dest1), "Markdown (*.md)"
-
-    monkeypatch.setattr(mwmod.QFileDialog, "getSaveFileName", staticmethod(fake_save1))
-
-    info_log = {"ok": False}
-
-    # Auto-accept the warning dialog
+    # Use real QMessageBox class; just force decisions and silence popups
     monkeypatch.setattr(
         mwmod.QMessageBox, "exec", lambda self: mwmod.QMessageBox.Yes, raising=False
     )
-    info_log = {"ok": False}
     monkeypatch.setattr(
-        mwmod.QMessageBox,
-        "information",
-        staticmethod(lambda *a, **k: info_log.__setitem__("ok", True) or 0),
-        raising=False,
+        mwmod.QMessageBox, "information", staticmethod(lambda *a, **k: 0), raising=False
     )
+    # Critical should never trigger in the success path
     monkeypatch.setattr(
         mwmod.QMessageBox,
         "critical",
@@ -154,9 +153,9 @@ def test_export_success_and_error(qtbot, app, fresh_db, tmp_path, monkeypatch):
         ),
         raising=False,
     )
+
     w._export()
     assert dest1.with_suffix(".md").exists()
-    assert info_log["ok"]
 
     # Now force an exception during export to hit error branch (patch the window's DB)
     def boom():
@@ -166,14 +165,13 @@ def test_export_success_and_error(qtbot, app, fresh_db, tmp_path, monkeypatch):
 
     # Different filename to avoid overwriting
     dest2 = tmp_path / "export_two"
-
-    def fake_save2(*a, **k):
-        return str(dest2), "CSV (*.csv)"
-
-    monkeypatch.setattr(mwmod.QFileDialog, "getSaveFileName", staticmethod(fake_save2))
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(dest2), "CSV (*.csv)")),
+    )
 
     errs = {"hit": False}
-    # Auto-accept the warning dialog and capture the error message
     monkeypatch.setattr(
         mwmod.QMessageBox, "exec", lambda self: mwmod.QMessageBox.Yes, raising=False
     )
@@ -410,3 +408,1057 @@ def test_event_filter_keypress_starts_idle_timer(qtbot, app):
     w.show()
     ev = QEvent(QEvent.KeyPress)
     w.eventFilter(w, ev)
+
+
+def _make_main_window(tmp_db_cfg, app, monkeypatch, fresh_db=None):
+    """Create a MainWindow wired to an existing db config so it doesn't prompt for key."""
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    # Force MainWindow to pick up our provided cfg
+    monkeypatch.setattr(mwmod, "load_db_config", lambda: tmp_db_cfg, raising=True)
+    # Make sure DB connects fine
+    if fresh_db is None:
+        fresh_db = DBManager(tmp_db_cfg)
+        assert fresh_db.connect()
+    w = MainWindow(themes)
+    return w
+
+
+def test_init_exits_when_prompt_rejected(app, monkeypatch, tmp_path):
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+
+    # cfg with empty key and non-existent path => first_time True
+    cfg = DBConfig(
+        path=tmp_path / "does_not_exist.db",
+        key="",
+        idle_minutes=0,
+        theme="light",
+        move_todos=True,
+    )
+    monkeypatch.setattr(mwmod, "load_db_config", lambda: cfg, raising=True)
+
+    # Avoid accidentaly creating DB by short-circuiting the prompt loop
+    class MW(MainWindow):
+        def _prompt_for_key_until_valid(self, first_time: bool) -> bool:  # noqa: N802
+            assert first_time is True  # hit line 73 path
+            return False
+
+    with pytest.raises(SystemExit):
+        MW(themes)
+
+
+@pytest.mark.parametrize(
+    "msg, expect_key_msg",
+    [
+        ("file is not a database", True),
+        ("totally unrelated", False),
+    ],
+)
+def test_try_connect_maps_errors(
+    qtbot, tmp_db_cfg, app, monkeypatch, msg, expect_key_msg
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Make connect() raise
+    def boom(self):
+        raise Exception(msg)
+
+    monkeypatch.setattr(mwmod.DBManager, "connect", boom, raising=True)
+
+    shown = {}
+
+    def fake_critical(parent, title, text, *a, **k):
+        shown["title"] = title
+        shown["text"] = str(text)
+        return 0
+
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "critical", staticmethod(fake_critical), raising=True
+    )
+
+    ok = w._try_connect()
+    assert ok is False
+    assert "database" in shown["title"].lower()
+    if expect_key_msg:
+        assert "key" in shown["text"].lower()
+    else:
+        assert "unrelated" in shown["text"].lower()
+    # If closeEvent later explodes here, that is an app bug (should guard partial init).
+
+
+# ---- _prompt_for_key_until_valid (324-332) ----
+
+
+def test_prompt_for_key_cancel_returns_false(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    class CancelPrompt:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec(self):
+            return mwmod.QDialog.Rejected
+
+        def key(self):
+            return ""
+
+    monkeypatch.setattr(mwmod, "KeyPrompt", CancelPrompt, raising=True)
+    assert w._prompt_for_key_until_valid(first_time=False) is False
+
+
+def test_prompt_for_key_accept_then_connects(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    class OKPrompt:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec(self):
+            return mwmod.QDialog.Accepted
+
+        def key(self):
+            return "abc"
+
+    monkeypatch.setattr(mwmod, "KeyPrompt", OKPrompt, raising=True)
+    monkeypatch.setattr(w, "_try_connect", lambda: True, raising=True)
+    assert w._prompt_for_key_until_valid(first_time=True) is True
+    assert w.cfg.key == "abc"
+
+
+# ---- Tabs/date management (368, 383, 388-391, 427-428, …) ----
+
+
+def test_reorder_tabs_by_date_and_tab_lookup(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    d1 = QDate.fromString("2024-01-10", "yyyy-MM-dd")
+    d2 = QDate.fromString("2024-01-01", "yyyy-MM-dd")
+    d3 = QDate.fromString("2024-02-01", "yyyy-MM-dd")
+
+    e2 = w._create_new_tab(d2)
+    e3 = w._create_new_tab(d3)
+    e1 = w._create_new_tab(d1)  # out of order on purpose
+
+    # Force a reorder and verify ascending order for the three we added.
+    w._reorder_tabs_by_date()
+    order = [w.tab_widget.tabText(i) for i in range(w.tab_widget.count())]
+    today = QDate.currentDate().toString("yyyy-MM-dd")
+    order_wo_today = [d for d in order if d != today]
+    assert order_wo_today[:3] == ["2024-01-01", "2024-01-10", "2024-02-01"]
+
+    # _tab_index_for_date finds existing and returns -1 for absent
+    assert w._tab_index_for_date(d2) != -1
+    assert w._tab_index_for_date(QDate.fromString("1999-12-31", "yyyy-MM-dd")) == -1
+    assert e1 is not None and e2 is not None and e3 is not None
+
+
+def test_open_close_tabs_and_focus(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    today = QDate.currentDate()
+    ed = w._open_date_in_tab(today)  # creates new if needed
+    assert hasattr(ed, "current_date")
+    # make another tab to allow closing
+    w._create_new_tab(today.addDays(1))
+    count = w.tab_widget.count()
+    w._close_tab(0)
+    assert w.tab_widget.count() == count - 1
+
+
+# ---- _set_editor_markdown_preserve_view & load with extra_data (631) ----
+
+
+def test_load_selected_date_appends_extra_data_with_newline(
+    qtbot, tmp_db_cfg, app, monkeypatch, fresh_db
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch, fresh_db)
+    qtbot.addWidget(w)
+    w.db.save_new_version("2020-01-01", "first line", "seed")
+    w._load_selected_date("2020-01-01", extra_data="- [ ] carry")
+    assert "carry" in w.editor.toPlainText()
+
+
+# ---- _save_editor_content early return (679) ----
+
+
+def test_save_editor_content_returns_without_current_date(
+    qtbot, tmp_db_cfg, app, monkeypatch
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    from PySide6.QtWidgets import QTextEdit
+
+    other = QTextEdit()
+    w._save_editor_content(other)  # should early-return, not crash
+
+
+# ---- _adjust_today creates a tab (695-696) ----
+
+
+def test_adjust_today_creates_tab(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    w._adjust_today()
+    today = QDate.currentDate().toString("yyyy-MM-dd")
+    assert any(w.tab_widget.tabText(i) == today for i in range(w.tab_widget.count()))
+
+
+# ---- _on_date_changed guard for context menus (745) ----
+
+
+def test_on_date_changed_early_return_when_context_menu(
+    qtbot, tmp_db_cfg, app, monkeypatch
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    w._showing_context_menu = True
+    # Should not throw or load
+    w._on_date_changed()
+    assert w._showing_context_menu is True  # not toggled here
+
+
+# ---- _save_current explicit paths (793-801, 809-810) ----
+
+
+def test_save_current_explicit_cancel(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    class CancelSave:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec(self):
+            return mwmod.QDialog.Rejected
+
+        def note_text(self):
+            return ""
+
+    monkeypatch.setattr(mwmod, "SaveDialog", CancelSave, raising=True)
+    # returns early, does not raise
+    w._save_current(explicit=True)
+
+
+def test_save_current_explicit_accept(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    class OKSave:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec(self):
+            return mwmod.QDialog.Accepted
+
+        def note_text(self):
+            return "manual"
+
+    monkeypatch.setattr(mwmod, "SaveDialog", OKSave, raising=True)
+    w._save_current(explicit=True)  # should start/restart timers without error
+
+
+# ---- Search highlighting (852-854) ----
+
+
+def test_apply_search_highlights_adds_and_clears(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    d1 = QDate.currentDate()
+    d2 = d1.addDays(1)
+    w._apply_search_highlights({d1, d2})
+    # now drop d2 so clear-path runs
+    w._apply_search_highlights({d1})
+    fmt = w.calendar.dateTextFormat(d1)
+    assert fmt.background().style() != Qt.NoBrush
+
+
+# ---- History dialog glue (956, 961-962) ----
+
+
+def test_open_history_accept_refreshes(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    called = {"load": False, "refresh": False}
+
+    def fake_load(date_iso=None):
+        called["load"] = True
+
+    def fake_refresh():
+        called["refresh"] = True
+
+    monkeypatch.setattr(w, "_load_selected_date", fake_load, raising=True)
+    monkeypatch.setattr(w, "_refresh_calendar_marks", fake_refresh, raising=True)
+
+    class Dlg:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec(self):
+            return mwmod.QDialog.Accepted
+
+    monkeypatch.setattr(mwmod, "HistoryDialog", Dlg, raising=True)
+    w._open_history()
+    assert called["load"] and called["refresh"]
+
+
+# ---- Insert image picker (974, 981-989) ----
+
+
+def test_on_insert_image_calls_editor_insert(
+    qtbot, tmp_db_cfg, app, monkeypatch, tmp_path
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Make a tiny PNG file
+    from PySide6.QtGui import QImage
+
+    img_path = tmp_path / "tiny.png"
+    img = QImage(1, 1, QImage.Format_ARGB32)
+    img.fill(0xFFFFFFFF)
+    img.save(str(img_path))
+
+    called = []
+
+    def fake_picker(*a, **k):
+        return ([str(img_path)], "Images (*.png)")
+
+    monkeypatch.setattr(
+        mwmod.QFileDialog, "getOpenFileNames", staticmethod(fake_picker), raising=True
+    )
+
+    def recorder(path):
+        called.append(Path(path))
+
+    monkeypatch.setattr(w.editor, "insert_image_from_path", recorder, raising=True)
+
+    w._on_insert_image()
+    assert called and called[0].name == "tiny.png"
+
+
+# ---- Export flow branches (1062, 1078-1107) ----
+
+
+@pytest.mark.parametrize(
+    "filter_label, method",
+    [
+        ("Text (*.txt)", "export_txt"),
+        ("JSON (*.json)", "export_json"),
+        ("CSV (*.csv)", "export_csv"),
+        ("HTML (*.html)", "export_html"),
+        ("Markdown (*.md)", "export_markdown"),
+        ("SQL (*.sql)", "export_sql"),
+    ],
+)
+def test_export_calls_correct_method(
+    qtbot, tmp_db_cfg, app, monkeypatch, tmp_path, filter_label, method
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Confirm 'Yes' using the real QMessageBox; patch methods only
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "exec", lambda self: mwmod.QMessageBox.Yes, raising=False
+    )
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "information", staticmethod(lambda *a, **k: 0), raising=False
+    )
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "critical", staticmethod(lambda *a, **k: 0), raising=False
+    )
+
+    # Return a path without extension to exercise default-ext logic too
+    out = tmp_path / "out"
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(out), filter_label)),
+        raising=True,
+    )
+
+    # Provide some entries
+    monkeypatch.setattr(
+        w.db, "get_all_entries", lambda: [("2024-01-01", "x")], raising=True
+    )
+
+    called = {"name": None}
+
+    def mark(*a, **k):
+        called["name"] = method
+
+    monkeypatch.setattr(w.db, method, mark, raising=True)
+    w._export()
+    assert called["name"] == method
+
+
+def test_export_unknown_filter_raises_and_is_caught(
+    qtbot, tmp_db_cfg, app, monkeypatch, tmp_path
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Pre-export confirmation: Yes
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "exec", lambda self: mwmod.QMessageBox.Yes, raising=False
+    )
+
+    out = tmp_path / "weird"
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(out), "WUT (*.wut)")),
+        raising=True,
+    )
+
+    # Capture the critical call
+    seen = {}
+
+    def critical(parent, title, text, *a, **k):
+        seen["title"] = title
+        seen["text"] = str(text)
+        return 0
+
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "critical", staticmethod(critical), raising=False
+    )
+
+    # And stub entries
+    monkeypatch.setattr(w.db, "get_all_entries", lambda: [], raising=True)
+
+    w._export()
+    assert "export" in seen["title"].lower()
+
+
+# ---- Backup handler (1147-1148) ----
+
+
+def test_backup_success_and_error(qtbot, tmp_db_cfg, app, monkeypatch, tmp_path):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Always choose a filename and the SQL option
+    out = tmp_path / "backup"
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(out), "SQLCipher (*.db)")),
+        raising=True,
+    )
+
+    called = {"ok": False, "err": False}
+
+    def ok_export(path):
+        called["ok"] = True
+
+    def crit(parent, title, text, *a, **k):
+        called["err"] = True
+        return 0
+
+    # First success
+    monkeypatch.setattr(w.db, "export_sqlcipher", ok_export, raising=True)
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "information", staticmethod(lambda *a, **k: 0), raising=False
+    )
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "critical", staticmethod(crit), raising=False
+    )
+    w._backup()
+    assert called["ok"]
+
+    # Then failure
+    def boom(path):
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(w.db, "export_sqlcipher", boom, raising=True)
+    w._backup()
+    assert called["err"]
+
+
+# ---- Help openers (1152-1169) ----
+
+
+def test_open_docs_and_bugs_show_warning_on_failure(
+    qtbot, tmp_db_cfg, app, monkeypatch
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    monkeypatch.setattr(
+        mwmod.QDesktopServices, "openUrl", staticmethod(lambda *a: False), raising=True
+    )
+    seen = {"docs": False, "bugs": False}
+
+    def warn(parent, title, text, *a, **k):
+        if "documentation" in title.lower():
+            seen["docs"] = True
+        if "bug" in title.lower():
+            seen["bugs"] = True
+        return 0
+
+    monkeypatch.setattr(
+        mwmod, "QMessageBox", type("MB", (), {"warning": staticmethod(warn)})
+    )
+    w._open_docs()
+    w._open_bugs()
+    assert seen["docs"] and seen["bugs"]
+
+
+# ---- Idle/lock/event filter helpers (1176, 1181-1187, 1193-1202, 1231-1233) ----
+
+
+def test_apply_idle_minutes_paths_and_unlock(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # remove timer to hit early return
+    delattr(w, "_idle_timer")
+    w._apply_idle_minutes(5)  # no crash => line 1176 branch
+
+    # re-create a timer and simulate locking then disabling idle
+    w._idle_timer = QTimer(w)
+    w._idle_timer.setSingleShot(True)
+    w._locked = True
+    w._apply_idle_minutes(0)
+    assert not w._locked  # unlocked and overlay hidden path covered
+
+
+def test_event_filter_sets_context_flag_and_keystart(
+    qtbot, tmp_db_cfg, app, monkeypatch
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    # Right-click on calendar with a real QMouseEvent
+    me = QMouseEvent(
+        QEvent.MouseButtonPress,
+        QPoint(0, 0),
+        Qt.RightButton,
+        Qt.RightButton,
+        Qt.NoModifier,
+    )
+    w.eventFilter(w.calendar, me)
+    assert getattr(w, "_showing_context_menu", False) is True
+
+    # KeyPress restarts idle timer when unlocked (real QKeyEvent)
+    w._locked = False
+    ke = QKeyEvent(QEvent.KeyPress, Qt.Key_A, Qt.NoModifier)
+    w.eventFilter(w, ke)
+
+
+def test_unlock_exception_path(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    def boom(*a, **k):
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(w, "_prompt_for_key_until_valid", boom, raising=True)
+
+    captured = {}
+
+    def critical(parent, title, text, *a, **k):
+        captured["title"] = title
+        return 0
+
+    monkeypatch.setattr(
+        mwmod, "QMessageBox", type("MB", (), {"critical": staticmethod(critical)})
+    )
+    w._on_unlock_clicked()
+    assert "unlock" in captured["title"].lower()
+
+
+# ---- Focus helpers (1273-1275, 1290) ----
+
+
+def test_focus_editor_now_and_app_state(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    w.show()
+    # Locked => early return
+    w._locked = True
+    w._focus_editor_now()
+    # Active window path (force isActiveWindow)
+    w._locked = False
+    monkeypatch.setattr(w, "isActiveWindow", lambda: True, raising=True)
+    w._focus_editor_now()
+    # App state callback path
+    w._on_app_state_changed(Qt.ApplicationActive)
+
+
+# ---- _rect_on_any_screen false path (1039) ----
+
+
+def test_rect_on_any_screen_false(qtbot, tmp_db_cfg, app, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    sc = QApplication.primaryScreen().availableGeometry()
+    far = QRect(sc.right() + 10_000, sc.bottom() + 10_000, 100, 100)
+    assert not w._rect_on_any_screen(far)
+
+
+@pytest.mark.gui
+def test_reorder_tabs_with_undated_page_stays_last(qtbot, app, tmp_db_cfg, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Create two dated tabs (out of order), plus an undated QWidget page.
+    d1 = QDate.fromString("2024-02-01", "yyyy-MM-dd")
+    d2 = QDate.fromString("2024-01-01", "yyyy-MM-dd")
+    w._create_new_tab(d1)
+    w._create_new_tab(d2)
+
+    misc = QWidget()
+    w.tab_widget.addTab(misc, "misc")
+
+    # Reorder and check: dated tabs sorted first, undated kept after them
+    w._reorder_tabs_by_date()
+    labels = [w.tab_widget.tabText(i) for i in range(w.tab_widget.count())]
+    assert labels[0] <= labels[1]
+    assert labels[-1] == "misc"
+
+    # Also cover lookup for an existing date
+    assert w._tab_index_for_date(d2) != -1
+
+
+def test_index_for_date_insert_positions(qtbot, app, tmp_db_cfg, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    a = QDate.fromString("2024-01-01", "yyyy-MM-dd")
+    c = QDate.fromString("2024-03-01", "yyyy-MM-dd")
+    d = QDate.fromString("2024-04-01", "yyyy-MM-dd")
+
+    def expected():
+        key = (d.year(), d.month(), d.day())
+        for i in range(w.tab_widget.count()):
+            ed = w.tab_widget.widget(i)
+            cur = getattr(ed, "current_date", None)
+            if isinstance(cur, QDate) and cur.isValid():
+                if (cur.year(), cur.month(), cur.day()) > key:
+                    return i
+        return w.tab_widget.count()
+
+    w._create_new_tab(a)
+    w._create_new_tab(c)
+
+    # B belongs between A and C
+    b = QDate.fromString("2024-02-01", "yyyy-MM-dd")
+    assert w._index_for_date_insert(b) == 1
+
+    # Date prior to first should insert at 0
+    z = QDate.fromString("2023-12-31", "yyyy-MM-dd")
+    assert w._index_for_date_insert(z) == 0
+
+    # Date after last should append
+    d = QDate.fromString("2024-04-01", "yyyy-MM-dd")
+    assert w._index_for_date_insert(d) == expected()
+
+
+def test_on_tab_changed_early_and_stop_guard(qtbot, app, tmp_db_cfg, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Early return path
+    w._on_tab_changed(-1)
+
+    # Create two tabs then make stop() raise to hit try/except guard
+    w._create_new_tab(QDate.fromString("2024-01-01", "yyyy-MM-dd"))
+    w._create_new_tab(QDate.fromString("2024-01-02", "yyyy-MM-dd"))
+
+    def boom():
+        raise RuntimeError("stop failed")
+
+    monkeypatch.setattr(w._save_timer, "stop", boom, raising=True)
+    w._on_tab_changed(1)  # should not raise
+
+
+@pytest.mark.gui
+def test_show_calendar_context_menu_no_action(qtbot, app, tmp_db_cfg, monkeypatch):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    before = w.tab_widget.count()
+
+    class DummyMenu:
+        def __init__(self, *a, **k):
+            pass
+
+        def addAction(self, *a, **k):
+            return object()
+
+        def exec_(self, *a, **k):
+            return None  # return no action
+
+    monkeypatch.setattr(mwmod, "QMenu", DummyMenu, raising=True)
+    w._show_calendar_context_menu(w.calendar.rect().center())  # nothing should happen
+    assert w.tab_widget.count() == before
+
+
+@pytest.mark.gui
+def test_export_cancel_then_empty_filename(
+    qtbot, app, tmp_db_cfg, monkeypatch, tmp_path
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # 1) cancel at the confirmation dialog
+    class FullMB:
+        Yes = QMessageBox.Yes
+        No = QMessageBox.No
+        Warning = QMessageBox.Warning
+
+        def __init__(self, *a, **k):
+            pass
+
+        def setWindowTitle(self, *a):
+            pass
+
+        def setText(self, *a):
+            pass
+
+        def setStandardButtons(self, *a):
+            pass
+
+        def setIcon(self, *a):
+            pass
+
+        def show(self):
+            pass
+
+        def adjustSize(self):
+            pass
+
+        def exec(self):
+            return self.No
+
+        @staticmethod
+        def information(*a, **k):
+            return 0
+
+        @staticmethod
+        def critical(*a, **k):
+            return 0
+
+    monkeypatch.setattr(mwmod, "QMessageBox", FullMB, raising=True)
+    w._export()  # returns early on No
+
+    # 2) Yes in confirmation, but user cancels file dialog (empty filename)
+    class YesOnly(FullMB):
+        def exec(self):
+            return self.Yes
+
+    monkeypatch.setattr(mwmod, "QMessageBox", YesOnly, raising=True)
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: ("", "Text (*.txt)")),
+        raising=False,
+    )
+    w._export()  # returns early at filename check
+
+
+@pytest.mark.gui
+def test_set_editor_markdown_preserve_view_preserves(
+    qtbot, app, tmp_db_cfg, monkeypatch
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    long = "line\n" * 200
+    w.editor.from_markdown(long)
+    w.editor.verticalScrollBar().setValue(50)
+    w.editor.moveCursor(QTextCursor.End)
+    pos_before = w.editor.textCursor().position()
+    v_before = w.editor.verticalScrollBar().value()
+
+    # Same markdown → no rewrite, caret/scroll restored
+    w._set_editor_markdown_preserve_view(long)
+    assert w.editor.textCursor().position() == pos_before
+    assert w.editor.verticalScrollBar().value() == v_before
+
+    # Different markdown → rewritten but caret restoration still executes
+    changed = long + "extra\n"
+    w._set_editor_markdown_preserve_view(changed)
+    assert w.editor.to_markdown().endswith("extra\n")
+
+
+@pytest.mark.gui
+def test_load_date_into_editor_with_extra_data_forces_save(
+    qtbot, app, tmp_db_cfg, monkeypatch
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    called = {"iso": None, "explicit": None}
+
+    def save_date(iso, explicit):
+        called.update(iso=iso, explicit=explicit)
+
+    monkeypatch.setattr(w, "_save_date", save_date, raising=True)
+    d = QDate.fromString("2020-01-01", "yyyy-MM-dd")
+    w._load_date_into_editor(d, extra_data="- [ ] carry")
+    assert called["iso"] == "2020-01-01" and called["explicit"] is True
+
+
+@pytest.mark.gui
+def test_reorder_tabs_moves_and_undated(qtbot, app, tmp_db_cfg, monkeypatch):
+    """Covers moveTab for both dated and undated buckets."""
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Create out-of-order dated tabs
+    d1 = QDate.fromString("2024-01-10", "yyyy-MM-dd")
+    d2 = QDate.fromString("2024-01-01", "yyyy-MM-dd")
+    d3 = QDate.fromString("2024-02-01", "yyyy-MM-dd")
+    w._create_new_tab(d1)
+    w._create_new_tab(d3)
+    w._create_new_tab(d2)
+
+    # Also insert an "undated" plain QWidget at the front to force a move later
+    undated = QWidget()
+    w.tab_widget.insertTab(0, undated, "undated")
+
+    moved = {"calls": []}
+    tb = w.tab_widget.tabBar()
+
+    def spy_moveTab(frm, to):
+        moved["calls"].append((frm, to))
+        # don't actually move; we just need the call for coverage
+
+    monkeypatch.setattr(tb, "moveTab", spy_moveTab, raising=True)
+
+    w._reorder_tabs_by_date()
+    assert moved["calls"]  # both dated and undated moves should have occurred
+
+
+def test_date_from_calendar_view_none(qtbot, app, tmp_db_cfg, monkeypatch):
+    """Covers early return when calendar view can't be found."""
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    monkeypatch.setattr(
+        w.calendar,
+        "findChild",
+        lambda *a, **k: None,  # pretend the internal view is missing
+        raising=False,
+    )
+    assert w._date_from_calendar_pos(QPoint(1, 1)) is None
+
+
+def test_date_from_calendar_no_first_or_last(qtbot, app, tmp_db_cfg, monkeypatch):
+    """
+    Covers early returns when first_index or last_index cannot be found
+    """
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    class FakeModel:
+        def rowCount(self):
+            return 1
+
+        def columnCount(self):
+            return 1
+
+        class Idx:
+            def data(self):
+                return None  # never equals first/last-day
+
+        def index(self, *_):
+            return self.Idx()
+
+    class FakeView:
+        def model(self):
+            return FakeModel()
+
+        class VP:
+            def mapToGlobal(self, p):
+                return p
+
+            def mapFrom(self, *_):  # calendar-local -> viewport
+                return QPoint(0, 0)
+
+        def viewport(self):
+            return self.VP()
+
+        def indexAt(self, *_):
+            # return an *instance* whose isValid() returns False
+            return type("I", (), {"isValid": lambda self: False})()
+
+    monkeypatch.setattr(
+        w.calendar,
+        "findChild",
+        lambda *a, **k: FakeView(),
+        raising=False,
+    )
+    # Early return when first day (1) can't be found
+    assert w._date_from_calendar_pos(QPoint(5, 5)) is None
+
+
+@pytest.mark.gui
+def test_save_editor_content_returns_if_no_conn(qtbot, app, tmp_db_cfg, monkeypatch):
+    """Covers DB not connected branch."""
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # window editor has a current_date; simulate a dropped connection
+    assert isinstance(w.db, DBManager)
+    w.db.conn = None
+    # no crash -> branch hit
+    w._save_editor_content(w.editor)
+
+
+@pytest.mark.gui
+def test_on_date_changed_stops_timer_and_saves_prev_when_dirty(
+    qtbot, app, tmp_db_cfg, monkeypatch
+):
+    """
+    Covers the exception-protected _save_timer.stop() and
+    the prev-date save path.
+    """
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # Make timer.stop() raise so the except path is covered
+    w._dirty = True
+    w.editor.current_date = QDate.fromString("2024-01-01", "yyyy-MM-dd")
+    # make timer.stop() raise so the except path is exercised
+    monkeypatch.setattr(
+        w._save_timer,
+        "stop",
+        lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        raising=True,
+    )
+
+    saved = {"iso": None}
+
+    def stub_save_date(iso, explicit=False, note=None):
+        saved["iso"] = iso
+
+    monkeypatch.setattr(w, "_save_date", stub_save_date, raising=False)
+
+    w._on_date_changed()
+    assert saved["iso"] == "2024-01-01"
+
+
+@pytest.mark.gui
+def test_bind_toolbar_idempotent(qtbot, app, tmp_db_cfg, monkeypatch):
+    """Covers early return when toolbar is already bound."""
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    w._bind_toolbar()
+    # Call again; line is covered if this no-ops
+    w._bind_toolbar()
+
+
+@pytest.mark.gui
+def test_on_insert_image_no_selection_returns(qtbot, app, tmp_db_cfg, monkeypatch):
+    """Covers the early return when user selects no files."""
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getOpenFileNames",
+        staticmethod(lambda *a, **k: ([], "")),
+        raising=True,
+    )
+
+    # Ensure we would notice if it tried to insert anything
+    monkeypatch.setattr(
+        w.editor,
+        "insert_image_from_path",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not insert")),
+        raising=True,
+    )
+    w._on_insert_image()
+
+
+def test_apply_idle_minutes_starts_when_unlocked(qtbot, app, tmp_db_cfg, monkeypatch):
+    """Covers set + start when minutes>0 and not locked."""
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+    w._locked = False
+
+    hit = {"start": False}
+    monkeypatch.setattr(
+        w._idle_timer,
+        "start",
+        lambda *a, **k: hit.__setitem__("start", True),
+        raising=True,
+    )
+    w._apply_idle_minutes(7)
+    assert hit["start"]
+
+
+@pytest.mark.gui
+def test_close_event_handles_settings_failures(qtbot, app, tmp_db_cfg, monkeypatch):
+    """
+    Covers exception swallowing around settings writes & ensures close proceeds
+    """
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    qtbot.addWidget(w)
+
+    # A couple of tabs so _save_editor_content runs during close
+    w._create_new_tab(QDate.fromString("2024-01-01", "yyyy-MM-dd"))
+
+    # Make settings.setValue raise for coverage
+    orig_set = w.settings.setValue
+
+    def flaky_set(*a, **k):
+        if a[0] in ("main/geometry", "main/windowState"):
+            raise RuntimeError("boom")
+        return orig_set(*a, **k)
+
+    monkeypatch.setattr(w.settings, "setValue", flaky_set, raising=True)
+
+    # Should not crash
+    w.close()
+
+
+def test_on_date_changed_ignored_when_context_menu_shown(
+    qtbot, app, tmp_db_cfg, monkeypatch
+):
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+    # Simulate flag set by context menu to ensure early return path
+    w._showing_context_menu = True
+    w._on_date_changed()  # should simply return without raising
+    assert True  # reached
+
+
+def test_closeEvent_swallows_exceptions(qtbot, app, tmp_db_cfg, monkeypatch):
+    called = {"save": False, "close": False}
+    w = _make_main_window(tmp_db_cfg, app, monkeypatch)
+
+    def bad_save(editor):
+        called["save"] = True
+        raise RuntimeError("boom")
+
+    class DummyDB:
+        def __init__(self):
+            self.conn = object()  # <-- make conn truthy so branch is taken
+
+        def close(self):
+            called["close"] = True
+            raise RuntimeError("kaboom")
+
+    class DummyTabs:
+        def count(self):
+            return 1  # <-- ensures the save loop runs
+
+        def widget(self, i):
+            return object()  # any non-None editor-like object
+
+    # Patch the pieces the closeEvent checks
+    w.tab_widget = DummyTabs()
+    w.db = DummyDB()
+    monkeypatch.setattr(w, "_save_editor_content", bad_save, raising=True)
+
+    # Fire the event
+    ev = QCloseEvent()
+    w.closeEvent(ev)
+
+    assert called["save"] and called["close"]

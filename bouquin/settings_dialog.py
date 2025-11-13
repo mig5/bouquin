@@ -303,7 +303,7 @@ class SettingsDialog(QDialog):
                 self, strings._("key_changed"), strings._("key_changed_explanation")
             )
         except Exception as e:
-            QMessageBox.critical(self, strings._("error"), e)
+            QMessageBox.critical(self, strings._("error"), str(e))
 
     @Slot(bool)
     def _save_key_btn_clicked(self, checked: bool):
@@ -330,7 +330,7 @@ class SettingsDialog(QDialog):
                 self, strings._("success"), strings._("database_compacted_successfully")
             )
         except Exception as e:
-            QMessageBox.critical(self, strings._("error"), e)
+            QMessageBox.critical(self, strings._("error"), str(e))
 
     @property
     def config(self) -> DBConfig:

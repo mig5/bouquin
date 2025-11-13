@@ -1,6 +1,7 @@
 import pytest
 
 from PySide6.QtGui import QTextCursor
+from PySide6.QtWidgets import QTextEdit, QWidget
 from bouquin.markdown_editor import MarkdownEditor
 from bouquin.theme import ThemeManager, ThemeConfig, Theme
 from bouquin.find_bar import FindBar
@@ -133,3 +134,40 @@ def test_maybe_hide_and_wrap_prev(qtbot, editor):
     c.movePosition(QTextCursor.Start)
     editor.setTextCursor(c)
     fb.find_prev()
+
+
+def _make_fb(editor, qtbot):
+    """Create a FindBar with a live parent kept until teardown."""
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    fb = FindBar(editor=editor, parent=parent)
+    qtbot.addWidget(fb)
+    parent.show()
+    fb.show()
+    return fb, parent
+
+
+def test_find_next_early_returns_no_editor(qtbot):
+    # No editor: should early return and not crash
+    fb, _parent = _make_fb(editor=None, qtbot=qtbot)
+    fb.find_next()
+
+
+def test_find_next_early_returns_empty_text(qtbot):
+    ed = QTextEdit()
+    fb, _parent = _make_fb(editor=ed, qtbot=qtbot)
+    fb.edit.setText("")  # empty -> early return
+    fb.find_next()
+
+
+def test_find_prev_early_returns_empty_text(qtbot):
+    ed = QTextEdit()
+    fb, _parent = _make_fb(editor=ed, qtbot=qtbot)
+    fb.edit.setText("")  # empty -> early return
+    fb.find_prev()
+
+
+def test_update_highlight_early_returns_no_editor(qtbot):
+    fb, _parent = _make_fb(editor=None, qtbot=qtbot)
+    fb.edit.setText("abc")
+    fb._update_highlight()  # should return without error

@@ -18,8 +18,6 @@ class LockOverlay(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setGeometry(parent.rect())
 
-        self._last_dark: bool | None = None
-
         lay = QVBoxLayout(self)
         lay.addStretch(1)
 
