@@ -1,19 +1,24 @@
 from importlib.resources import files
 import json
 
-_AVAILABLE = ("en", "fr")
+# Get list of locales
+root = files("bouquin") / "locales"
+_AVAILABLE = tuple(
+    entry.stem
+    for entry in root.iterdir()
+    if entry.is_file() and entry.suffix == ".json"
+)
+
 _DEFAULT = "en"
 
 strings = {}
 translations = {}
 
-
 def load_strings(current_locale: str) -> None:
     global strings, translations
     translations = {}
 
-    # read json resources from bouquin/locales/*.json
-    root = files("bouquin") / "locales"
+    # read in the locales json
     for loc in _AVAILABLE:
         data = (root / f"{loc}.json").read_text(encoding="utf-8")
         translations[loc] = json.loads(data)

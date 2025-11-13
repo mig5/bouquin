@@ -1,3 +1,8 @@
+# 0.2.1.9
+
+ * Fix a few small matters identified with tests
+ * Make locales dynamically detected from the locales dir rather than hardcoded
+
 # 0.2.1.8
 
  * Translate all strings, add French, add locale choice in settings
