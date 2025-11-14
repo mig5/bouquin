@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from sqlcipher3 import dbapi2 as sqlite
-from typing import List, Sequence, Tuple, Iterable
+from typing import List, Sequence, Tuple
 
 
 from . import strings
@@ -458,8 +458,9 @@ class DBManager:
         """
         Replace the tag set for a page with the given names.
         Creates new tags as needed (with auto colours).
+        Tags are case-insensitive - reuses existing tag if found with different case.
         """
-        # Normalise + dedupe
+        # Normalise + dedupe (case-insensitive)
         clean_names = []
         seen = set()
         for name in tag_names:
@@ -482,31 +483,44 @@ class DBManager:
                 cur.execute("DELETE FROM page_tags WHERE page_date=?;", (date_iso,))
                 return
 
-            # Ensure tag rows exist
+            # For each tag name, check if it exists with different casing
+            # If so, reuse that existing tag; otherwise create new
+            final_tag_names = []
             for name in clean_names:
-                cur.execute(
-                    """
-                    INSERT OR IGNORE INTO tags(name, color)
-                    VALUES (?, ?);
-                    """,
-                    (name, self._default_tag_colour(name)),
-                )
+                # Look for existing tag (case-insensitive)
+                existing = cur.execute(
+                    "SELECT name FROM tags WHERE LOWER(name) = LOWER(?);", (name,)
+                ).fetchone()
 
-            # Lookup ids
-            placeholders = ",".join("?" for _ in clean_names)
+                if existing:
+                    # Use the existing tag's exact name
+                    final_tag_names.append(existing["name"])
+                else:
+                    # Create new tag with the provided casing
+                    cur.execute(
+                        """
+                        INSERT OR IGNORE INTO tags(name, color)
+                        VALUES (?, ?);
+                        """,
+                        (name, self._default_tag_colour(name)),
+                    )
+                    final_tag_names.append(name)
+
+            # Lookup ids for the final tag names
+            placeholders = ",".join("?" for _ in final_tag_names)
             rows = cur.execute(
                 f"""
                 SELECT id, name
                 FROM tags
                 WHERE name IN ({placeholders});
                 """,
-                tuple(clean_names),
+                tuple(final_tag_names),
             ).fetchall()
             ids_by_name = {r["name"]: r["id"] for r in rows}
 
             # Reset page_tags for this page
             cur.execute("DELETE FROM page_tags WHERE page_date=?;", (date_iso,))
-            for name in clean_names:
+            for name in final_tag_names:
                 tag_id = ids_by_name.get(name)
                 if tag_id is not None:
                     cur.execute(

@@ -1,11 +1,16 @@
 # tag_browser.py
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
+    QHBoxLayout,
     QTreeWidget,
     QTreeWidgetItem,
     QPushButton,
+    QLabel,
+    QColorDialog,
+    QMessageBox,
 )
 
 from .db import DBManager
@@ -18,33 +23,86 @@ class TagBrowserDialog(QDialog):
     def __init__(self, db: DBManager, parent=None, focus_tag: str | None = None):
         super().__init__(parent)
         self._db = db
-        self.setWindowTitle(strings._("tag_browser_title"))
+        self.setWindowTitle(
+            strings._("tag_browser_title") + " / " + strings._("manage_tags")
+        )
+        self.resize(600, 500)
 
         layout = QVBoxLayout(self)
+
+        # Instructions
+        instructions = QLabel(strings._("tag_browser_instructions"))
+        instructions.setWordWrap(True)
+        layout.addWidget(instructions)
+
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels([strings._("tag"), strings._("date")])
+        self.tree.setHeaderLabels(
+            [strings._("tag"), strings._("color_hex"), strings._("date")]
+        )
+        self.tree.setColumnWidth(0, 200)
+        self.tree.setColumnWidth(1, 100)
         self.tree.itemActivated.connect(self._on_item_activated)
+        self.tree.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self.tree)
 
+        # Tag management buttons
+        btn_row = QHBoxLayout()
+
+        self.edit_name_btn = QPushButton(strings._("edit_tag_name"))
+        self.edit_name_btn.clicked.connect(self._edit_tag_name)
+        self.edit_name_btn.setEnabled(False)
+        btn_row.addWidget(self.edit_name_btn)
+
+        self.change_color_btn = QPushButton(strings._("change_color"))
+        self.change_color_btn.clicked.connect(self._change_tag_color)
+        self.change_color_btn.setEnabled(False)
+        btn_row.addWidget(self.change_color_btn)
+
+        self.delete_btn = QPushButton(strings._("delete_tag"))
+        self.delete_btn.clicked.connect(self._delete_tag)
+        self.delete_btn.setEnabled(False)
+        btn_row.addWidget(self.delete_btn)
+
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
+
+        # Close button
+        close_row = QHBoxLayout()
+        close_row.addStretch(1)
         close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn)
+        close_row.addWidget(close_btn)
+        layout.addLayout(close_row)
 
         self._populate(focus_tag)
 
     def _populate(self, focus_tag: str | None):
+        self.tree.clear()
         tags = self._db.list_tags()
         focus_item = None
+
         for tag_id, name, color in tags:
-            root = QTreeWidgetItem([name, ""])
-            # coloured background or icon:
-            root.setData(0, Qt.ItemDataRole.UserRole, name)
+            # Create the tree item
+            root = QTreeWidgetItem([name, "", ""])
+            root.setData(
+                0,
+                Qt.ItemDataRole.UserRole,
+                {"type": "tag", "id": tag_id, "name": name, "color": color},
+            )
+
+            # Set background color for the second column to show the tag color
+            root.setBackground(1, QColor(color))
+            root.setText(1, color)  # Also show the hex code
+            root.setTextAlignment(1, Qt.AlignCenter)
+
             self.tree.addTopLevelItem(root)
 
             pages = self._db.get_pages_for_tag(name)
             for date_iso, _content in pages:
-                child = QTreeWidgetItem(["", date_iso])
-                child.setData(0, Qt.ItemDataRole.UserRole, date_iso)
+                child = QTreeWidgetItem(["", "", date_iso])
+                child.setData(
+                    0, Qt.ItemDataRole.UserRole, {"type": "page", "date": date_iso}
+                )
                 root.addChild(child)
 
             if focus_tag and name.lower() == focus_tag.lower():
@@ -54,7 +112,94 @@ class TagBrowserDialog(QDialog):
             self.tree.expandItem(focus_item)
             self.tree.setCurrentItem(focus_item)
 
+    def _on_item_clicked(self, item: QTreeWidgetItem, column: int):
+        """Enable/disable buttons based on selection"""
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if isinstance(data, dict):
+            if data.get("type") == "tag":
+                self.edit_name_btn.setEnabled(True)
+                self.change_color_btn.setEnabled(True)
+                self.delete_btn.setEnabled(True)
+            else:
+                self.edit_name_btn.setEnabled(False)
+                self.change_color_btn.setEnabled(False)
+                self.delete_btn.setEnabled(False)
+
     def _on_item_activated(self, item: QTreeWidgetItem, column: int):
-        date_iso = item.data(0, Qt.ItemDataRole.UserRole)
-        if isinstance(date_iso, str) and date_iso:
-            self.openDateRequested.emit(date_iso)
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if isinstance(data, dict):
+            if data.get("type") == "page":
+                date_iso = data.get("date")
+                if date_iso:
+                    self.openDateRequested.emit(date_iso)
+                    self.accept()
+
+    def _edit_tag_name(self):
+        """Edit the name of the selected tag"""
+        item = self.tree.currentItem()
+        if not item:
+            return
+
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not isinstance(data, dict) or data.get("type") != "tag":
+            return
+
+        tag_id = data["id"]
+        old_name = data["name"]
+        color = data["color"]
+
+        # Simple input dialog
+        from PySide6.QtWidgets import QInputDialog
+
+        new_name, ok = QInputDialog.getText(
+            self, strings._("edit_tag_name"), strings._("new_tag_name"), text=old_name
+        )
+
+        if ok and new_name and new_name != old_name:
+            self._db.update_tag(tag_id, new_name, color)
+            self._populate(None)
+
+    def _change_tag_color(self):
+        """Change the color of the selected tag"""
+        item = self.tree.currentItem()
+        if not item:
+            return
+
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not isinstance(data, dict) or data.get("type") != "tag":
+            return
+
+        tag_id = data["id"]
+        name = data["name"]
+        current_color = data["color"]
+
+        color = QColorDialog.getColor(QColor(current_color), self)
+        if color.isValid():
+            self._db.update_tag(tag_id, name, color.name())
+            self._populate(None)
+
+    def _delete_tag(self):
+        """Delete the selected tag"""
+        item = self.tree.currentItem()
+        if not item:
+            return
+
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not isinstance(data, dict) or data.get("type") != "tag":
+            return
+
+        tag_id = data["id"]
+        name = data["name"]
+
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            strings._("delete_tag"),
+            strings._("delete_tag_confirm").format(name=name),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if reply == QMessageBox.Yes:
+            self._db.delete_tag(tag_id)
+            self._populate(None)

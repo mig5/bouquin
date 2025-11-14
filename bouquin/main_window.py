@@ -57,7 +57,6 @@ from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from . import strings
 from .tags_widget import PageTagsWidget
-from .status_tags_widget import StatusBarTagsWidget
 from .toolbar import ToolBar
 from .theme import ThemeManager
 
@@ -96,6 +95,8 @@ class MainWindow(QMainWindow):
         self.search.resultDatesChanged.connect(self._on_search_dates_changed)
 
         self.tags = PageTagsWidget(self.db)
+        self.tags.tagActivated.connect(self._on_tag_activated)
+        self.tags.tagAdded.connect(self._on_tag_added)
 
         # Lock the calendar to the left panel at the top to stop it stretching
         # when the main window is resized.
@@ -181,11 +182,6 @@ class MainWindow(QMainWindow):
         # FindBar will get the current editor dynamically via a callable
         self.findBar = FindBar(lambda: self.editor, shortcut_parent=self, parent=self)
         self.statusBar().addPermanentWidget(self.findBar)
-        # status-bar tags widget
-        self.statusTags = StatusBarTagsWidget(self.db, self)
-        self.statusBar().addPermanentWidget(self.statusTags)
-        # Clicking a tag in the status bar will open tag pages (next section)
-        self.statusTags.tagActivated.connect(self._on_tag_activated)
         # When the findBar closes, put the caret back in the editor
         self.findBar.closed.connect(self._focus_editor_now)
 
@@ -213,6 +209,10 @@ class MainWindow(QMainWindow):
         act_backup.setShortcut("Ctrl+Shift+B")
         act_backup.triggered.connect(self._backup)
         file_menu.addAction(act_backup)
+        act_tags = QAction("&" + strings._("manage_tags"), self)
+        act_tags.setShortcut("Ctrl+T")
+        act_tags.triggered.connect(self.tags._open_manager)
+        file_menu.addAction(act_tags)
         file_menu.addSeparator()
         act_quit = QAction("&" + strings._("quit"), self)
         act_quit.setShortcut("Ctrl+Q")
@@ -509,6 +509,7 @@ class MainWindow(QMainWindow):
                 self.calendar.setSelectedDate(editor.current_date)
 
             # update per-page tags for the active tab
+            date_iso = editor.current_date.toString("yyyy-MM-dd")
             self._update_tag_views_for_date(date_iso)
 
         # Reconnect toolbar to new active editor
@@ -814,6 +815,10 @@ class MainWindow(QMainWindow):
         if current_index >= 0:
             self.tab_widget.setTabText(current_index, new_date.toString("yyyy-MM-dd"))
 
+        # Update tags for the newly loaded page
+        date_iso = new_date.toString("yyyy-MM-dd")
+        self._update_tag_views_for_date(date_iso)
+
         # Keep tabs sorted by date
         self._reorder_tabs_by_date()
 
@@ -1034,15 +1039,45 @@ class MainWindow(QMainWindow):
     def _update_tag_views_for_date(self, date_iso: str):
         if hasattr(self, "tags"):
             self.tags.set_current_date(date_iso)
-        if hasattr(self, "statusTags"):
-            self.statusTags.set_current_page(date_iso)
 
-    def _on_tag_activated(self, tag_name: str):
-        from .tag_browser import TagBrowserDialog
+    def _on_tag_added(self):
+        """Called when a tag is added - trigger autosave for current page"""
+        # Use QTimer to defer the save slightly, avoiding re-entrancy issues
+        from PySide6.QtCore import QTimer
 
-        dlg = TagBrowserDialog(self.db, self, focus_tag=tag_name)
-        dlg.openDateRequested.connect(self._load_selected_date)
-        dlg.exec()
+        QTimer.singleShot(0, self._do_tag_save)
+
+    def _do_tag_save(self):
+        """Actually perform the save after tag is added"""
+        if hasattr(self, "editor") and hasattr(self.editor, "current_date"):
+            date_iso = self.editor.current_date.toString("yyyy-MM-dd")
+
+            # Get current editor content
+            text = self.editor.to_markdown()
+
+            # Save the content (or blank if page is empty)
+            # This ensures the page shows up in tag browser
+            self.db.save_new_version(date_iso, text, note="Tag added")
+            self._dirty = False
+            self._refresh_calendar_marks()
+            from datetime import datetime as _dt
+
+            self.statusBar().showMessage(
+                strings._("saved") + f" {date_iso}: {_dt.now().strftime('%H:%M:%S')}",
+                2000,
+            )
+
+    def _on_tag_activated(self, tag_name_or_date: str):
+        # If it's a date (YYYY-MM-DD format), load it
+        if len(tag_name_or_date) == 10 and tag_name_or_date.count("-") == 2:
+            self._load_selected_date(tag_name_or_date)
+        else:
+            # It's a tag name, open the tag browser
+            from .tag_browser import TagBrowserDialog
+
+            dlg = TagBrowserDialog(self.db, self, focus_tag=tag_name_or_date)
+            dlg.openDateRequested.connect(self._load_selected_date)
+            dlg.exec()
 
     # ----------- Settings handler ------------#
     def _open_settings(self):
