@@ -1,10 +1,13 @@
+import pytest
 from PySide6.QtCore import Qt, QPoint, QEvent
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox, QInputDialog, QColorDialog
 from bouquin.db import DBManager
+from bouquin.strings import load_strings
 from bouquin.tags_widget import PageTagsWidget, TagChip
 from bouquin.tag_browser import TagBrowserDialog
 from bouquin.flow_layout import FlowLayout
+from sqlcipher3.dbapi2 import IntegrityError
 
 
 # ============================================================================
@@ -152,6 +155,20 @@ def test_update_tag_name_and_color(fresh_db):
     assert len(updated_tags) == 1
     assert updated_tags[0][1] == "newname"
     assert updated_tags[0][2] == "#FF0000"
+
+
+def test_update_tag_existing_name_fails(fresh_db):
+    """Test updating a tag's name to an existing tag fails"""
+    load_strings("en")
+    date_iso = "2024-01-15"
+    fresh_db.set_tags_for_page(date_iso, ["tag1", "tag2"])
+
+    tags = fresh_db.list_tags()
+    tag_id = tags[0][0]
+
+    with pytest.raises(IntegrityError) as excinfo:
+        fresh_db.update_tag(tag_id, "tag2", "#111111")
+    assert str(excinfo.value) == "A tag already exists with that name"
 
 
 def test_delete_tag(fresh_db):
