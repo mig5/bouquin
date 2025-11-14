@@ -435,7 +435,7 @@ def test_init_exits_when_prompt_rejected(app, monkeypatch, tmp_path):
     # Avoid accidentaly creating DB by short-circuiting the prompt loop
     class MW(MainWindow):
         def _prompt_for_key_until_valid(self, first_time: bool) -> bool:  # noqa: N802
-            assert first_time is True  # hit line 73 path
+            assert first_time is True
             return False
 
     with pytest.raises(SystemExit):
@@ -938,7 +938,7 @@ def test_apply_idle_minutes_paths_and_unlock(qtbot, tmp_db_cfg, app, monkeypatch
 
     # remove timer to hit early return
     delattr(w, "_idle_timer")
-    w._apply_idle_minutes(5)  # no crash => line 1176 branch
+    w._apply_idle_minutes(5)  # no crash
 
     # re-create a timer and simulate locking then disabling idle
     w._idle_timer = QTimer(w)
@@ -1474,7 +1474,7 @@ def test_closeEvent_swallows_exceptions(qtbot, app, tmp_db_cfg, monkeypatch):
 
 
 # ============================================================================
-# Tag Save Handler Tests (lines 1050-1068)
+# Tag Save Handler Tests
 # ============================================================================
 
 
@@ -1525,7 +1525,7 @@ def test_main_window_do_tag_save_no_editor(app, fresh_db, tmp_db_cfg, monkeypatc
 def test_main_window_on_tag_added_triggers_deferred_save(
     app, fresh_db, tmp_db_cfg, monkeypatch
 ):
-    """Test that _on_tag_added defers the save (lines 1043-1048)"""
+    """Test that _on_tag_added defers the save"""
     monkeypatch.setattr(
         "bouquin.main_window.KeyPrompt",
         lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
@@ -1546,7 +1546,7 @@ def test_main_window_on_tag_added_triggers_deferred_save(
 
 
 # ============================================================================
-# Tag Activation Tests (lines 1070-1080)
+# Tag Activation Tests
 # ============================================================================
 
 
@@ -1600,7 +1600,7 @@ def test_main_window_on_tag_activated_with_tag_name(
 
 
 # ============================================================================
-# Settings Path Change Tests (lines 1105-1116)
+# Settings Path Change Tests
 # ============================================================================
 
 
@@ -1651,7 +1651,7 @@ def test_main_window_settings_path_change_success(
 def test_main_window_settings_path_change_failure(
     app, fresh_db, tmp_db_cfg, tmp_path, monkeypatch
 ):
-    """Test failed database path change shows warning (lines 1108-1113)"""
+    """Test failed database path change shows warning"""
     monkeypatch.setattr(
         "bouquin.main_window.KeyPrompt",
         lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
@@ -1691,7 +1691,7 @@ def test_main_window_settings_path_change_failure(
 
 
 def test_main_window_settings_no_path_change(app, fresh_db, tmp_db_cfg, monkeypatch):
-    """Test settings change without path change (lines 1105 condition False)"""
+    """Test settings change without path change"""
     monkeypatch.setattr(
         "bouquin.main_window.KeyPrompt",
         lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
@@ -1729,7 +1729,7 @@ def test_main_window_settings_no_path_change(app, fresh_db, tmp_db_cfg, monkeypa
 
 
 def test_main_window_settings_cancelled(app, fresh_db, tmp_db_cfg, monkeypatch):
-    """Test cancelling settings dialog (line 1085-1086)"""
+    """Test cancelling settings dialog"""
     monkeypatch.setattr(
         "bouquin.main_window.KeyPrompt",
         lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
@@ -1753,7 +1753,7 @@ def test_main_window_settings_cancelled(app, fresh_db, tmp_db_cfg, monkeypatch):
 
 
 # ============================================================================
-# Update Tag Views Tests (lines 1039-1041)
+# Update Tag Views Tests
 # ============================================================================
 
 

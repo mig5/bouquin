@@ -204,7 +204,7 @@ class ThemeManager(QObject):
         )
 
         if is_dark:
-            # Use the link color as the accent (you set this to ORANGE in dark palette)
+            # Use the link color as the accent
             accent = pal.color(QPalette.Link)
             r, g, b = accent.red(), accent.green(), accent.blue()
             accent_hex = accent.name()

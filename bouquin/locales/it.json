@@ -130,5 +130,6 @@
     "new_tag_name": "Nuovo nome tag:",
     "change_color": "Cambia colore",
     "delete_tag": "Elimina tag",
-    "delete_tag_confirm": "Sei sicuro di voler eliminare il tag '{name}'? Questo lo rimuoverà da tutte le pagine."
+    "delete_tag_confirm": "Sei sicuro di voler eliminare il tag '{name}'? Questo lo rimuoverà da tutte le pagine.",
+    "tag_already_exists_with_that_name": "Esiste già un tag con questo nome"
 }

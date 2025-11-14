@@ -199,7 +199,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(end - 2, 2, self.syntax_format)
             self.setFormat(content_start, content_end - content_start, self.bold_format)
 
-        # --- Italic (*) or (_): skip if it overlaps any triple, keep your guards
+        # --- Italic (*) or (_): skip if it overlaps any triple
         for m in re.finditer(
             r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", text
         ):

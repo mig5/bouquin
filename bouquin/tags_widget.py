@@ -70,7 +70,10 @@ class TagChip(QFrame):
     def mouseReleaseEvent(self, ev):
         if ev.button() == Qt.LeftButton:
             self.clicked.emit(self._name)
-        super().mouseReleaseEvent(ev)
+        try:
+            super().mouseReleaseEvent(ev)
+        except RuntimeError:
+            pass
 
 
 class PageTagsWidget(QFrame):

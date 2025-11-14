@@ -29,6 +29,7 @@ There is deliberately no network connectivity or syncing intended.
  * Tabs are supported - right-click on a date from the calendar to open it in a new tab.
  * Images are supported
  * Search all pages, or find text on page (Ctrl+F)
+ * Add tags to pages, find pages by tag in the Tag Browser, and customise tag names and colours
  * Automatic periodic saving (or explicitly save)
  * Transparent integrity checking of the database when it opens
  * Automatic locking of the app after a period of inactivity (default 15 min)
@@ -37,7 +38,8 @@ There is deliberately no network connectivity or syncing intended.
  * Backup the database to encrypted SQLCipher format (which can then be loaded back in to a Bouquin)
  * Dark and light themes
  * Automatically generate checkboxes when typing 'TODO'
- * Optionally automatically move unchecked checkboxes from yesterday to today, on startup
+ * It is possible to automatically move unchecked checkboxes from yesterday to today, on startup
+ * English, French and Italian locales provided
 
 
 ## How to install

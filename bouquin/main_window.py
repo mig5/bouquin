@@ -1077,7 +1077,16 @@ class MainWindow(QMainWindow):
 
             dlg = TagBrowserDialog(self.db, self, focus_tag=tag_name_or_date)
             dlg.openDateRequested.connect(self._load_selected_date)
+            dlg.tagsModified.connect(self._refresh_current_page_tags)
             dlg.exec()
+
+    def _refresh_current_page_tags(self):
+        """Refresh the tag chips for the current page (after tag browser changes)"""
+        if hasattr(self, "tags") and hasattr(self.editor, "current_date"):
+            date_iso = self.editor.current_date.toString("yyyy-MM-dd")
+            self.tags.set_current_date(date_iso)
+            if self.tags.toggle_btn.isChecked():
+                self.tags._reload_tags()
 
     # ----------- Settings handler ------------#
     def _open_settings(self):

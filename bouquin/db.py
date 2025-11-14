@@ -23,6 +23,20 @@ _TAG_COLORS = [
     "#BAFFC9",  # soft green
     "#BAE1FF",  # soft blue
     "#E0BAFF",  # soft purple
+    "#FFC4B3",  # soft coral
+    "#FFD8B1",  # soft peach
+    "#FFF1BA",  # soft light yellow
+    "#E9FFBA",  # soft lime
+    "#CFFFE5",  # soft mint
+    "#BAFFF5",  # soft aqua
+    "#BAF0FF",  # soft cyan
+    "#C7E9FF",  # soft sky blue
+    "#C7CEFF",  # soft periwinkle
+    "#F0BAFF",  # soft lavender pink
+    "#FFBAF2",  # soft magenta
+    "#FFD1F0",  # soft pink
+    "#EBD5C7",  # soft beige
+    "#EAEAEA",  # soft gray
 ]
 
 
@@ -554,16 +568,22 @@ class DBManager:
         name = name.strip()
         color = color.strip() or "#CCCCCC"
 
-        with self.conn:
-            cur = self.conn.cursor()
-            cur.execute(
-                """
-                UPDATE tags
-                SET name = ?, color = ?
-                WHERE id = ?;
-                """,
-                (name, color, tag_id),
-            )
+        try:
+            with self.conn:
+                cur = self.conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE tags
+                    SET name = ?, color = ?
+                    WHERE id = ?;
+                    """,
+                    (name, color, tag_id),
+                )
+        except sqlite.IntegrityError as e:
+            if "UNIQUE constraint failed: tags.name" in str(e):
+                raise sqlite.IntegrityError(
+                    strings._("tag_already_exists_with_that_name")
+                ) from e
 
     def delete_tag(self, tag_id: int) -> None:
         """

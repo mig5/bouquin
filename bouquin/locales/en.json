@@ -112,13 +112,14 @@
     "toolbar_heading": "Heading",
     "toolbar_toggle_checkboxes": "Toggle checkboxes",
     "tags": "Tags",
+    "tag": "Tag",
     "manage_tags": "Manage tags",
     "add_tag_placeholder": "Add a tag and press Enter",
     "tag_browser_title": "Tag Browser",
     "tag_browser_instructions": "Click a tag to expand and see all pages with that tag. Click a date to open it. Select a tag to edit its name, change its color, or delete it globally.",
     "tag_name": "Tag name",
     "tag_color_hex": "Hex colour",
-    "color_hex": "Color",
+    "color_hex": "Colour",
     "date": "Date",
     "pick_color": "Pick colour",
     "invalid_color_title": "Invalid colour",
@@ -130,5 +131,6 @@
     "new_tag_name": "New tag name:",
     "change_color": "Change colour",
     "delete_tag": "Delete tag",
-    "delete_tag_confirm": "Are you sure you want to delete the tag '{name}'? This will remove it from all pages."
+    "delete_tag_confirm": "Are you sure you want to delete the tag '{name}'? This will remove it from all pages.",
+    "tag_already_exists_with_that_name": "A tag already exists with that name"
 }

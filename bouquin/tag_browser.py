@@ -14,11 +14,13 @@ from PySide6.QtWidgets import (
 )
 
 from .db import DBManager
+from sqlcipher3.dbapi2 import IntegrityError
 from . import strings
 
 
 class TagBrowserDialog(QDialog):
     openDateRequested = Signal(str)
+    tagsModified = Signal()
 
     def __init__(self, db: DBManager, parent=None, focus_tag: str | None = None):
         super().__init__(parent)
@@ -43,6 +45,8 @@ class TagBrowserDialog(QDialog):
         self.tree.setColumnWidth(1, 100)
         self.tree.itemActivated.connect(self._on_item_activated)
         self.tree.itemClicked.connect(self._on_item_clicked)
+        self.tree.setSortingEnabled(True)
+        self.tree.sortByColumn(0, Qt.AscendingOrder)
         layout.addWidget(self.tree)
 
         # Tag management buttons
@@ -77,6 +81,9 @@ class TagBrowserDialog(QDialog):
         self._populate(focus_tag)
 
     def _populate(self, focus_tag: str | None):
+        # Disable sorting during population for better performance
+        was_sorting = self.tree.isSortingEnabled()
+        self.tree.setSortingEnabled(False)
         self.tree.clear()
         tags = self._db.list_tags()
         focus_item = None
@@ -91,7 +98,18 @@ class TagBrowserDialog(QDialog):
             )
 
             # Set background color for the second column to show the tag color
-            root.setBackground(1, QColor(color))
+            bg_color = QColor(color)
+            root.setBackground(1, bg_color)
+
+            # Calculate luminance and set contrasting text color
+            # Using relative luminance formula (ITU-R BT.709)
+            luminance = (
+                0.2126 * bg_color.red()
+                + 0.7152 * bg_color.green()
+                + 0.0722 * bg_color.blue()
+            ) / 255.0
+            text_color = QColor(0, 0, 0) if luminance > 0.5 else QColor(255, 255, 255)
+            root.setForeground(1, text_color)
             root.setText(1, color)  # Also show the hex code
             root.setTextAlignment(1, Qt.AlignCenter)
 
@@ -111,6 +129,9 @@ class TagBrowserDialog(QDialog):
         if focus_item:
             self.tree.expandItem(focus_item)
             self.tree.setCurrentItem(focus_item)
+
+        # Re-enable sorting after population
+        self.tree.setSortingEnabled(was_sorting)
 
     def _on_item_clicked(self, item: QTreeWidgetItem, column: int):
         """Enable/disable buttons based on selection"""
@@ -156,8 +177,12 @@ class TagBrowserDialog(QDialog):
         )
 
         if ok and new_name and new_name != old_name:
-            self._db.update_tag(tag_id, new_name, color)
-            self._populate(None)
+            try:
+                self._db.update_tag(tag_id, new_name, color)
+                self._populate(None)
+                self.tagsModified.emit()
+            except IntegrityError as e:
+                QMessageBox.critical(self, strings._("db_database_error"), str(e))
 
     def _change_tag_color(self):
         """Change the color of the selected tag"""
@@ -175,8 +200,12 @@ class TagBrowserDialog(QDialog):
 
         color = QColorDialog.getColor(QColor(current_color), self)
         if color.isValid():
-            self._db.update_tag(tag_id, name, color.name())
-            self._populate(None)
+            try:
+                self._db.update_tag(tag_id, name, color.name())
+                self._populate(None)
+                self.tagsModified.emit()
+            except IntegrityError as e:
+                QMessageBox.critical(self, strings._("db_database_error"), str(e))
 
     def _delete_tag(self):
         """Delete the selected tag"""
@@ -203,3 +232,4 @@ class TagBrowserDialog(QDialog):
         if reply == QMessageBox.Yes:
             self._db.delete_tag(tag_id)
             self._populate(None)
+            self.tagsModified.emit()

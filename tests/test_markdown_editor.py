@@ -374,7 +374,7 @@ def test_theme_change_rehighlight(highlighter):
 
 @pytest.fixture
 def hl_light(app):
-    # Light theme path (covers lines ~74-75 in _on_theme_changed)
+    # Light theme path
     tm = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     doc = QTextDocument()
     hl = MarkdownHighlighter(doc, tm)
@@ -435,7 +435,7 @@ def test_code_block_light_colors(hl_light):
 
 def test_end_guard_skips_italic_followed_by_marker(hl_light):
     """
-    Triggers the end-following guard for italic (line ~208), e.g. '*i**'.
+    Triggers the end-following guard for italic e.g. '*i**'.
     """
     doc, hl = hl_light
     doc.setPlainText("*i**")
@@ -543,7 +543,7 @@ def test_insert_image_from_path_invalid_returns(editor_hello, tmp_path):
 
 
 # ============================================================================
-# setDocument Tests (lines 75-81)
+# setDocument Tests
 # ============================================================================
 
 
@@ -582,7 +582,7 @@ def test_markdown_editor_set_document_with_highlighter(app):
 
 
 # ============================================================================
-# showEvent Tests (lines 83-86)
+# showEvent Tests
 # ============================================================================
 
 
@@ -604,7 +604,7 @@ def test_markdown_editor_show_event(app, qtbot):
 
 
 # ============================================================================
-# Checkbox Transformation Tests (lines 100-133)
+# Checkbox Transformation Tests
 # ============================================================================
 
 
@@ -645,7 +645,7 @@ def test_markdown_editor_transform_checked_checkbox(app, qtbot):
 
 
 def test_markdown_editor_transform_todo(app, qtbot):
-    """Test transforming TODO to unchecked checkbox (lines 110-114)"""
+    """Test transforming TODO to unchecked checkbox"""
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     editor = MarkdownEditor(themes)
     editor.show()
@@ -726,7 +726,7 @@ def test_markdown_editor_no_transform_when_updating(app):
     editor.insertPlainText("- [ ] Task")
 
     # Should NOT transform since _updating is True
-    # This tests the early return in _on_text_changed (lines 90-91)
+    # This tests the early return in _on_text_changed
     assert editor._updating
 
 
@@ -779,7 +779,7 @@ def test_markdown_editor_update_code_block_backgrounds(app):
 
 
 # ============================================================================
-# Image Insertion Tests (lines 336-366)
+# Image Insertion Tests
 # ============================================================================
 
 
@@ -811,7 +811,7 @@ def test_markdown_editor_insert_image_from_path(app, tmp_path):
 
 
 # ============================================================================
-# Formatting Tests (missing lines in various formatting methods)
+# Formatting Tests
 # ============================================================================
 
 
@@ -886,7 +886,7 @@ def test_markdown_editor_toggle_code_empty_selection(app):
 
 
 # ============================================================================
-# Heading Tests (lines 455-459)
+# Heading Tests
 # ============================================================================
 
 
@@ -932,7 +932,7 @@ def test_markdown_editor_set_heading_zero_removes_heading(app):
 
 
 # ============================================================================
-# List Tests (lines 483-519)
+# List Tests
 # ============================================================================
 
 
@@ -972,7 +972,7 @@ def test_markdown_editor_toggle_list_ordered(app):
 
 
 # ============================================================================
-# Code Block Tests (lines 540-577)
+# Code Block Tests
 # ============================================================================
 
 
@@ -1016,7 +1016,7 @@ def test_markdown_editor_apply_code_remove(app):
 
 
 # ============================================================================
-# Checkbox Tests (lines 596-600)
+# Checkbox Tests
 # ============================================================================
 
 
@@ -1032,7 +1032,7 @@ def test_markdown_editor_insert_checkbox_unchecked(app):
 
 
 # ============================================================================
-# Toggle Checkboxes Tests (lines 659-660, 686-691)
+# Toggle Checkboxes Tests
 # ============================================================================
 
 
@@ -1071,7 +1071,7 @@ def test_markdown_editor_toggle_checkboxes_mixed(app):
 
 
 # ============================================================================
-# Markdown Conversion Tests (lines 703, 710-714, 731)
+# Markdown Conversion Tests
 # ============================================================================
 
 
@@ -1113,7 +1113,7 @@ def test_markdown_editor_from_markdown_with_links(app):
 
 
 # ============================================================================
-# Selection and Cursor Tests (lines 747-752)
+# Selection and Cursor Tests
 # ============================================================================
 
 
@@ -1152,7 +1152,7 @@ def test_markdown_editor_get_selected_blocks(app):
 
 
 # ============================================================================
-# Key Event Tests (lines 795, 806-809)
+# Key Event Tests
 # ============================================================================
 
 
@@ -1194,7 +1194,7 @@ def test_markdown_editor_key_press_return_in_list(app):
 
 
 # ============================================================================
-# Link Handling Tests (lines 898, 922, 949, 990)
+# Link Handling Tests
 # ============================================================================
 
 
@@ -1229,12 +1229,12 @@ def test_markdown_editor_mouse_move_over_link(app):
 
 
 # ============================================================================
-# Theme Mode Tests (lines 72-79)
+# Theme Mode Tests
 # ============================================================================
 
 
 def test_markdown_highlighter_light_mode(app):
-    """Test highlighter in light mode (lines 74-77)"""
+    """Test highlighter in light mode"""
     doc = QTextDocument()
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     highlighter = MarkdownHighlighter(doc, themes)
@@ -1252,7 +1252,7 @@ def test_markdown_highlighter_light_mode(app):
 
 
 def test_markdown_highlighter_dark_mode(app):
-    """Test highlighter in dark mode (lines 70-71)"""
+    """Test highlighter in dark mode"""
     doc = QTextDocument()
     themes = ThemeManager(app, ThemeConfig(theme=Theme.DARK))
     highlighter = MarkdownHighlighter(doc, themes)
@@ -1266,7 +1266,7 @@ def test_markdown_highlighter_dark_mode(app):
 
 
 # ============================================================================
-# Highlighting Pattern Tests (lines 196, 208, 211, 213)
+# Highlighting Pattern Tests
 # ============================================================================
 
 

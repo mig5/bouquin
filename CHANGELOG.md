@@ -1,13 +1,14 @@
-# 0.2.1.9
+# 0.3
 
- * Fix a few small matters identified with tests
- * Make locales dynamically detected from the locales dir rather than hardcoded
+ * Introduce Tags
+ * Make translations dynamically detected from the locales dir rather than hardcoded
+ * Add Italian translations (thanks @mdaleo404)
  * Add version information in the navigation
  * Increase line spacing between lines (except for code blocks)
- * Add Italian translations (thanks @mdaleo404)
  * Prevent being able to left-click a date and have it load in current tab if it is already open in another tab
  * Avoid second checkbox/bullet on second newline after first newline
  * Avoid Home/left arrow jumping to the left side of a list symbol
+ * Various test additions/fixes
 
 # 0.2.1.8
 

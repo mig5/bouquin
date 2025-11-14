@@ -786,7 +786,7 @@ def test_tag_page_without_content(fresh_db):
 
 
 # ============================================================================
-# TagChip Mouse Event Tests (tags_widget.py lines 70-73)
+# TagChip Mouse Event Tests
 # ============================================================================
 
 
@@ -844,12 +844,12 @@ def test_tag_chip_right_click_no_signal(app, qtbot):
 
 
 # ============================================================================
-# PageTagsWidget Edge Cases (tags_widget.py missing lines)
+# PageTagsWidget Edge Cases
 # ============================================================================
 
 
 def test_page_tags_widget_add_tag_with_completer_popup_visible(app, fresh_db):
-    """Test adding tag when completer popup is visible (line 148)"""
+    """Test adding tag when completer popup is visible"""
     widget = PageTagsWidget(fresh_db)
     widget.show()
     date_iso = "2024-01-15"
@@ -906,12 +906,12 @@ def test_page_tags_widget_no_current_date_remove_tag(app, fresh_db):
 
 
 # ============================================================================
-# TagBrowserDialog Interactive Tests (tag_browser.py lines 124-126, 139-205)
+# TagBrowserDialog Interactive Tests
 # ============================================================================
 
 
 def test_tag_browser_button_states_with_page_item(app, fresh_db):
-    """Test that buttons are disabled when clicking a page item (lines 124-126)"""
+    """Test that buttons are disabled when clicking a page item"""
     fresh_db.save_new_version("2024-01-15", "Content", "note")
     fresh_db.set_tags_for_page("2024-01-15", ["test"])
 
@@ -936,7 +936,7 @@ def test_tag_browser_button_states_with_page_item(app, fresh_db):
 
 
 def test_tag_browser_edit_tag_name_no_item(app, fresh_db):
-    """Test editing tag name when no item is selected (lines 139-141)"""
+    """Test editing tag name when no item is selected"""
     dialog = TagBrowserDialog(fresh_db)
 
     # Try to edit without selecting anything
@@ -947,7 +947,7 @@ def test_tag_browser_edit_tag_name_no_item(app, fresh_db):
 
 
 def test_tag_browser_edit_tag_name_page_item(app, fresh_db):
-    """Test editing tag name when a page item is selected (lines 143-145)"""
+    """Test editing tag name when a page item is selected"""
     fresh_db.save_new_version("2024-01-15", "Content", "note")
     fresh_db.set_tags_for_page("2024-01-15", ["test"])
 
@@ -969,7 +969,7 @@ def test_tag_browser_edit_tag_name_page_item(app, fresh_db):
 
 
 def test_tag_browser_change_color_no_item(app, fresh_db):
-    """Test changing color when no item is selected (lines 164-166)"""
+    """Test changing color when no item is selected"""
     dialog = TagBrowserDialog(fresh_db)
 
     # Try to change color without selecting anything
@@ -980,7 +980,7 @@ def test_tag_browser_change_color_no_item(app, fresh_db):
 
 
 def test_tag_browser_change_color_page_item(app, fresh_db):
-    """Test changing color when a page item is selected (lines 168-170)"""
+    """Test changing color when a page item is selected"""
     fresh_db.save_new_version("2024-01-15", "Content", "note")
     fresh_db.set_tags_for_page("2024-01-15", ["test"])
 
@@ -1002,7 +1002,7 @@ def test_tag_browser_change_color_page_item(app, fresh_db):
 
 
 def test_tag_browser_delete_tag_no_item(app, fresh_db):
-    """Test deleting tag when no item is selected (lines 183-185)"""
+    """Test deleting tag when no item is selected"""
     dialog = TagBrowserDialog(fresh_db)
 
     # Try to delete without selecting anything
@@ -1013,7 +1013,7 @@ def test_tag_browser_delete_tag_no_item(app, fresh_db):
 
 
 def test_tag_browser_delete_tag_page_item(app, fresh_db):
-    """Test deleting tag when a page item is selected (lines 187-189)"""
+    """Test deleting tag when a page item is selected"""
     fresh_db.save_new_version("2024-01-15", "Content", "note")
     fresh_db.set_tags_for_page("2024-01-15", ["test"])
 
@@ -1036,12 +1036,12 @@ def test_tag_browser_delete_tag_page_item(app, fresh_db):
 
 
 # ============================================================================
-# FlowLayout Edge Case (flow_layout.py line 28)
+# FlowLayout Edge Case
 # ============================================================================
 
 
 def test_flow_layout_take_at_out_of_bounds(app):
-    """Test FlowLayout.takeAt with invalid index (line 28)"""
+    """Test FlowLayout.takeAt with invalid index"""
     layout = FlowLayout()
 
     # Try to take item at index that doesn't exist
@@ -1063,7 +1063,7 @@ def test_flow_layout_take_at_negative(app):
 
 
 # ============================================================================
-# DB Edge Case (db.py line 434)
+# DB Edge Case for tags
 # ============================================================================
 
 
