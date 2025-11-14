@@ -12,6 +12,7 @@ from PySide6.QtGui import (
     QTextCursor,
     QTextDocument,
     QTextFormat,
+    QTextBlockFormat,
     QTextImageFormat,
 )
 from PySide6.QtCore import Qt, QRect, QTimer
@@ -43,6 +44,8 @@ class MarkdownEditor(QTextEdit):
         font.setPointSize(10)
         self.setFont(font)
 
+        self._apply_line_spacing()  # 1.25× initial spacing
+
         # Checkbox characters (Unicode for display, markdown for storage)
         self._CHECK_UNCHECKED_DISPLAY = "☐"
         self._CHECK_CHECKED_DISPLAY = "☑"
@@ -73,6 +76,8 @@ class MarkdownEditor(QTextEdit):
         # reattach the highlighter to the new document
         if hasattr(self, "highlighter") and self.highlighter:
             self.highlighter.setDocument(self.document())
+        self._apply_line_spacing()
+        self._apply_code_block_spacing()
         QTimer.singleShot(0, self._update_code_block_row_backgrounds)
 
     def showEvent(self, e):
@@ -140,9 +145,10 @@ class MarkdownEditor(QTextEdit):
     def _update_code_block_row_backgrounds(self):
         """Paint a full-width background for each line that is in a fenced code block."""
         doc = self.document()
-        sels = []
+        if doc is None:
+            return
 
-        # Use the same bg color as the highlighter's code block
+        sels = []
         bg_brush = self.highlighter.code_block_format.background()
 
         inside = False
@@ -158,16 +164,12 @@ class MarkdownEditor(QTextEdit):
                 fmt = QTextCharFormat()
                 fmt.setBackground(bg_brush)
                 fmt.setProperty(QTextFormat.FullWidthSelection, True)
-                # mark so we can merge with other selections safely
                 fmt.setProperty(QTextFormat.UserProperty, "codeblock_bg")
                 sel.format = fmt
 
                 cur = QTextCursor(doc)
-                cur.setPosition(
-                    block.position()
-                )  # collapsed cursor = whole line when FullWidthSelection
+                cur.setPosition(block.position())
                 sel.cursor = cur
-
                 sels.append(sel)
 
             if is_fence:
@@ -181,6 +183,60 @@ class MarkdownEditor(QTextEdit):
             if s.format.property(QTextFormat.UserProperty) != "codeblock_bg"
         ]
         self.setExtraSelections(others + sels)
+
+    def _apply_line_spacing(self, height: float = 125.0):
+        """Apply proportional line spacing to the whole document."""
+        doc = self.document()
+        if doc is None:
+            return
+
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+        cursor.select(QTextCursor.Document)
+
+        fmt = QTextBlockFormat()
+        fmt.setLineHeight(
+            height,  # 125.0 = 1.25×
+            QTextBlockFormat.LineHeightTypes.ProportionalHeight.value,
+        )
+        cursor.mergeBlockFormat(fmt)
+        cursor.endEditBlock()
+
+    def _apply_code_block_spacing(self):
+        """
+        Make all fenced code-block lines (including ``` fences) single-spaced.
+        Call this AFTER _apply_line_spacing().
+        """
+        doc = self.document()
+        if doc is None:
+            return
+
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+
+        inside = False
+        block = doc.begin()
+        while block.isValid():
+            text = block.text()
+            stripped = text.strip()
+            is_fence = stripped.startswith("```")
+            is_code_line = is_fence or inside
+
+            if is_code_line:
+                fmt = block.blockFormat()
+                fmt.setLineHeight(
+                    0.0,
+                    QTextBlockFormat.LineHeightTypes.SingleHeight.value,
+                )
+                cursor.setPosition(block.position())
+                cursor.setBlockFormat(fmt)
+
+            if is_fence:
+                inside = not inside
+
+            block = block.next()
+
+        cursor.endEditBlock()
 
     def to_markdown(self) -> str:
         """Export current content as markdown."""
@@ -254,6 +310,9 @@ class MarkdownEditor(QTextEdit):
                 self.highlighter.rehighlight()
         finally:
             self._updating = False
+
+        self._apply_line_spacing()
+        self._apply_code_block_spacing()
 
         # Render any embedded images
         self._render_images()
@@ -452,9 +511,33 @@ class MarkdownEditor(QTextEdit):
 
             block_state = current_block.userState()
 
-            # If current line is opening code fence, or we're inside a code block
-            if current_line.strip().startswith("```") or block_state == 1:
-                # Just insert a regular newline - the highlighter will format it as code
+            stripped = current_line.strip()
+            is_fence_line = stripped.startswith("```")
+
+            if is_fence_line:
+                # Work out if this fence is closing (inside block before it)
+                inside_before = self._is_inside_code_block(current_block.previous())
+
+                # Insert the newline as usual
+                super().keyPressEvent(event)
+
+                if inside_before:
+                    # We were on the *closing* fence; the new line is outside the block.
+                    # Give that new block normal 1.25× spacing.
+                    new_block = self.textCursor().block()
+                    fmt = new_block.blockFormat()
+                    fmt.setLineHeight(
+                        125.0,
+                        QTextBlockFormat.LineHeightTypes.ProportionalHeight.value,
+                    )
+                    cur2 = self.textCursor()
+                    cur2.setBlockFormat(fmt)
+                    self.setTextCursor(cur2)
+
+                return
+
+            # Inside a code block (but not on a fence): newline stays code-style
+            if block_state == 1:
                 super().keyPressEvent(event)
                 return
 
@@ -646,6 +729,9 @@ class MarkdownEditor(QTextEdit):
             c.insertText(f"```\n{selected.rstrip()}\n```\n")
             if hasattr(self, "_update_code_block_row_backgrounds"):
                 self._update_code_block_row_backgrounds()
+            # tighten spacing for the new code block
+            self._apply_code_block_spacing()
+
             self.setFocus()
             return
 
@@ -710,6 +796,10 @@ class MarkdownEditor(QTextEdit):
 
         if hasattr(self, "_update_code_block_row_backgrounds"):
             self._update_code_block_row_backgrounds()
+
+        # tighten spacing for the new code block
+        self._apply_code_block_spacing()
+
         self.setFocus()
 
     def apply_heading(self, size: int):

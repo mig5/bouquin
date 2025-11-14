@@ -3,6 +3,7 @@
  * Fix a few small matters identified with tests
  * Make locales dynamically detected from the locales dir rather than hardcoded
  * Add version information in the navigation
+ * Increase line spacing between lines (except for code blocks)
 
 # 0.2.1.8
 
