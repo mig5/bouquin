@@ -1,5 +1,3 @@
-import pytest
-
 from bouquin.db import DBManager, DBConfig
 from bouquin.key_prompt import KeyPrompt
 import bouquin.settings_dialog as sd
@@ -10,7 +8,6 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox, QWidget, QDialog
 
 
-@pytest.mark.gui
 def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db, tmp_path):
     # Provide a parent that exposes a real ThemeManager (dialog calls parent().themes.set(...))
     app = QApplication.instance()
@@ -206,7 +203,6 @@ def test_settings_compact_error(qtbot, app, monkeypatch, tmp_db_cfg, fresh_db):
     assert called["text"]
 
 
-@pytest.mark.gui
 def test_settings_browse_sets_path(qtbot, app, tmp_path, fresh_db, monkeypatch):
     parent = QWidget()
     parent.themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))

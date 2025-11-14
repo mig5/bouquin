@@ -73,9 +73,10 @@ class MarkdownEditor(QTextEdit):
 
     def setDocument(self, doc):
         super().setDocument(doc)
-        # reattach the highlighter to the new document
-        if hasattr(self, "highlighter") and self.highlighter:
-            self.highlighter.setDocument(self.document())
+        # Recreate the highlighter for the new document
+        # (the old one gets deleted with the old document)
+        if hasattr(self, "highlighter") and hasattr(self, "theme_manager"):
+            self.highlighter = MarkdownHighlighter(self.document(), self.theme_manager)
         self._apply_line_spacing()
         self._apply_code_block_spacing()
         QTimer.singleShot(0, self._update_code_block_row_backgrounds)
@@ -97,7 +98,7 @@ class MarkdownEditor(QTextEdit):
             line = block.text()
             pos_in_block = c.position() - block.position()
 
-            # Transform markldown checkboxes and 'TODO' to unicode checkboxes
+            # Transform markdown checkboxes and 'TODO' to unicode checkboxes
             def transform_line(s: str) -> str:
                 s = s.replace(
                     f"- {self._CHECK_CHECKED_STORAGE} ",

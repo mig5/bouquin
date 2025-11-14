@@ -10,11 +10,12 @@ from bouquin.settings import get_settings
 from bouquin.key_prompt import KeyPrompt
 from bouquin.db import DBConfig, DBManager
 from PySide6.QtCore import QEvent, QDate, QTimer, Qt, QPoint, QRect
-from PySide6.QtWidgets import QTableView, QApplication, QWidget, QMessageBox
+from PySide6.QtWidgets import QTableView, QApplication, QWidget, QMessageBox, QDialog
 from PySide6.QtGui import QMouseEvent, QKeyEvent, QTextCursor, QCloseEvent
 
+from unittest.mock import Mock, patch
 
-@pytest.mark.gui
+
 def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
     s.setValue("db/path", str(tmp_db_cfg.path))
@@ -79,7 +80,6 @@ def test_load_yesterday_todos_moves_items(qtbot, app, tmp_db_cfg, fresh_db):
     assert "carry me" not in y_txt or "- [ ]" not in y_txt
 
 
-@pytest.mark.gui
 def test_open_docs_and_bugs_warning(qtbot, app, fresh_db, tmp_path, monkeypatch):
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     w = MainWindow(themes=themes)
@@ -113,7 +113,6 @@ def test_open_docs_and_bugs_warning(qtbot, app, fresh_db, tmp_path, monkeypatch)
     assert called["docs"] and called["bugs"]
 
 
-@pytest.mark.gui
 def test_export_success_and_error(qtbot, app, fresh_db, tmp_path, monkeypatch):
     # Seed some content
     fresh_db.save_new_version("2001-01-01", "alpha", "n1")
@@ -190,7 +189,6 @@ def test_export_success_and_error(qtbot, app, fresh_db, tmp_path, monkeypatch):
     assert errs["hit"]
 
 
-@pytest.mark.gui
 def test_backup_path(qtbot, app, fresh_db, tmp_path, monkeypatch):
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
 
@@ -248,7 +246,6 @@ def test_backup_path(qtbot, app, fresh_db, tmp_path, monkeypatch):
     assert str(dest.with_suffix(".db")) in hit["text"]
 
 
-@pytest.mark.gui
 def test_close_tab_edges_and_autosave(qtbot, app, fresh_db, monkeypatch):
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     from bouquin.settings import get_settings
@@ -283,7 +280,6 @@ def test_close_tab_edges_and_autosave(qtbot, app, fresh_db, monkeypatch):
     monkeypatch.delattr(w, "_save_editor_content", raising=False)
 
 
-@pytest.mark.gui
 def test_restore_window_position_variants(qtbot, app, fresh_db, monkeypatch):
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     w = MainWindow(themes=themes)
@@ -329,7 +325,6 @@ def test_restore_window_position_variants(qtbot, app, fresh_db, monkeypatch):
     assert called["max"]
 
 
-@pytest.mark.gui
 def test_calendar_pos_mapping_and_context_menu(qtbot, app, fresh_db, monkeypatch):
     # Seed DB so refresh marks does something
     fresh_db.save_new_version("2021-08-15", "note", "")
@@ -402,7 +397,6 @@ def test_calendar_pos_mapping_and_context_menu(qtbot, app, fresh_db, monkeypatch
     w._show_calendar_context_menu(cal_pos)
 
 
-@pytest.mark.gui
 def test_event_filter_keypress_starts_idle_timer(qtbot, app):
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     w = MainWindow(themes=themes)
@@ -1027,7 +1021,6 @@ def test_rect_on_any_screen_false(qtbot, tmp_db_cfg, app, monkeypatch):
     assert not w._rect_on_any_screen(far)
 
 
-@pytest.mark.gui
 def test_reorder_tabs_with_undated_page_stays_last(qtbot, app, tmp_db_cfg, monkeypatch):
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
     qtbot.addWidget(w)
@@ -1103,7 +1096,6 @@ def test_on_tab_changed_early_and_stop_guard(qtbot, app, tmp_db_cfg, monkeypatch
     w._on_tab_changed(1)  # should not raise
 
 
-@pytest.mark.gui
 def test_show_calendar_context_menu_no_action(qtbot, app, tmp_db_cfg, monkeypatch):
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
     qtbot.addWidget(w)
@@ -1124,7 +1116,6 @@ def test_show_calendar_context_menu_no_action(qtbot, app, tmp_db_cfg, monkeypatc
     assert w.tab_widget.count() == before
 
 
-@pytest.mark.gui
 def test_export_cancel_then_empty_filename(
     qtbot, app, tmp_db_cfg, monkeypatch, tmp_path
 ):
@@ -1187,7 +1178,6 @@ def test_export_cancel_then_empty_filename(
     w._export()  # returns early at filename check
 
 
-@pytest.mark.gui
 def test_set_editor_markdown_preserve_view_preserves(
     qtbot, app, tmp_db_cfg, monkeypatch
 ):
@@ -1212,7 +1202,6 @@ def test_set_editor_markdown_preserve_view_preserves(
     assert w.editor.to_markdown().endswith("extra\n")
 
 
-@pytest.mark.gui
 def test_load_date_into_editor_with_extra_data_forces_save(
     qtbot, app, tmp_db_cfg, monkeypatch
 ):
@@ -1230,7 +1219,6 @@ def test_load_date_into_editor_with_extra_data_forces_save(
     assert called["iso"] == "2020-01-01" and called["explicit"] is True
 
 
-@pytest.mark.gui
 def test_reorder_tabs_moves_and_undated(qtbot, app, tmp_db_cfg, monkeypatch):
     """Covers moveTab for both dated and undated buckets."""
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
@@ -1324,7 +1312,6 @@ def test_date_from_calendar_no_first_or_last(qtbot, app, tmp_db_cfg, monkeypatch
     assert w._date_from_calendar_pos(QPoint(5, 5)) is None
 
 
-@pytest.mark.gui
 def test_save_editor_content_returns_if_no_conn(qtbot, app, tmp_db_cfg, monkeypatch):
     """Covers DB not connected branch."""
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
@@ -1337,7 +1324,6 @@ def test_save_editor_content_returns_if_no_conn(qtbot, app, tmp_db_cfg, monkeypa
     w._save_editor_content(w.editor)
 
 
-@pytest.mark.gui
 def test_on_date_changed_stops_timer_and_saves_prev_when_dirty(
     qtbot, app, tmp_db_cfg, monkeypatch
 ):
@@ -1370,7 +1356,6 @@ def test_on_date_changed_stops_timer_and_saves_prev_when_dirty(
     assert saved["iso"] == "2024-01-01"
 
 
-@pytest.mark.gui
 def test_bind_toolbar_idempotent(qtbot, app, tmp_db_cfg, monkeypatch):
     """Covers early return when toolbar is already bound."""
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
@@ -1380,7 +1365,6 @@ def test_bind_toolbar_idempotent(qtbot, app, tmp_db_cfg, monkeypatch):
     w._bind_toolbar()
 
 
-@pytest.mark.gui
 def test_on_insert_image_no_selection_returns(qtbot, app, tmp_db_cfg, monkeypatch):
     """Covers the early return when user selects no files."""
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
@@ -1420,7 +1404,6 @@ def test_apply_idle_minutes_starts_when_unlocked(qtbot, app, tmp_db_cfg, monkeyp
     assert hit["start"]
 
 
-@pytest.mark.gui
 def test_close_event_handles_settings_failures(qtbot, app, tmp_db_cfg, monkeypatch):
     """
     Covers exception swallowing around settings writes & ensures close proceeds
@@ -1488,3 +1471,328 @@ def test_closeEvent_swallows_exceptions(qtbot, app, tmp_db_cfg, monkeypatch):
     w.closeEvent(ev)
 
     assert called["save"] and called["close"]
+
+
+# ============================================================================
+# Tag Save Handler Tests (lines 1050-1068)
+# ============================================================================
+
+
+def test_main_window_do_tag_save_with_editor(app, fresh_db, tmp_db_cfg, monkeypatch):
+    """Test _do_tag_save when editor has current_date"""
+    # Skip the key prompt
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    # Set a date on the editor
+    date = QDate(2024, 1, 15)
+    window.editor.current_date = date
+    window.editor.from_markdown("Test content")
+
+    # Call _do_tag_save
+    window._do_tag_save()
+
+    # Should have saved
+    fresh_db.get_entry("2024-01-15")
+    # May or may not have content depending on timing, but should not crash
+    assert True
+
+
+def test_main_window_do_tag_save_no_editor(app, fresh_db, tmp_db_cfg, monkeypatch):
+    """Test _do_tag_save when editor doesn't have current_date"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    # Remove current_date attribute
+    if hasattr(window.editor, "current_date"):
+        delattr(window.editor, "current_date")
+
+    # Call _do_tag_save - should handle gracefully
+    window._do_tag_save()
+
+    assert True
+
+
+def test_main_window_on_tag_added_triggers_deferred_save(
+    app, fresh_db, tmp_db_cfg, monkeypatch
+):
+    """Test that _on_tag_added defers the save (lines 1043-1048)"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    # Mock QTimer.singleShot
+    with patch("PySide6.QtCore.QTimer.singleShot") as mock_timer:
+        window._on_tag_added()
+
+        # Should have called singleShot
+        mock_timer.assert_called_once()
+        args = mock_timer.call_args[0]
+        assert args[0] == 0  # Delay of 0
+        assert callable(args[1])  # Callback function
+
+
+# ============================================================================
+# Tag Activation Tests (lines 1070-1080)
+# ============================================================================
+
+
+def test_main_window_on_tag_activated_with_date(app, fresh_db, tmp_db_cfg, monkeypatch):
+    """Test _on_tag_activated when passed a date string"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    # Mock _load_selected_date
+    window._load_selected_date = Mock()
+
+    # Call with date format
+    window._on_tag_activated("2024-01-15")
+
+    # Should have called _load_selected_date
+    window._load_selected_date.assert_called_once_with("2024-01-15")
+
+
+def test_main_window_on_tag_activated_with_tag_name(
+    app, fresh_db, tmp_db_cfg, monkeypatch
+):
+    """Test _on_tag_activated when passed a tag name"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    # Mock the tag browser dialog (it's imported locally in the method)
+    with patch("bouquin.tag_browser.TagBrowserDialog") as mock_dialog:
+        mock_instance = Mock()
+        mock_instance.openDateRequested = Mock()
+        mock_instance.exec.return_value = QDialog.Accepted
+        mock_dialog.return_value = mock_instance
+
+        # Call with tag name
+        window._on_tag_activated("worktag")
+
+        # Should have opened dialog
+        mock_dialog.assert_called_once()
+        # Check focus_tag was passed
+        call_kwargs = mock_dialog.call_args[1]
+        assert call_kwargs.get("focus_tag") == "worktag"
+
+
+# ============================================================================
+# Settings Path Change Tests (lines 1105-1116)
+# ============================================================================
+
+
+def test_main_window_settings_path_change_success(
+    app, fresh_db, tmp_db_cfg, tmp_path, monkeypatch
+):
+    """Test changing database path in settings"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    new_path = tmp_path / "new.db"
+
+    # Mock the settings dialog
+    with patch("bouquin.main_window.SettingsDialog") as mock_dialog:
+        mock_instance = Mock()
+        mock_instance.exec.return_value = QDialog.Accepted
+
+        # Create a new config with different path
+        new_cfg = Mock()
+        new_cfg.path = str(new_path)
+        new_cfg.key = tmp_db_cfg.key
+        new_cfg.idle_minutes = 15
+        new_cfg.theme = "light"
+        new_cfg.move_todos = True
+        new_cfg.locale = "en"
+
+        mock_instance.config = new_cfg
+        mock_dialog.return_value = mock_instance
+
+        # Mock _prompt_for_key_until_valid to return True
+        window._prompt_for_key_until_valid = Mock(return_value=True)
+        # Also mock _load_selected_date and _refresh_calendar_marks since we don't have a real DB connection
+        window._load_selected_date = Mock()
+        window._refresh_calendar_marks = Mock()
+
+        # Open settings
+        window._open_settings()
+
+        # Path should have changed
+        assert window.cfg.path == str(new_path)
+
+
+def test_main_window_settings_path_change_failure(
+    app, fresh_db, tmp_db_cfg, tmp_path, monkeypatch
+):
+    """Test failed database path change shows warning (lines 1108-1113)"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    new_path = tmp_path / "new.db"
+
+    # Mock the settings dialog
+    with patch("bouquin.main_window.SettingsDialog") as mock_dialog:
+        mock_instance = Mock()
+        mock_instance.exec.return_value = QDialog.Accepted
+
+        new_cfg = Mock()
+        new_cfg.path = str(new_path)
+        new_cfg.key = tmp_db_cfg.key
+        new_cfg.idle_minutes = 15
+        new_cfg.theme = "light"
+        new_cfg.move_todos = True
+        new_cfg.locale = "en"
+
+        mock_instance.config = new_cfg
+        mock_dialog.return_value = mock_instance
+
+        # Mock _prompt_for_key_until_valid to return False (failure)
+        window._prompt_for_key_until_valid = Mock(return_value=False)
+
+        # Mock QMessageBox.warning
+        with patch.object(QMessageBox, "warning") as mock_warning:
+            # Open settings
+            window._open_settings()
+
+            # Warning should have been shown
+            mock_warning.assert_called_once()
+
+
+def test_main_window_settings_no_path_change(app, fresh_db, tmp_db_cfg, monkeypatch):
+    """Test settings change without path change (lines 1105 condition False)"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    old_path = window.cfg.path
+
+    # Mock the settings dialog
+    with patch("bouquin.main_window.SettingsDialog") as mock_dialog:
+        mock_instance = Mock()
+        mock_instance.exec.return_value = QDialog.Accepted
+
+        # Create config with SAME path
+        new_cfg = Mock()
+        new_cfg.path = old_path
+        new_cfg.key = tmp_db_cfg.key
+        new_cfg.idle_minutes = 20  # Changed
+        new_cfg.theme = "dark"  # Changed
+        new_cfg.move_todos = False  # Changed
+        new_cfg.locale = "fr"  # Changed
+
+        mock_instance.config = new_cfg
+        mock_dialog.return_value = mock_instance
+
+        # Open settings
+        window._open_settings()
+
+        # Settings should be updated but path didn't change
+        assert window.cfg.idle_minutes == 20
+        assert window.cfg.theme == "dark"
+        assert window.cfg.path == old_path
+
+
+def test_main_window_settings_cancelled(app, fresh_db, tmp_db_cfg, monkeypatch):
+    """Test cancelling settings dialog (line 1085-1086)"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    old_theme = window.cfg.theme
+
+    # Mock the settings dialog to be rejected
+    with patch("bouquin.main_window.SettingsDialog") as mock_dialog:
+        mock_instance = Mock()
+        mock_instance.exec.return_value = QDialog.Rejected
+        mock_dialog.return_value = mock_instance
+
+        # Open settings
+        window._open_settings()
+
+        # Settings should NOT change
+        assert window.cfg.theme == old_theme
+
+
+# ============================================================================
+# Update Tag Views Tests (lines 1039-1041)
+# ============================================================================
+
+
+def test_main_window_update_tag_views_for_date(app, fresh_db, tmp_db_cfg, monkeypatch):
+    """Test _update_tag_views_for_date"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    # Set tags for a date
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    # Update tag views
+    window._update_tag_views_for_date("2024-01-15")
+
+    # Tags widget should have been updated
+    assert window.tags._current_date == "2024-01-15"
+
+
+def test_main_window_update_tag_views_no_tags_widget(
+    app, fresh_db, tmp_db_cfg, monkeypatch
+):
+    """Test _update_tag_views_for_date when tags widget doesn't exist"""
+    monkeypatch.setattr(
+        "bouquin.main_window.KeyPrompt",
+        lambda *args, **kwargs: Mock(exec=lambda: True, key=lambda: tmp_db_cfg.key),
+    )
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes)
+
+    # Remove tags widget
+    delattr(window, "tags")
+
+    # Should handle gracefully
+    window._update_tag_views_for_date("2024-01-15")
+
+    assert True

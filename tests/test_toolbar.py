@@ -14,7 +14,6 @@ def editor(app, qtbot):
     return ed
 
 
-@pytest.mark.gui
 def test_toolbar_signals_and_styling(qtbot, editor):
     host = QWidget()
     qtbot.addWidget(host)

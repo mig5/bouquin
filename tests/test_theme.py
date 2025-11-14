@@ -1,4 +1,3 @@
-import pytest
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QCalendarWidget, QWidget
 
@@ -15,7 +14,6 @@ def test_theme_manager_apply_light_and_dark(app):
     assert isinstance(app.palette(), QPalette)
 
 
-@pytest.mark.gui
 def test_theme_manager_system_roundtrip(app, qtbot):
     cfg = ThemeConfig(theme=Theme.SYSTEM)
     mgr = ThemeManager(app, cfg)

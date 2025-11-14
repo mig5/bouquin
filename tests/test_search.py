@@ -1,4 +1,3 @@
-import pytest
 from bouquin.search import Search
 from PySide6.QtWidgets import QListWidgetItem
 
@@ -80,7 +79,6 @@ def test_make_html_snippet_variants(qtbot, fresh_db):
     assert "<b>delta</b>" in frag
 
 
-@pytest.mark.gui
 def test_search_error_path_and_empty_snippet(qtbot, fresh_db, monkeypatch):
     s = Search(fresh_db)
     qtbot.addWidget(s)
@@ -92,7 +90,6 @@ def test_search_error_path_and_empty_snippet(qtbot, fresh_db, monkeypatch):
     assert frag == "" and not left and not right
 
 
-@pytest.mark.gui
 def test_populate_results_shows_both_ellipses(qtbot, fresh_db):
     s = Search(fresh_db)
     qtbot.addWidget(s)

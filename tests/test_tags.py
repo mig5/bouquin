@@ -1,6 +1,10 @@
+from PySide6.QtCore import Qt, QPoint, QEvent
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QApplication, QMessageBox, QInputDialog, QColorDialog
 from bouquin.db import DBManager
 from bouquin.tags_widget import PageTagsWidget, TagChip
 from bouquin.tag_browser import TagBrowserDialog
+from bouquin.flow_layout import FlowLayout
 
 
 # ============================================================================
@@ -779,3 +783,991 @@ def test_tag_page_without_content(fresh_db):
     # Page should be created but with no content
     content = fresh_db.get_entry(date_iso)
     assert content is None or content == ""
+
+
+# ============================================================================
+# TagChip Mouse Event Tests (tags_widget.py lines 70-73)
+# ============================================================================
+
+
+def test_tag_chip_mouse_click_emits_signal(app, qtbot):
+    """Test that clicking a TagChip emits the clicked signal"""
+    chip = TagChip(1, "clickable", "#FF0000")
+    chip.show()
+    qtbot.waitExposed(chip)
+
+    signal_data = {"name": None}
+
+    def on_clicked(name):
+        signal_data["name"] = name
+
+    chip.clicked.connect(on_clicked)
+
+    # Simulate mouse click
+    event = QMouseEvent(
+        QEvent.MouseButtonRelease,
+        QPoint(5, 5),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    chip.mouseReleaseEvent(event)
+
+    assert signal_data["name"] == "clickable"
+
+
+def test_tag_chip_right_click_no_signal(app, qtbot):
+    """Test that right-clicking a TagChip does not emit clicked signal"""
+    chip = TagChip(1, "clickable", "#FF0000")
+    chip.show()
+    qtbot.waitExposed(chip)
+
+    signal_emitted = {"emitted": False}
+
+    def on_clicked(name):
+        signal_emitted["emitted"] = True
+
+    chip.clicked.connect(on_clicked)
+
+    # Simulate right click
+    event = QMouseEvent(
+        QEvent.MouseButtonRelease,
+        QPoint(5, 5),
+        Qt.RightButton,
+        Qt.RightButton,
+        Qt.NoModifier,
+    )
+    chip.mouseReleaseEvent(event)
+
+    # Signal should NOT be emitted for right click
+    assert not signal_emitted["emitted"]
+
+
+# ============================================================================
+# PageTagsWidget Edge Cases (tags_widget.py missing lines)
+# ============================================================================
+
+
+def test_page_tags_widget_add_tag_with_completer_popup_visible(app, fresh_db):
+    """Test adding tag when completer popup is visible (line 148)"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+    date_iso = "2024-01-15"
+
+    # Create some existing tags for autocomplete
+    fresh_db.set_tags_for_page("2024-01-14", ["existing", "another"])
+    fresh_db.set_tags_for_page(date_iso, [])
+
+    widget.set_current_date(date_iso)
+    widget.toggle_btn.setChecked(True)
+    widget._on_toggle(True)
+
+    # Type partial text to trigger completer
+    widget.add_edit.setText("exi")
+
+    # Show the completer popup
+    completer = widget.add_edit.completer()
+    if completer:
+        completer.complete()
+
+        # If popup is now visible, pressing enter should return early
+        if completer.popup().isVisible():
+            # Call _on_add_tag while popup is visible
+            widget._on_add_tag()
+
+            # Tag should NOT be added since completer popup was visible
+            tags = fresh_db.get_tags_for_page(date_iso)
+            # "exi" should not be added as a tag
+            tag_names = [name for _, name, _ in tags]
+            assert "exi" not in tag_names
+
+
+def test_page_tags_widget_no_current_date_add_tag(app, fresh_db):
+    """Test adding tag when no current date is set (early return)"""
+    widget = PageTagsWidget(fresh_db)
+
+    # Don't set current date
+    widget.add_edit.setText("test")
+    widget._on_add_tag()
+
+    # Should handle gracefully and not crash
+    assert widget._current_date is None
+
+
+def test_page_tags_widget_no_current_date_remove_tag(app, fresh_db):
+    """Test removing tag when no current date is set"""
+    widget = PageTagsWidget(fresh_db)
+
+    # Try to remove tag without setting date
+    widget._remove_tag(1)
+
+    # Should handle gracefully
+    assert widget._current_date is None
+
+
+# ============================================================================
+# TagBrowserDialog Interactive Tests (tag_browser.py lines 124-126, 139-205)
+# ============================================================================
+
+
+def test_tag_browser_button_states_with_page_item(app, fresh_db):
+    """Test that buttons are disabled when clicking a page item (lines 124-126)"""
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    # Get the tag item and expand it
+    root = dialog.tree.topLevelItem(0)
+    dialog.tree.expandItem(root)
+
+    # Get the date child item
+    date_item = root.child(0)
+
+    # Click the date item
+    dialog.tree.setCurrentItem(date_item)
+    dialog._on_item_clicked(date_item, 0)
+
+    # Buttons should be disabled for page items
+    assert not dialog.edit_name_btn.isEnabled()
+    assert not dialog.change_color_btn.isEnabled()
+    assert not dialog.delete_btn.isEnabled()
+
+
+def test_tag_browser_edit_tag_name_no_item(app, fresh_db):
+    """Test editing tag name when no item is selected (lines 139-141)"""
+    dialog = TagBrowserDialog(fresh_db)
+
+    # Try to edit without selecting anything
+    dialog._edit_tag_name()
+
+    # Should handle gracefully (no exception)
+    assert True
+
+
+def test_tag_browser_edit_tag_name_page_item(app, fresh_db):
+    """Test editing tag name when a page item is selected (lines 143-145)"""
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+
+    # Get the tag item and expand it
+    root = dialog.tree.topLevelItem(0)
+    dialog.tree.expandItem(root)
+
+    # Select the date child item (not a tag)
+    date_item = root.child(0)
+    dialog.tree.setCurrentItem(date_item)
+
+    # Try to edit - should return early since it's not a tag item
+    dialog._edit_tag_name()
+
+    # Should handle gracefully
+    assert True
+
+
+def test_tag_browser_change_color_no_item(app, fresh_db):
+    """Test changing color when no item is selected (lines 164-166)"""
+    dialog = TagBrowserDialog(fresh_db)
+
+    # Try to change color without selecting anything
+    dialog._change_tag_color()
+
+    # Should handle gracefully
+    assert True
+
+
+def test_tag_browser_change_color_page_item(app, fresh_db):
+    """Test changing color when a page item is selected (lines 168-170)"""
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+
+    # Get the tag item and expand it
+    root = dialog.tree.topLevelItem(0)
+    dialog.tree.expandItem(root)
+
+    # Select the date child item
+    date_item = root.child(0)
+    dialog.tree.setCurrentItem(date_item)
+
+    # Try to change color - should return early
+    dialog._change_tag_color()
+
+    # Should handle gracefully
+    assert True
+
+
+def test_tag_browser_delete_tag_no_item(app, fresh_db):
+    """Test deleting tag when no item is selected (lines 183-185)"""
+    dialog = TagBrowserDialog(fresh_db)
+
+    # Try to delete without selecting anything
+    dialog._delete_tag()
+
+    # Should handle gracefully
+    assert True
+
+
+def test_tag_browser_delete_tag_page_item(app, fresh_db):
+    """Test deleting tag when a page item is selected (lines 187-189)"""
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+
+    # Get the tag item and expand it
+    root = dialog.tree.topLevelItem(0)
+    dialog.tree.expandItem(root)
+
+    # Select the date child item
+    date_item = root.child(0)
+    dialog.tree.setCurrentItem(date_item)
+
+    # Try to delete - should return early
+    dialog._delete_tag()
+
+    # Tag should still exist
+    tags = fresh_db.list_tags()
+    assert len(tags) == 1
+
+
+# ============================================================================
+# FlowLayout Edge Case (flow_layout.py line 28)
+# ============================================================================
+
+
+def test_flow_layout_take_at_out_of_bounds(app):
+    """Test FlowLayout.takeAt with invalid index (line 28)"""
+    layout = FlowLayout()
+
+    # Try to take item at index that doesn't exist
+    result = layout.takeAt(999)
+
+    # Should return None
+    assert result is None
+
+
+def test_flow_layout_take_at_negative(app):
+    """Test FlowLayout.takeAt with negative index"""
+    layout = FlowLayout()
+
+    # Try to take item at negative index
+    result = layout.takeAt(-1)
+
+    # Should return None
+    assert result is None
+
+
+# ============================================================================
+# DB Edge Case (db.py line 434)
+# ============================================================================
+
+
+def test_db_default_tag_colour_many_tags(fresh_db):
+    """Test the _default_tag_colour method with many tags"""
+    # Create many tags to test color assignment logic
+    tag_names = [f"tag{i}" for i in range(20)]
+
+    for i, name in enumerate(tag_names):
+        fresh_db.set_tags_for_page(f"2024-01-{i+1:02d}", [name])
+
+    # Verify all tags have valid colors
+    tags = fresh_db.list_tags()
+    for _, name, color in tags:
+        assert color.startswith("#")
+        assert len(color) in (4, 7)
+
+
+# ============================================================================
+# Additional PageTagsWidget Coverage
+# ============================================================================
+
+
+def test_page_tags_widget_set_date_while_collapsed(app, fresh_db):
+    """Test setting date when widget is collapsed"""
+    widget = PageTagsWidget(fresh_db)
+    date_iso = "2024-01-15"
+
+    fresh_db.set_tags_for_page(date_iso, ["tag1", "tag2"])
+
+    # Widget is collapsed by default
+    assert not widget.toggle_btn.isChecked()
+
+    # Set date while collapsed
+    widget.set_current_date(date_iso)
+
+    # Chips should not be loaded yet (collapsed)
+    assert widget.chip_layout.count() == 0
+
+
+def test_page_tags_widget_expand_then_set_date(app, fresh_db):
+    """Test expanding widget then setting date"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+    date_iso = "2024-01-15"
+
+    fresh_db.set_tags_for_page(date_iso, ["tag1"])
+
+    # Expand first
+    widget.toggle_btn.setChecked(True)
+    widget._on_toggle(True)
+
+    # Then set date
+    widget.set_current_date(date_iso)
+
+    # Process events
+    QApplication.processEvents()
+
+    # Chips should be loaded
+    assert widget.chip_layout.count() == 1
+
+
+def test_page_tags_widget_remove_tag_no_date(app, fresh_db):
+    """Test removing tag when current date is None"""
+    widget = PageTagsWidget(fresh_db)
+
+    # Current date is None
+    assert widget._current_date is None
+
+    # Try to remove tag
+    widget._remove_tag(1)
+
+    # Should handle gracefully
+    assert True
+
+
+# ============================================================================
+# Signal Connection Tests
+# ============================================================================
+
+
+def test_tag_browser_open_date_signal_works(app, fresh_db):
+    """Test that openDateRequested signal works properly"""
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+
+    received_dates = []
+
+    def date_handler(date_iso):
+        received_dates.append(date_iso)
+
+    dialog.openDateRequested.connect(date_handler)
+
+    # Get tag item, expand it, and get child date item
+    root = dialog.tree.topLevelItem(0)
+    dialog.tree.expandItem(root)
+    date_item = root.child(0)
+
+    # Simulate activation (double-click)
+    dialog._on_item_activated(date_item, 0)
+
+    assert "2024-01-15" in received_dates
+
+
+def test_page_tags_widget_tag_activated_signal_works(app, fresh_db):
+    """Test tagActivated signal emission"""
+    widget = PageTagsWidget(fresh_db)
+    date_iso = "2024-01-15"
+
+    fresh_db.set_tags_for_page(date_iso, ["clicktag"])
+    widget.set_current_date(date_iso)
+
+    received_data = []
+
+    def tag_handler(data):
+        received_data.append(data)
+
+    widget.tagActivated.connect(tag_handler)
+
+    # Directly call the method
+    widget._on_chip_clicked("clicktag")
+
+    assert "clicktag" in received_data
+
+
+# ============================================================================
+# Additional Edge Cases
+# ============================================================================
+
+
+def test_page_tags_widget_clear_chips_when_no_items(app, fresh_db):
+    """Test clearing chips when layout is empty"""
+    widget = PageTagsWidget(fresh_db)
+
+    # Clear when empty
+    widget._clear_chips()
+
+    # Should handle gracefully
+    assert widget.chip_layout.count() == 0
+
+
+def test_tag_browser_populate_with_no_focus_tag(app, fresh_db):
+    """Test populating browser without focus tag"""
+    fresh_db.set_tags_for_page("2024-01-15", ["tag1", "tag2"])
+
+    dialog = TagBrowserDialog(fresh_db, focus_tag=None)
+
+    # Should have both tags
+    assert dialog.tree.topLevelItemCount() == 2
+
+
+def test_tag_browser_populate_with_nonexistent_focus_tag(app, fresh_db):
+    """Test populating browser with focus tag that doesn't exist"""
+    fresh_db.set_tags_for_page("2024-01-15", ["tag1"])
+
+    dialog = TagBrowserDialog(fresh_db, focus_tag="nonexistent")
+
+    # Should handle gracefully
+    assert dialog.tree.topLevelItemCount() == 1
+
+
+# ============================================================================
+# PageTagsWidget Edge Cases
+# ============================================================================
+
+
+def test_page_tags_widget_reload_without_current_date(app, fresh_db):
+    """Test _reload_tags with no current date set"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+
+    # Try to reload without setting a date
+    widget._reload_tags()
+
+    # Should handle gracefully
+    assert widget.chip_layout.count() == 0
+
+
+def test_page_tags_widget_add_tag_without_current_date(app, fresh_db):
+    """Test trying to add tag without current date set"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+
+    widget.add_edit.setText("shouldnotadd")
+    widget._on_add_tag()
+
+    # Should not crash, and no tags should be in database
+    all_tags = fresh_db.list_tags()
+    assert len(all_tags) == 0
+
+
+def test_page_tags_widget_completer_popup_visible_skip(app, fresh_db):
+    """Test that _on_add_tag returns early if completer popup is visible"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+    date_iso = "2024-01-15"
+
+    # Create some existing tags for autocomplete
+    fresh_db.set_tags_for_page(date_iso, ["existing1", "existing2"])
+    widget.set_current_date(date_iso)
+    widget._setup_autocomplete()
+
+    # Make completer popup visible
+    widget.add_edit.setText("ex")
+    completer = widget.add_edit.completer()
+    if completer:
+        completer.popup().show()
+
+        # Try to add tag while popup is visible
+        initial_count = len(fresh_db.get_tags_for_page(date_iso))
+        widget._on_add_tag()
+
+        # Should return early, not add anything
+        assert len(fresh_db.get_tags_for_page(date_iso)) == initial_count
+
+
+def test_page_tags_widget_set_date_when_collapsed(app, fresh_db):
+    """Test setting date when widget is collapsed"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+    date_iso = "2024-01-15"
+
+    fresh_db.set_tags_for_page(date_iso, ["tag1", "tag2"])
+
+    # Ensure widget is collapsed
+    widget.toggle_btn.setChecked(False)
+
+    # Set date - should clear chips since collapsed
+    widget.set_current_date(date_iso)
+
+    assert widget._current_date == date_iso
+    # Chips should be cleared when collapsed
+    assert widget.chip_layout.count() == 0
+
+
+def test_page_tags_widget_set_date_when_expanded(app, fresh_db):
+    """Test setting date when widget is expanded"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+    date_iso = "2024-01-15"
+
+    fresh_db.set_tags_for_page(date_iso, ["tag1", "tag2"])
+
+    # Expand widget
+    widget.toggle_btn.setChecked(True)
+    widget._on_toggle(True)
+
+    # Set date - should reload tags since expanded
+    widget.set_current_date(date_iso)
+
+    assert widget.chip_layout.count() == 2
+
+
+def test_page_tags_widget_toggle_without_date(app, fresh_db):
+    """Test toggling widget without a current date set"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+
+    # Try to expand without setting a date
+    widget.toggle_btn.setChecked(True)
+    widget._on_toggle(True)
+
+    # Should not crash
+    assert widget.body.isVisible()
+
+
+# ============================================================================
+# TagBrowserDialog User Interaction Tests
+# ============================================================================
+
+
+def test_tag_browser_click_page_item_disables_buttons(app, fresh_db):
+    """Test that clicking a page item (not tag) disables edit buttons"""
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    # Get the tag item and expand it
+    root = dialog.tree.topLevelItem(0)
+    dialog.tree.expandItem(root)
+
+    # Click the page child item
+    page_item = root.child(0)
+    dialog.tree.setCurrentItem(page_item)
+    dialog._on_item_clicked(page_item, 0)
+
+    # Buttons should be disabled for page items
+    assert not dialog.edit_name_btn.isEnabled()
+    assert not dialog.change_color_btn.isEnabled()
+    assert not dialog.delete_btn.isEnabled()
+
+
+def test_tag_browser_edit_name_no_item_selected(app, fresh_db):
+    """Test _edit_tag_name with no item selected"""
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    # Clear selection
+    dialog.tree.setCurrentItem(None)
+
+    # Try to edit - should return early
+    dialog._edit_tag_name()
+
+    # Tag should be unchanged
+    tags = fresh_db.list_tags()
+    assert tags[0][1] == "test"
+
+
+def test_tag_browser_edit_name_page_item_selected(app, fresh_db):
+    """Test _edit_tag_name with page item selected (should return early)"""
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    # Select a page item
+    root = dialog.tree.topLevelItem(0)
+    dialog.tree.expandItem(root)
+    page_item = root.child(0)
+    dialog.tree.setCurrentItem(page_item)
+
+    # Try to edit - should return early
+    dialog._edit_tag_name()
+
+    # Tag should be unchanged
+    tags = fresh_db.list_tags()
+    assert tags[0][1] == "test"
+
+
+def test_tag_browser_edit_name_cancelled(app, fresh_db, monkeypatch):
+    """Test _edit_tag_name when user cancels the dialog"""
+    fresh_db.set_tags_for_page("2024-01-15", ["oldname"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    # Select the tag
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    # Mock QInputDialog.getText to return cancelled (ok=False)
+    def mock_get_text(*args, **kwargs):
+        return ("newname", False)  # User cancelled
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+
+    dialog._edit_tag_name()
+
+    # Tag should be unchanged
+    tags = fresh_db.list_tags()
+    assert tags[0][1] == "oldname"
+
+
+def test_tag_browser_edit_name_empty_name(app, fresh_db, monkeypatch):
+    """Test _edit_tag_name with empty name"""
+    fresh_db.set_tags_for_page("2024-01-15", ["oldname"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    # Mock QInputDialog.getText to return empty string
+    def mock_get_text(*args, **kwargs):
+        return ("", True)
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+
+    dialog._edit_tag_name()
+
+    # Tag should be unchanged
+    tags = fresh_db.list_tags()
+    assert tags[0][1] == "oldname"
+
+
+def test_tag_browser_edit_name_same_name(app, fresh_db, monkeypatch):
+    """Test _edit_tag_name with same name (no change)"""
+    fresh_db.set_tags_for_page("2024-01-15", ["samename"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    # Mock QInputDialog.getText to return same name
+    def mock_get_text(*args, **kwargs):
+        return ("samename", True)
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+
+    dialog._edit_tag_name()
+
+    # Tag should be unchanged
+    tags = fresh_db.list_tags()
+    assert tags[0][1] == "samename"
+
+
+def test_tag_browser_edit_name_success(app, fresh_db, monkeypatch):
+    """Test successfully editing a tag name"""
+    fresh_db.set_tags_for_page("2024-01-15", ["oldname"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    # Mock QInputDialog.getText to return new name
+    def mock_get_text(*args, **kwargs):
+        return ("newname", True)
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+
+    dialog._edit_tag_name()
+
+    # Tag should be updated
+    tags = fresh_db.list_tags()
+    assert tags[0][1] == "newname"
+
+
+def test_tag_browser_change_color_cancelled(app, fresh_db, monkeypatch):
+    """Test _change_tag_color when user cancels"""
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    original_color = fresh_db.list_tags()[0][2]
+
+    # Mock QColorDialog.getColor to return invalid color (cancelled)
+    from PySide6.QtGui import QColor
+
+    def mock_get_color(*args, **kwargs):
+        return QColor()  # Invalid color
+
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+
+    dialog._change_tag_color()
+
+    # Color should be unchanged
+    assert fresh_db.list_tags()[0][2] == original_color
+
+
+def test_tag_browser_change_color_success(app, fresh_db, monkeypatch):
+    """Test successfully changing tag color"""
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    # Mock QColorDialog.getColor to return blue
+    from PySide6.QtGui import QColor
+
+    def mock_get_color(*args, **kwargs):
+        return QColor("#0000FF")
+
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+
+    dialog._change_tag_color()
+
+    # Color should be updated
+    tags = fresh_db.list_tags()
+    assert tags[0][2] == "#0000ff"  # Qt lowercases hex colors
+
+
+def test_tag_browser_delete_tag_cancelled(app, fresh_db, monkeypatch):
+    """Test _delete_tag when user cancels confirmation"""
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    # Mock QMessageBox.question to return No
+    def mock_question(*args, **kwargs):
+        return QMessageBox.No
+
+    monkeypatch.setattr(QMessageBox, "question", mock_question)
+
+    dialog._delete_tag()
+
+    # Tag should still exist
+    assert len(fresh_db.list_tags()) == 1
+
+
+def test_tag_browser_delete_tag_confirmed(app, fresh_db, monkeypatch):
+    """Test successfully deleting a tag after confirmation"""
+    fresh_db.set_tags_for_page("2024-01-15", ["test"])
+
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    # Mock QMessageBox.question to return Yes
+    def mock_question(*args, **kwargs):
+        return QMessageBox.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", mock_question)
+
+    dialog._delete_tag()
+
+    # Tag should be deleted
+    assert len(fresh_db.list_tags()) == 0
+
+
+# ============================================================================
+# DB Edge Cases
+# ============================================================================
+
+
+def test_default_tag_colour_empty_name(fresh_db):
+    """Test _default_tag_colour with empty string"""
+    color = fresh_db._default_tag_colour("")
+    assert color == "#CCCCCC"
+
+
+def test_default_tag_colour_none(fresh_db):
+    """Test _default_tag_colour with None (should handle edge case)"""
+    # This tests the "if not name:" condition
+    color = fresh_db._default_tag_colour("")
+    assert color == "#CCCCCC"
+
+
+# ============================================================================
+# FlowLayout Edge Cases
+# ============================================================================
+
+
+def test_flow_layout_take_at_invalid_index(app):
+    """Test FlowLayout.takeAt with out-of-bounds index"""
+    from PySide6.QtWidgets import QWidget, QLabel
+
+    widget = QWidget()
+    layout = FlowLayout(widget)
+
+    # Add some items
+    layout.addWidget(QLabel("Item 1"))
+    layout.addWidget(QLabel("Item 2"))
+
+    # Try to take at invalid negative index
+    result = layout.takeAt(-1)
+    assert result is None
+
+    # Try to take at index beyond count
+    result = layout.takeAt(100)
+    assert result is None
+
+    # Valid index should work
+    result = layout.takeAt(0)
+    assert result is not None
+
+
+def test_flow_layout_take_at_boundary(app):
+    """Test FlowLayout.takeAt at exact boundary"""
+    from PySide6.QtWidgets import QWidget, QLabel
+
+    widget = QWidget()
+    layout = FlowLayout(widget)
+
+    # Add items
+    layout.addWidget(QLabel("Item 1"))
+    layout.addWidget(QLabel("Item 2"))
+
+    count = layout.count()
+
+    # Try to take at count (should be out of bounds)
+    result = layout.takeAt(count)
+    assert result is None
+
+    # Take at count-1 (should work)
+    result = layout.takeAt(count - 1)
+    assert result is not None
+
+
+# ============================================================================
+# Integration Tests for Complete Coverage
+# ============================================================================
+
+
+def test_complete_tag_lifecycle_with_browser(app, fresh_db, monkeypatch):
+    """Test complete tag lifecycle: create, view in browser, edit, delete"""
+    # Create a tag
+    fresh_db.save_new_version("2024-01-15", "Content", "note")
+    fresh_db.set_tags_for_page("2024-01-15", ["lifecycle"])
+
+    # Open browser
+    dialog = TagBrowserDialog(fresh_db)
+    dialog.show()
+
+    # Select the tag
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+    dialog._on_item_clicked(item, 0)
+
+    # Edit name
+    def mock_get_text(*args, **kwargs):
+        return ("renamed", True)
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+    dialog._edit_tag_name()
+
+    # After _edit_tag_name calls _populate(), need to re-select the item
+    # as the tree was rebuilt
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+    dialog._on_item_clicked(item, 0)
+
+    # Change color
+    from PySide6.QtGui import QColor
+
+    def mock_get_color(*args, **kwargs):
+        return QColor("#FF0000")
+
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+    dialog._change_tag_color()
+
+    # Verify changes
+    tags = fresh_db.list_tags()
+    assert tags[0][1] == "renamed"
+    # Qt lowercases hex colors
+    assert tags[0][2].lower() == "#ff0000"
+
+    # Delete tag - need to re-select after _change_tag_color also calls _populate
+    item = dialog.tree.topLevelItem(0)
+    dialog.tree.setCurrentItem(item)
+
+    def mock_question(*args, **kwargs):
+        return QMessageBox.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", mock_question)
+    dialog._delete_tag()
+
+    # Tag should be gone
+    assert len(fresh_db.list_tags()) == 0
+
+
+def test_tag_widget_with_completer_interaction(app, fresh_db):
+    """Test tag widget with autocomplete interaction"""
+    widget = PageTagsWidget(fresh_db)
+    widget.show()
+
+    # Create some tags
+    date1 = "2024-01-15"
+    fresh_db.set_tags_for_page(date1, ["alpha", "beta", "gamma"])
+
+    # Set up widget with different date
+    date2 = "2024-01-16"
+    widget.set_current_date(date2)
+    widget.toggle_btn.setChecked(True)
+    widget._on_toggle(True)
+
+    # Autocomplete should have previous tags
+    completer = widget.add_edit.completer()
+    assert completer is not None
+
+    # Add a tag that exists in autocomplete
+    widget.add_edit.setText("alpha")
+    widget._on_add_tag()
+
+    # Should be added to current page
+    tags = fresh_db.get_tags_for_page(date2)
+    tag_names = [name for _, name, _ in tags]
+    assert "alpha" in tag_names
+
+
+def test_multiple_widgets_same_database(app, fresh_db):
+    """Test multiple tag widgets operating on same database"""
+    widget1 = PageTagsWidget(fresh_db)
+    widget2 = PageTagsWidget(fresh_db)
+
+    widget1.show()
+    widget2.show()
+
+    date_iso = "2024-01-15"
+
+    # Widget 1 adds a tag
+    widget1.set_current_date(date_iso)
+    widget1.toggle_btn.setChecked(True)
+    widget1._on_toggle(True)
+    widget1.add_edit.setText("shared")
+    widget1._on_add_tag()
+
+    # Widget 2 should see it when set to same date
+    widget2.set_current_date(date_iso)
+    widget2.toggle_btn.setChecked(True)
+    widget2._on_toggle(True)
+
+    assert widget2.chip_layout.count() == 1

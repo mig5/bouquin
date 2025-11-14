@@ -15,7 +15,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            black pyflakes3
+            black pyflakes3 vulture
 
       - name: Run linters
         run: |
@@ -23,3 +23,4 @@ jobs:
           black --diff --check tests/*
           pyflakes3 bouquin/*
           pyflakes3 tests/*
+          vulture

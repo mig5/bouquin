@@ -16,7 +16,6 @@ def editor(app, qtbot):
     return ed
 
 
-@pytest.mark.gui
 def test_findbar_basic_navigation(qtbot, editor):
     editor.from_markdown("alpha\nbeta\nalpha\nGamma\n")
     editor.moveCursor(QTextCursor.Start)
@@ -113,7 +112,6 @@ def test_update_highlight_clear_when_empty(qtbot, editor):
     assert not editor.extraSelections()
 
 
-@pytest.mark.gui
 def test_maybe_hide_and_wrap_prev(qtbot, editor):
     editor.setPlainText("a a a")
     fb = FindBar(editor=editor, shortcut_parent=editor)

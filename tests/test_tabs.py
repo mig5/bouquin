@@ -1,5 +1,4 @@
 import types
-import pytest
 from PySide6.QtWidgets import QFileDialog
 from PySide6.QtGui import QTextCursor
 
@@ -10,7 +9,6 @@ from bouquin.main_window import MainWindow
 from bouquin.history_dialog import HistoryDialog
 
 
-@pytest.mark.gui
 def test_tabs_open_and_deduplicate(qtbot, app, tmp_db_cfg, fresh_db):
     # point to the temp encrypted DB
     s = get_settings()
@@ -43,7 +41,6 @@ def test_tabs_open_and_deduplicate(qtbot, app, tmp_db_cfg, fresh_db):
     assert w.tab_widget.currentWidget().current_date == date1
 
 
-@pytest.mark.gui
 def test_toolbar_signals_dispatch_once_per_click(
     qtbot, app, tmp_db_cfg, fresh_db, monkeypatch
 ):
@@ -115,7 +112,6 @@ def test_toolbar_signals_dispatch_once_per_click(
     assert calls2["bold"] == 1
 
 
-@pytest.mark.gui
 def test_history_and_insert_image_not_duplicated(
     qtbot, app, tmp_db_cfg, fresh_db, monkeypatch, tmp_path
 ):
@@ -158,7 +154,6 @@ def test_history_and_insert_image_not_duplicated(
     assert inserted["count"] == 1
 
 
-@pytest.mark.gui
 def test_highlighter_attached_after_text_load(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
     s.setValue("db/path", str(tmp_db_cfg.path))
@@ -174,7 +169,6 @@ def test_highlighter_attached_after_text_load(qtbot, app, tmp_db_cfg, fresh_db):
     assert w.editor.highlighter.document() is w.editor.document()
 
 
-@pytest.mark.gui
 def test_findbar_works_for_current_tab(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
     s.setValue("db/path", str(tmp_db_cfg.path))
