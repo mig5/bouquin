@@ -5,6 +5,9 @@
  * Add version information in the navigation
  * Increase line spacing between lines (except for code blocks)
  * Add Italian translations (thanks @mdaleo404)
+ * Prevent being able to left-click a date and have it load in current tab if it is already open in another tab
+ * Avoid second checkbox/bullet on second newline after first newline
+ * Avoid Home/left arrow jumping to the left side of a list symbol
 
 # 0.2.1.8
 

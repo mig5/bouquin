@@ -478,6 +478,46 @@ class MarkdownEditor(QTextEdit):
                     self._update_code_block_row_backgrounds()
                 return
 
+        # Handle Home and Left arrow keys to prevent going left of list markers
+        if event.key() in (Qt.Key.Key_Home, Qt.Key.Key_Left):
+            cursor = self.textCursor()
+            block = cursor.block()
+            line = block.text()
+            pos_in_block = cursor.position() - block.position()
+
+            # Detect list prefix length
+            prefix_len = 0
+            stripped = line.lstrip()
+            leading_spaces = len(line) - len(stripped)
+
+            # Check for checkbox (Unicode display format)
+            if stripped.startswith(
+                f"{self._CHECK_UNCHECKED_DISPLAY} "
+            ) or stripped.startswith(f"{self._CHECK_CHECKED_DISPLAY} "):
+                prefix_len = leading_spaces + 2  # icon + space
+            # Check for bullet list
+            elif re.match(r"^[-*+]\s", stripped):
+                prefix_len = leading_spaces + 2  # marker + space
+            # Check for numbered list
+            elif re.match(r"^\d+\.\s", stripped):
+                match = re.match(r"^(\d+\.\s)", stripped)
+                if match:
+                    prefix_len = leading_spaces + len(match.group(1))
+
+            if prefix_len > 0:
+                if event.key() == Qt.Key.Key_Home:
+                    # Move to after the list marker
+                    cursor.setPosition(block.position() + prefix_len)
+                    self.setTextCursor(cursor)
+                    return
+                elif event.key() == Qt.Key.Key_Left and pos_in_block <= prefix_len:
+                    # Prevent moving left of the list marker
+                    if pos_in_block > prefix_len:
+                        # Allow normal left movement if we're past the prefix
+                        super().keyPressEvent(event)
+                    # Otherwise block the movement
+                    return
+
         # Handle Enter key for smart list continuation AND code blocks
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
             cursor = self.textCursor()
@@ -559,8 +599,10 @@ class MarkdownEditor(QTextEdit):
                     self._last_enter_was_empty = False
                     return
                 elif is_empty:
-                    # First enter on empty list item - remember this
+                    # First enter on empty list item - just insert newline without prefix
+                    super().keyPressEvent(event)
                     self._last_enter_was_empty = True
+                    return
                 else:
                     # Not empty - continue the list
                     self._last_enter_was_empty = False
