@@ -25,6 +25,7 @@ _TAG_COLORS = [
     "#E0BAFF",  # soft purple
 ]
 
+
 @dataclass
 class DBConfig:
     path: Path
@@ -197,7 +198,6 @@ class DBManager:
             (pattern, pattern),
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
-
 
     def dates_with_content(self) -> list[str]:
         """
@@ -559,6 +559,28 @@ class DBManager:
             cur = self.conn.cursor()
             cur.execute("DELETE FROM page_tags WHERE tag_id=?;", (tag_id,))
             cur.execute("DELETE FROM tags WHERE id=?;", (tag_id,))
+
+    def get_pages_for_tag(self, tag_name: str) -> list[Entry]:
+        """
+        Return (date, content) for pages that have the given tag.
+        """
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT p.date, v.content
+            FROM pages AS p
+            JOIN versions AS v
+              ON v.id = p.current_version_id
+            JOIN page_tags pt
+              ON pt.page_date = p.date
+            JOIN tags t
+              ON t.id = pt.tag_id
+            WHERE LOWER(t.name) = LOWER(?)
+            ORDER BY p.date DESC;
+            """,
+            (tag_name,),
+        ).fetchall()
+        return [(r[0], r[1]) for r in rows]
 
     def close(self) -> None:
         if self.conn is not None:

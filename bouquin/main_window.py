@@ -57,6 +57,7 @@ from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from . import strings
 from .tags_widget import PageTagsWidget
+from .status_tags_widget import StatusBarTagsWidget
 from .toolbar import ToolBar
 from .theme import ThemeManager
 
@@ -180,6 +181,11 @@ class MainWindow(QMainWindow):
         # FindBar will get the current editor dynamically via a callable
         self.findBar = FindBar(lambda: self.editor, shortcut_parent=self, parent=self)
         self.statusBar().addPermanentWidget(self.findBar)
+        # status-bar tags widget
+        self.statusTags = StatusBarTagsWidget(self.db, self)
+        self.statusBar().addPermanentWidget(self.statusTags)
+        # Clicking a tag in the status bar will open tag pages (next section)
+        self.statusTags.tagActivated.connect(self._on_tag_activated)
         # When the findBar closes, put the caret back in the editor
         self.findBar.closed.connect(self._focus_editor_now)
 
@@ -502,11 +508,8 @@ class MainWindow(QMainWindow):
             with QSignalBlocker(self.calendar):
                 self.calendar.setSelectedDate(editor.current_date)
 
-
             # update per-page tags for the active tab
-            if hasattr(self, "tags"):
-                date_iso = editor.current_date.toString("yyyy-MM-dd")
-                self.tags.set_current_date(date_iso)
+            self._update_tag_views_for_date(date_iso)
 
         # Reconnect toolbar to new active editor
         self._sync_toolbar()
@@ -639,8 +642,7 @@ class MainWindow(QMainWindow):
         self._reorder_tabs_by_date()
 
         # sync tags
-        if hasattr(self, "tags"):
-            self.tags.set_current_date(date_iso)        
+        self._update_tag_views_for_date(date_iso)
 
     def _load_date_into_editor(self, date: QDate, extra_data=False):
         """Load a specific date's content into a given editor."""
@@ -1004,6 +1006,20 @@ class MainWindow(QMainWindow):
         # Insert each image
         for path_str in paths:
             self.editor.insert_image_from_path(Path(path_str))
+
+    # ----------- Tags handler ----------------#
+    def _update_tag_views_for_date(self, date_iso: str):
+        if hasattr(self, "tags"):
+            self.tags.set_current_date(date_iso)
+        if hasattr(self, "statusTags"):
+            self.statusTags.set_current_page(date_iso)
+
+    def _on_tag_activated(self, tag_name: str):
+        from .tag_browser import TagBrowserDialog
+
+        dlg = TagBrowserDialog(self.db, self, focus_tag=tag_name)
+        dlg.openDateRequested.connect(self._load_selected_date)
+        dlg.exec()
 
     # ----------- Settings handler ------------#
     def _open_settings(self):

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from . import strings
 from .db import DBManager
 
+
 class TagManagerDialog(QDialog):
     def __init__(self, db: DBManager, parent=None):
         super().__init__(parent)
@@ -42,12 +43,12 @@ class TagManagerDialog(QDialog):
 
         action_row = QHBoxLayout()
         ok_btn = QPushButton(strings._("ok"))
-        cancel_btn = QPushButton(strings._("cancel"))
+        close_btn = QPushButton(strings._("close"))
         ok_btn.clicked.connect(self.accept)
-        cancel_btn.clicked.connect(self.reject)
+        close_btn.clicked.connect(self.reject)
         action_row.addStretch(1)
         action_row.addWidget(ok_btn)
-        action_row.addWidget(cancel_btn)
+        action_row.addWidget(close_btn)
         layout.addLayout(action_row)
 
         self.add_btn.clicked.connect(self._add_row)

@@ -112,11 +112,15 @@
     "toolbar_heading": "Heading",
     "toolbar_toggle_checkboxes": "Toggle checkboxes",
     "tags": "Tags",
-    "manage_tags": "Manage tags…",
-    "add_tag_placeholder": "Add tag and press Enter…",
+    "manage_tags": "Manage tags on this page",
+    "add_tag_placeholder": "Add a tag and press Enter",
+    "tag_browser_title": "Tag Browser",
     "tag_name": "Tag name",
     "tag_color_hex": "Hex colour",
-    "pick_color": "Pick colour…",
+    "pick_color": "Pick colour",
     "invalid_color_title": "Invalid colour",
-    "invalid_color_message": "Please enter a valid hex colour like #RRGGBB."    
+    "invalid_color_message": "Please enter a valid hex colour like #RRGGBB.",
+    "add": "Add",
+    "remove": "Remove",
+    "ok": "OK"
 }

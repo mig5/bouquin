@@ -17,13 +17,20 @@ from PySide6.QtWidgets import (
 
 from . import strings
 from .db import DBManager
+from .flow_layout import FlowLayout
+
 
 class TagChip(QFrame):
     removeRequested = Signal(int)  # tag_id
+    clicked = Signal(str)  # tag name
 
-    def __init__(self, tag_id: int, name: str, color: str, parent: QWidget | None = None):
+    def __init__(
+        self, tag_id: int, name: str, color: str, parent: QWidget | None = None
+    ):
         super().__init__(parent)
         self._id = tag_id
+        self._name = name
+
         self.setObjectName("TagChip")
 
         self.setFrameShape(QFrame.StyledPanel)
@@ -45,11 +52,19 @@ class TagChip(QFrame):
         btn.setText("×")
         btn.setAutoRaise(True)
         btn.clicked.connect(lambda: self.removeRequested.emit(self._id))
+
+        self.setCursor(Qt.PointingHandCursor)
+
         layout.addWidget(btn)
 
     @property
     def tag_id(self) -> int:
         return self._id
+
+    def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.LeftButton:
+            self.clicked.emit(self._name)
+        super().mouseReleaseEvent(ev)
 
 
 class PageTagsWidget(QFrame):
@@ -75,7 +90,9 @@ class PageTagsWidget(QFrame):
         self.toggle_btn.clicked.connect(self._on_toggle)
 
         self.manage_btn = QToolButton()
-        self.manage_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+        self.manage_btn.setIcon(
+            self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
+        )
         self.manage_btn.setToolTip(strings._("manage_tags"))
         self.manage_btn.setAutoRaise(True)
         self.manage_btn.clicked.connect(self._open_manager)
@@ -93,9 +110,7 @@ class PageTagsWidget(QFrame):
         self.body_layout.setSpacing(4)
 
         # Simple horizontal layout for now; you can swap for a FlowLayout
-        self.chip_row = QHBoxLayout()
-        self.chip_row.setContentsMargins(0, 0, 0, 0)
-        self.chip_row.setSpacing(4)
+        self.chip_row = FlowLayout(self.body, hspacing=4, vspacing=4)
         self.body_layout.addLayout(self.chip_row)
 
         self.add_edit = QLineEdit()
@@ -145,8 +160,8 @@ class PageTagsWidget(QFrame):
         for tag_id, name, color in tags:
             chip = TagChip(tag_id, name, color, self)
             chip.removeRequested.connect(self._remove_tag)
+            chip.clicked.connect(self._on_chip_clicked)
             self.chip_row.addWidget(chip)
-        self.chip_row.addStretch(1)
 
     def _on_add_tag(self) -> None:
         if not self._current_date:
@@ -156,7 +171,9 @@ class PageTagsWidget(QFrame):
             return
 
         # Combine current tags + new one, then write back
-        existing = [name for _, name, _ in self._db.get_tags_for_page(self._current_date)]
+        existing = [
+            name for _, name, _ in self._db.get_tags_for_page(self._current_date)
+        ]
         existing.append(new_tag)
         self._db.set_tags_for_page(self._current_date, existing)
         self.add_edit.clear()
@@ -179,3 +196,5 @@ class PageTagsWidget(QFrame):
             if self._current_date:
                 self._reload_tags()
 
+    def _on_chip_clicked(self, name: str) -> None:
+        self.tagActivated.emit(name)
