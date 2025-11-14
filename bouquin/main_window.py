@@ -626,6 +626,20 @@ class MainWindow(QMainWindow):
             date_iso = self._current_date_iso()
 
         qd = QDate.fromString(date_iso, "yyyy-MM-dd")
+        current_index = self.tab_widget.currentIndex()
+
+        # Check if this date is already open in a *different* tab
+        existing_idx = self._tab_index_for_date(qd)
+        if existing_idx != -1 and existing_idx != current_index:
+            # Date is already open in another tab - just switch to that tab
+            self.tab_widget.setCurrentIndex(existing_idx)
+            # Keep calendar in sync
+            with QSignalBlocker(self.calendar):
+                self.calendar.setSelectedDate(qd)
+            QTimer.singleShot(0, self._focus_editor_now)
+            return
+
+        # Date not open in any other tab - load it into current tab
         # Keep calendar in sync
         with QSignalBlocker(self.calendar):
             self.calendar.setSelectedDate(qd)
@@ -634,7 +648,6 @@ class MainWindow(QMainWindow):
         self.editor.current_date = qd
 
         # Update tab title
-        current_index = self.tab_widget.currentIndex()
         if current_index >= 0:
             self.tab_widget.setTabText(current_index, date_iso)
 
@@ -781,13 +794,23 @@ class MainWindow(QMainWindow):
             prev_date_iso = self.editor.current_date.toString("yyyy-MM-dd")
             self._save_date(prev_date_iso, explicit=False)
 
-        # Now load the newly selected date into the current tab
+        # Now load the newly selected date
         new_date = self.calendar.selectedDate()
+        current_index = self.tab_widget.currentIndex()
+
+        # Check if this date is already open in a *different* tab
+        existing_idx = self._tab_index_for_date(new_date)
+        if existing_idx != -1 and existing_idx != current_index:
+            # Date is already open in another tab - just switch to that tab
+            self.tab_widget.setCurrentIndex(existing_idx)
+            QTimer.singleShot(0, self._focus_editor_now)
+            return
+
+        # Date not open in any other tab - load it into current tab
         self._load_date_into_editor(new_date)
         self.editor.current_date = new_date
 
         # Update tab title
-        current_index = self.tab_widget.currentIndex()
         if current_index >= 0:
             self.tab_widget.setTabText(current_index, new_date.toString("yyyy-MM-dd"))
 
