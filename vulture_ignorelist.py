@@ -1,9 +1,12 @@
+from bouquin.db import DBManager
 from bouquin.flow_layout import FlowLayout
 from bouquin.markdown_editor import MarkdownEditor
 from bouquin.markdown_highlighter import MarkdownHighlighter
-from bouquin.db import DBManager
+from bouquin.statistics_dialog import DateHeatMap
 
 DBManager.row_factory
+
+DateHeatMap.minimumSizeHint
 
 FlowLayout.itemAt
 FlowLayout.expandingDirections

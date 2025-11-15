@@ -33,9 +33,6 @@ class MarkdownEditor(QTextEdit):
 
         self.theme_manager = theme_manager
 
-        # Track hyperlink under click
-        self._clicked_link: str | None = None
-
         # Setup tab width
         tab_w = 4 * self.fontMetrics().horizontalAdvance(" ")
         self.setTabStopDistance(tab_w)
