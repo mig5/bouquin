@@ -1,6 +1,7 @@
 # 0.3.1
 
  * Make it possible to add a tag from the Tag Browser
+ * Add a statistics dialog with heatmap
 
 # 0.3
 

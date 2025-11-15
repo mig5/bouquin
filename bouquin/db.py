@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import csv
+import datetime as _dt
 import hashlib
 import html
 import json
+import re
 
 from dataclasses import dataclass
 from pathlib import Path
 from sqlcipher3 import dbapi2 as sqlite
-from typing import List, Sequence, Tuple
+from typing import List, Sequence, Tuple, Dict
 
 
 from . import strings
@@ -639,6 +641,125 @@ class DBManager:
             (tag_name,),
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
+
+    # ---------- helpers for word counting ----------
+    def _strip_markdown(self, text: str) -> str:
+        """
+        Cheap markdown-ish stripper for word counting.
+        We only need approximate numbers.
+        """
+        if not text:
+            return ""
+
+        # Remove fenced code blocks
+        text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+        # Remove inline code
+        text = re.sub(r"`[^`]+`", " ", text)
+        # [text](url) → text
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        # Remove emphasis markers, headings, etc.
+        text = re.sub(r"[#*_>]+", " ", text)
+        # Strip simple HTML tags
+        text = re.sub(r"<[^>]+>", " ", text)
+
+        return text
+
+    def _count_words(self, text: str) -> int:
+        text = self._strip_markdown(text)
+        words = re.findall(r"\b\w+\b", text, flags=re.UNICODE)
+        return len(words)
+
+    def gather_stats(self):
+        """Compute all the numbers the Statistics dialog needs in one place."""
+
+        # 1) pages with content (current version only)
+        try:
+            pages_with_content_list = self.dates_with_content()
+        except Exception:
+            pages_with_content_list = []
+        pages_with_content = len(pages_with_content_list)
+
+        cur = self.conn.cursor()
+
+        # 2 & 3) total revisions + page with most revisions + per-date counts
+        total_revisions = 0
+        page_most_revisions = None
+        page_most_revisions_count = 0
+        revisions_by_date: Dict[_dt.date, int] = {}
+
+        rows = cur.execute(
+            """
+            SELECT date, COUNT(*) AS c
+            FROM versions
+            GROUP BY date
+            ORDER BY date;
+            """
+        ).fetchall()
+
+        for r in rows:
+            date_iso = r["date"]
+            c = int(r["c"])
+            total_revisions += c
+
+            if c > page_most_revisions_count:
+                page_most_revisions_count = c
+                page_most_revisions = date_iso
+
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+                revisions_by_date[d] = c
+            except ValueError:
+                # Ignore malformed dates
+                pass
+
+        # 4) total words + per-date words (current version only)
+        entries = self.get_all_entries()
+        total_words = 0
+        words_by_date: Dict[_dt.date, int] = {}
+
+        for date_iso, content in entries:
+            wc = self._count_words(content or "")
+            total_words += wc
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+                words_by_date[d] = wc
+            except ValueError:
+                pass
+
+        # tags + page with most tags
+
+        rows = cur.execute("SELECT COUNT(*) AS total_unique FROM tags;").fetchall()
+        unique_tags = int(rows[0]["total_unique"]) if rows else 0
+
+        rows = cur.execute(
+            """
+            SELECT page_date, COUNT(*) AS c
+            FROM page_tags
+            GROUP BY page_date
+            ORDER BY c DESC, page_date ASC
+            LIMIT 1;
+            """
+        ).fetchall()
+
+        if rows:
+            page_most_tags = rows[0]["page_date"]
+            page_most_tags_count = int(rows[0]["c"])
+        else:
+            page_most_tags = None
+            page_most_tags_count = 0
+
+        return (
+            pages_with_content,
+            total_revisions,
+            page_most_revisions,
+            page_most_revisions_count,
+            words_by_date,
+            total_words,
+            unique_tags,
+            page_most_tags,
+            page_most_tags_count,
+            revisions_by_date,
+        )
 
     def close(self) -> None:
         if self.conn is not None:

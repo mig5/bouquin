@@ -55,6 +55,7 @@ from .save_dialog import SaveDialog
 from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
+from .statistics_dialog import StatisticsDialog
 from . import strings
 from .tags_widget import PageTagsWidget
 from .toolbar import ToolBar
@@ -209,10 +210,14 @@ class MainWindow(QMainWindow):
         act_backup.setShortcut("Ctrl+Shift+B")
         act_backup.triggered.connect(self._backup)
         file_menu.addAction(act_backup)
-        act_tags = QAction("&" + strings._("manage_tags"), self)
+        act_tags = QAction(strings._("main_window_manage_tags_accessible_flag"), self)
         act_tags.setShortcut("Ctrl+T")
         act_tags.triggered.connect(self.tags._open_manager)
         file_menu.addAction(act_tags)
+        act_stats = QAction(strings._("main_window_statistics_accessible_flag"), self)
+        act_stats.setShortcut("Shift+Ctrl+S")
+        act_stats.triggered.connect(self._open_statistics)
+        file_menu.addAction(act_stats)
         file_menu.addSeparator()
         act_quit = QAction("&" + strings._("quit"), self)
         act_quit.setShortcut("Ctrl+Q")
@@ -1433,3 +1438,11 @@ class MainWindow(QMainWindow):
         super().changeEvent(ev)
         if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
             QTimer.singleShot(0, self._focus_editor_now)
+
+    def _open_statistics(self):
+        # If the DB isn't ready for some reason, just do nothing
+        if not getattr(self, "db", None) or self.db.conn is None:
+            return
+
+        dlg = StatisticsDialog(self.db, self)
+        dlg.exec()
