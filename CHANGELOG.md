@@ -3,6 +3,7 @@
  * Make it possible to add a tag from the Tag Browser
  * Add a statistics dialog with heatmap
  * Remove export to .txt (just use .md)
+ * Restore link styling and clickability
 
 # 0.3
 

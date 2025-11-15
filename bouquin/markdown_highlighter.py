@@ -91,6 +91,13 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.h3_format.setFontPointSize(14.0)
         self.h3_format.setFontWeight(QFont.Weight.Bold)
 
+        # Hyperlinks
+        self.link_format = QTextCharFormat()
+        link_color = pal.color(QPalette.Link)
+        self.link_format.setForeground(link_color)
+        self.link_format.setFontUnderline(True)
+        self.link_format.setAnchor(True)
+
         # Markdown syntax (the markers themselves) - make invisible
         self.syntax_format = QTextCharFormat()
         # Make the markers invisible by setting font size to 0.1 points
@@ -243,3 +250,15 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(start, 1, self.syntax_format)
             self.setFormat(end - 1, 1, self.syntax_format)
             self.setFormat(content_start, content_end - content_start, self.code_format)
+
+        # Hyperlinks
+        url_pattern = re.compile(r"(https?://[^\s<>()]+)")
+        for m in url_pattern.finditer(text):
+            start, end = m.span(1)
+            url = m.group(1)
+
+            # Clone link format so we can attach a per-link href
+            fmt = QTextCharFormat(self.link_format)
+            fmt.setAnchorHref(url)
+            # Overlay link attributes on top of whatever formatting is already there
+            self._overlay_range(start, end - start, fmt)

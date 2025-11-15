@@ -440,6 +440,7 @@ class MainWindow(QMainWindow):
         return self._create_new_tab(date)
 
     def _create_new_tab(self, date: QDate | None = None) -> MarkdownEditor:
+        """Create a new editor tab and return the editor instance."""
         if date is None:
             date = self.calendar.selectedDate()
 
@@ -449,7 +450,6 @@ class MainWindow(QMainWindow):
             self.tab_widget.setCurrentIndex(existing)
             return self.tab_widget.widget(existing)
 
-        """Create a new editor tab and return the editor instance."""
         editor = MarkdownEditor(self.themes)
 
         # Set up the editor's event connections
@@ -1129,6 +1129,15 @@ class MainWindow(QMainWindow):
             self._load_selected_date()
             self._refresh_calendar_marks()
 
+    # ------------ Statistics handler --------------- #
+
+    def _open_statistics(self):
+        if not getattr(self, "db", None) or self.db.conn is None:
+            return
+
+        dlg = StatisticsDialog(self.db, self)
+        dlg.exec()
+
     # ------------ Window positioning --------------- #
     def _restore_window_position(self):
         geom = self.settings.value("main/geometry", None)
@@ -1434,11 +1443,3 @@ class MainWindow(QMainWindow):
         super().changeEvent(ev)
         if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
             QTimer.singleShot(0, self._focus_editor_now)
-
-    def _open_statistics(self):
-        # If the DB isn't ready for some reason, just do nothing
-        if not getattr(self, "db", None) or self.db.conn is None:
-            return
-
-        dlg = StatisticsDialog(self.db, self)
-        dlg.exec()

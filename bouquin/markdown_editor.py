@@ -14,8 +14,9 @@ from PySide6.QtGui import (
     QTextFormat,
     QTextBlockFormat,
     QTextImageFormat,
+    QDesktopServices,
 )
-from PySide6.QtCore import Qt, QRect, QTimer
+from PySide6.QtCore import Qt, QRect, QTimer, QUrl
 from PySide6.QtWidgets import QTextEdit
 
 from .theme import ThemeManager
@@ -31,6 +32,9 @@ class MarkdownEditor(QTextEdit):
         super().__init__(*args, **kwargs)
 
         self.theme_manager = theme_manager
+
+        # Track hyperlink under click
+        self._clicked_link: str | None = None
 
         # Setup tab width
         tab_w = 4 * self.fontMetrics().horizontalAdvance(" ")
@@ -70,6 +74,11 @@ class MarkdownEditor(QTextEdit):
 
         # Enable mouse tracking for checkbox clicking
         self.viewport().setMouseTracking(True)
+        # Also mark links as mouse-accessible
+        flags = self.textInteractionFlags()
+        self.setTextInteractionFlags(
+            flags | Qt.TextInteractionFlag.LinksAccessibleByMouse
+        )
 
     def setDocument(self, doc):
         super().setDocument(doc)
@@ -400,6 +409,28 @@ class MarkdownEditor(QTextEdit):
 
         return (None, "")
 
+    def _url_at_pos(self, pos) -> str | None:
+        """
+        Return the URL under the given widget position, or None if there isn't one.
+        """
+        cursor = self.cursorForPosition(pos)
+        block = cursor.block()
+        text = block.text()
+        if not text:
+            return None
+
+        # Position of the cursor inside this block
+        pos_in_block = cursor.position() - block.position()
+
+        # Same pattern as in MarkdownHighlighter
+        url_pattern = re.compile(r"(https?://[^\s<>()]+)")
+        for m in url_pattern.finditer(text):
+            start, end = m.span(1)
+            if start <= pos_in_block < end:
+                return m.group(1)
+
+        return None
+
     def keyPressEvent(self, event):
         """Handle special key events for markdown editing."""
 
@@ -621,6 +652,37 @@ class MarkdownEditor(QTextEdit):
 
         # Default handling
         super().keyPressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        # Change cursor when hovering a link
+        url = self._url_at_pos(event.pos())
+        if url:
+            self.viewport().setCursor(Qt.PointingHandCursor)
+        else:
+            self.viewport().setCursor(Qt.IBeamCursor)
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        # Let QTextEdit handle caret/selection first
+        super().mouseReleaseEvent(event)
+
+        if event.button() != Qt.LeftButton:
+            return
+
+        # If the user dragged to select text, don't treat it as a click
+        if self.textCursor().hasSelection():
+            return
+
+        url_str = self._url_at_pos(event.pos())
+        if not url_str:
+            return
+
+        url = QUrl(url_str)
+        if not url.scheme():
+            url.setScheme("https")
+
+        QDesktopServices.openUrl(url)
 
     def mousePressEvent(self, event):
         """Toggle a checkbox only when the click lands on its icon."""
