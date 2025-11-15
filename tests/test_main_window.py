@@ -744,7 +744,6 @@ def test_on_insert_image_calls_editor_insert(
 @pytest.mark.parametrize(
     "filter_label, method",
     [
-        ("Text (*.txt)", "export_txt"),
         ("JSON (*.json)", "export_json"),
         ("CSV (*.csv)", "export_csv"),
         ("HTML (*.html)", "export_html"),
@@ -1172,7 +1171,7 @@ def test_export_cancel_then_empty_filename(
     monkeypatch.setattr(
         mwmod.QFileDialog,
         "getSaveFileName",
-        staticmethod(lambda *a, **k: ("", "Text (*.txt)")),
+        staticmethod(lambda *a, **k: ("", "Markdown (*.md)")),
         raising=False,
     )
     w._export()  # returns early at filename check

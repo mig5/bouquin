@@ -34,7 +34,7 @@ There is deliberately no network connectivity or syncing intended.
  * Transparent integrity checking of the database when it opens
  * Automatic locking of the app after a period of inactivity (default 15 min)
  * Rekey the database (change the password)
- * Export the database to json, txt, html, csv, markdown or .sql (for sqlite3)
+ * Export the database to json, html, csv, markdown or .sql (for sqlite3)
  * Backup the database to encrypted SQLCipher format (which can then be loaded back in to a Bouquin)
  * Dark and light themes
  * Automatically generate checkboxes when typing 'TODO'

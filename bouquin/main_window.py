@@ -1179,7 +1179,6 @@ class MainWindow(QMainWindow):
             return False
 
         filters = (
-            "Text (*.txt);;"
             "JSON (*.json);;"
             "CSV (*.csv);;"
             "HTML (*.html);;"
@@ -1195,22 +1194,19 @@ class MainWindow(QMainWindow):
             return  # user cancelled
 
         default_ext = {
-            "Text (*.txt)": ".txt",
             "JSON (*.json)": ".json",
             "CSV (*.csv)": ".csv",
             "HTML (*.html)": ".html",
             "Markdown (*.md)": ".md",
             "SQL (*.sql)": ".sql",
-        }.get(selected_filter, ".txt")
+        }.get(selected_filter, ".md")
 
         if not Path(filename).suffix:
             filename += default_ext
 
         try:
             entries = self.db.get_all_entries()
-            if selected_filter.startswith("Text"):
-                self.db.export_txt(entries, filename)
-            elif selected_filter.startswith("JSON"):
+            if selected_filter.startswith("JSON"):
                 self.db.export_json(entries, filename)
             elif selected_filter.startswith("CSV"):
                 self.db.export_csv(entries, filename)

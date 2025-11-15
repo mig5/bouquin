@@ -356,21 +356,6 @@ class DBManager:
             writer.writerow(["date", "content"])  # header
             writer.writerows(entries)
 
-    def export_txt(
-        self,
-        entries: Sequence[Entry],
-        file_path: str,
-        separator: str = "\n\n— — — — —\n\n",
-    ) -> None:
-        """
-        Strip the the latest version of the pages to a text file.
-        """
-        with open(file_path, "w", encoding="utf-8") as f:
-            for i, (d, c) in enumerate(entries):
-                f.write(f"{d}\n{c}\n")
-                if i < len(entries) - 1:
-                    f.write(separator)
-
     def export_html(
         self, entries: Sequence[Entry], file_path: str, title: str = "Bouquin export"
     ) -> None:

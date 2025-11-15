@@ -75,10 +75,6 @@ def test_get_all_entries_and_export(fresh_db, tmp_path):
     fresh_db.export_csv(entries, str(csv_path))
     assert csv_path.exists() and list(csv.reader(open(csv_path)))
 
-    txt_path = tmp_path / "export.txt"
-    fresh_db.export_txt(entries, str(txt_path))
-    assert txt_path.exists() and txt_path.read_text().strip()
-
     md_path = tmp_path / "export.md"
     fresh_db.export_markdown(entries, str(md_path))
     md_text = md_path.read_text()
