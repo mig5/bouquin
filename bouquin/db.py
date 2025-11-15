@@ -561,6 +561,30 @@ class DBManager:
         ).fetchall()
         return [(r[0], r[1], r[2]) for r in rows]
 
+    def add_tag(self, name: str, color: str) -> None:
+        """
+        Update a tag's name and colour.
+        """
+        name = name.strip()
+        color = color.strip() or "#CCCCCC"
+
+        try:
+            with self.conn:
+                cur = self.conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO tags
+                    (name, color)
+                    VALUES (?, ?);
+                    """,
+                    (name, color),
+                )
+        except sqlite.IntegrityError as e:
+            if "UNIQUE constraint failed: tags.name" in str(e):
+                raise sqlite.IntegrityError(
+                    strings._("tag_already_exists_with_that_name")
+                ) from e
+
     def update_tag(self, tag_id: int, name: str, color: str) -> None:
         """
         Update a tag's name and colour.

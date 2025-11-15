@@ -127,6 +127,7 @@
     "add": "Add",
     "remove": "Remove",
     "ok": "OK",
+    "add_a_tag": "Add a tag",
     "edit_tag_name": "Edit tag name",
     "new_tag_name": "New tag name:",
     "change_color": "Change colour",

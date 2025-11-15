@@ -127,6 +127,7 @@
     "add": "Ajouter",
     "remove": "Supprimer",
     "ok": "OK",
+    "add_a_tag": "Ajouter une étiquette",
     "edit_tag_name": "Modifier le nom de l'étiquette",
     "new_tag_name": "Nouveau nom de l'étiquette :",
     "change_color": "Changer la couleur",

@@ -1,4 +1,3 @@
-# tag_browser.py
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -11,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QColorDialog,
     QMessageBox,
+    QInputDialog,
 )
 
 from .db import DBManager
@@ -51,6 +51,10 @@ class TagBrowserDialog(QDialog):
 
         # Tag management buttons
         btn_row = QHBoxLayout()
+
+        self.add_tag_btn = QPushButton(strings._("add_a_tag"))
+        self.add_tag_btn.clicked.connect(self._add_a_tag)
+        btn_row.addWidget(self.add_tag_btn)
 
         self.edit_name_btn = QPushButton(strings._("edit_tag_name"))
         self.edit_name_btn.clicked.connect(self._edit_tag_name)
@@ -155,6 +159,23 @@ class TagBrowserDialog(QDialog):
                     self.openDateRequested.emit(date_iso)
                     self.accept()
 
+    def _add_a_tag(self):
+        """Add a new tag"""
+
+        new_name, ok = QInputDialog.getText(
+            self, strings._("add_a_tag"), strings._("new_tag_name"), text=""
+        )
+
+        if ok and new_name:
+            color = QColorDialog.getColor(QColor(), self)
+            if color.isValid():
+                try:
+                    self._db.add_tag(new_name, color.name())
+                    self._populate(None)
+                    self.tagsModified.emit()
+                except IntegrityError as e:
+                    QMessageBox.critical(self, strings._("db_database_error"), str(e))
+
     def _edit_tag_name(self):
         """Edit the name of the selected tag"""
         item = self.tree.currentItem()
@@ -168,9 +189,6 @@ class TagBrowserDialog(QDialog):
         tag_id = data["id"]
         old_name = data["name"]
         color = data["color"]
-
-        # Simple input dialog
-        from PySide6.QtWidgets import QInputDialog
 
         new_name, ok = QInputDialog.getText(
             self, strings._("edit_tag_name"), strings._("new_tag_name"), text=old_name

@@ -141,6 +141,16 @@ def test_list_all_tags(fresh_db):
     assert "tag3" in tag_names
 
 
+def test_add_tag_name_and_color(fresh_db):
+    """Test adding a tag's name and color"""
+    fresh_db.add_tag("new123", "#FF0000")
+
+    updated_tags = fresh_db.list_tags()
+    assert len(updated_tags) == 1
+    assert updated_tags[0][1] == "new123"
+    assert updated_tags[0][2] == "#FF0000"
+
+
 def test_update_tag_name_and_color(fresh_db):
     """Test updating a tag's name and color"""
     date_iso = "2024-01-15"
