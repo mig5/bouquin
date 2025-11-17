@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Dict
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush
 from PySide6.QtWidgets import (
     QDialog,
@@ -31,6 +31,8 @@ class DateHeatmap(QWidget):
 
     Data is a mapping: datetime.date -> integer value.
     """
+
+    date_clicked = Signal(_dt.date)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -191,6 +193,46 @@ class DateHeatmap(QWidget):
             )
 
         painter.end()
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            return super().mousePressEvent(event)
+
+        # No data = nothing to click
+        if not self._start or not self._end:
+            return
+
+        # Qt6: position(), older: pos()
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        x = pos.x()
+        y = pos.y()
+
+        # Outside grid area (left of weekday labels or above rows)
+        if x < self._margin_left or y < self._margin_top:
+            return
+
+        cell_span = self._cell + self._gap
+        col = int((x - self._margin_left) // cell_span)  # week index
+        row = int((y - self._margin_top) // cell_span)  # dow (0..6)
+
+        # Only 7 rows (Mon–Sun)
+        if not (0 <= row < 7):
+            return
+
+        # Only as many weeks as we actually have
+        day_count = (self._end - self._start).days + 1
+        weeks = (day_count + 6) // 7
+        if col < 0 or col >= weeks:
+            return
+
+        idx = col * 7 + row
+        date = self._start + _dt.timedelta(days=idx)
+
+        # Skip trailing empty cells beyond the last date
+        if date > self._end:
+            return
+
+        self.date_clicked.emit(date)
 
 
 # ---------- Statistics dialog itself ----------

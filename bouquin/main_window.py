@@ -1163,6 +1163,14 @@ class MainWindow(QMainWindow):
             return
 
         dlg = StatisticsDialog(self.db, self)
+
+        if hasattr(dlg, "_heatmap"):
+
+            def on_date_clicked(d: datetime.date):
+                qd = QDate(d.year, d.month, d.day)
+                self._open_date_in_tab(qd)
+
+            dlg._heatmap.date_clicked.connect(on_date_clicked)
         dlg.exec()
 
     # ------------ Window positioning --------------- #

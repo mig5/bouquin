@@ -1,6 +1,7 @@
 # 0.3.2
 
  * Add weekday letters on left axis of Statistics page
+ * Allow clicking on a date in the Statistics heatmap and have it open that page
  * Add the ability to choose the database path at startup
  * Add in-app bug report functionality
  * Add ability to take screenshots in-app and insert them into the page
