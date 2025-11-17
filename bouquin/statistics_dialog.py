@@ -41,7 +41,7 @@ class DateHeatmap(QWidget):
 
         self._cell = 12
         self._gap = 3
-        self._margin_left = 10
+        self._margin_left = 30
         self._margin_top = 10
         self._margin_bottom = 24
         self._margin_right = 10
@@ -146,6 +146,25 @@ class DateHeatmap(QWidget):
 
         painter.setPen(palette.text().color())
         fm = painter.fontMetrics()
+
+        # --- weekday labels on left -------------------------------------
+        # Python's weekday(): Monday=0 ... Sunday=6, same as your rows.
+        weekday_labels = ["M", "T", "W", "T", "F", "S", "S"]
+
+        for dow in range(7):
+            label = weekday_labels[dow]
+            text_width = fm.horizontalAdvance(label)
+
+            # Center text vertically in the cell
+            y_center = (
+                self._margin_top + dow * (self._cell + self._gap) + self._cell / 2
+            )
+            baseline_y = int(y_center + fm.ascent() / 2 - fm.descent() / 2)
+
+            # Right-align text just to the left of the first column
+            x = self._margin_left - self._gap - 2 - text_width
+
+            painter.drawText(x, baseline_y, label)
 
         prev_month = None
         for week in range(weeks):
