@@ -147,5 +147,7 @@
     "stats_heatmap_metric": "Colour by",
     "stats_metric_words": "Words",
     "stats_metric_revisions": "Revisions",
-    "stats_no_data": "No statistics available yet."
+    "stats_no_data": "No statistics available yet.",
+    "select_notebook": "Select notebook"
+
 }

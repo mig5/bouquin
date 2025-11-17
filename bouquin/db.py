@@ -433,7 +433,7 @@ class DBManager:
         """
         if not name:
             return "#CCCCCC"
-        h = int(hashlib.sha1(name.encode("utf-8")).hexdigest()[:8], 16)
+        h = int(hashlib.sha1(name.encode("utf-8")).hexdigest()[:8], 16)  # nosec
         return _TAG_COLORS[h % len(_TAG_COLORS)]
 
     # -------- Tags: per-page -------------------------------------------
@@ -514,7 +514,7 @@ class DBManager:
                 SELECT id, name
                 FROM tags
                 WHERE name IN ({placeholders});
-                """,
+                """,  # nosec
                 tuple(final_tag_names),
             ).fetchall()
             ids_by_name = {r["name"]: r["id"] for r in rows}

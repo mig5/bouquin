@@ -8,7 +8,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox, QWidget, QDialog
 
 
-def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db, tmp_path):
+def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db):
     # Provide a parent that exposes a real ThemeManager (dialog calls parent().themes.set(...))
     app = QApplication.instance()
     parent = QWidget()
@@ -17,7 +17,6 @@ def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db, tmp_path)
     qtbot.addWidget(dlg)
     dlg.show()
 
-    dlg.path_edit.setText(str(tmp_path / "alt.db"))
     dlg.idle_spin.setValue(3)
     dlg.theme_light.setChecked(True)
     dlg.move_todos.setChecked(True)
@@ -34,7 +33,6 @@ def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db, tmp_path)
 
     dlg._save()
     cfg = dlg.config
-    assert cfg.path.name == "alt.db"
     assert cfg.idle_minutes == 3
     assert cfg.theme in ("light", "dark", "system")
 
@@ -55,7 +53,7 @@ def test_save_key_toggle_roundtrip(qtbot, tmp_db_cfg, fresh_db, app):
     def _pump():
         for w in QApplication.topLevelWidgets():
             if isinstance(w, KeyPrompt):
-                w.edit.setText("supersecret")
+                w.key_entry.setText("supersecret")
                 w.accept()
             elif isinstance(w, QMessageBox):
                 w.accept()
@@ -99,7 +97,7 @@ def test_change_key_mismatch_shows_error(qtbot, tmp_db_cfg, tmp_path, app):
     def _pump_popups():
         for w in QApplication.topLevelWidgets():
             if isinstance(w, KeyPrompt):
-                w.edit.setText(keys.pop(0) if keys else "zzz")
+                w.key_entry.setText(keys.pop(0) if keys else "zzz")
                 w.accept()
             elif isinstance(w, QMessageBox):
                 w.accept()
@@ -141,7 +139,7 @@ def test_change_key_success(qtbot, tmp_path, app):
     def _pump():
         for w in QApplication.topLevelWidgets():
             if isinstance(w, KeyPrompt):
-                w.edit.setText(keys.pop(0) if keys else "newkey")
+                w.key_entry.setText(keys.pop(0) if keys else "newkey")
                 w.accept()
             elif isinstance(w, QMessageBox):
                 w.accept()
@@ -201,27 +199,6 @@ def test_settings_compact_error(qtbot, app, monkeypatch, tmp_db_cfg, fresh_db):
     assert called["critical"]
     assert called["title"]
     assert called["text"]
-
-
-def test_settings_browse_sets_path(qtbot, app, tmp_path, fresh_db, monkeypatch):
-    parent = QWidget()
-    parent.themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    cfg = DBConfig(
-        path=tmp_path / "x.db", key="k", idle_minutes=0, theme="light", move_todos=True
-    )
-    dlg = SettingsDialog(cfg, fresh_db, parent=parent)
-    qtbot.addWidget(dlg)
-    dlg.show()
-
-    p = tmp_path / "new_file.db"
-    monkeypatch.setattr(
-        sd.QFileDialog,
-        "getSaveFileName",
-        staticmethod(lambda *a, **k: (str(p), "DB Files (*.db)")),
-        raising=False,
-    )
-    dlg._browse()
-    assert dlg.path_edit.text().endswith("new_file.db")
 
 
 class _Host(QWidget):

@@ -12,7 +12,7 @@ from bouquin.history_dialog import HistoryDialog
 def test_tabs_open_and_deduplicate(qtbot, app, tmp_db_cfg, fresh_db):
     # point to the temp encrypted DB
     s = get_settings()
-    s.setValue("db/path", str(tmp_db_cfg.path))
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -45,7 +45,7 @@ def test_toolbar_signals_dispatch_once_per_click(
     qtbot, app, tmp_db_cfg, fresh_db, monkeypatch
 ):
     s = get_settings()
-    s.setValue("db/path", str(tmp_db_cfg.path))
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -116,7 +116,7 @@ def test_history_and_insert_image_not_duplicated(
     qtbot, app, tmp_db_cfg, fresh_db, monkeypatch, tmp_path
 ):
     s = get_settings()
-    s.setValue("db/path", str(tmp_db_cfg.path))
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -156,7 +156,7 @@ def test_history_and_insert_image_not_duplicated(
 
 def test_highlighter_attached_after_text_load(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
-    s.setValue("db/path", str(tmp_db_cfg.path))
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -171,7 +171,7 @@ def test_highlighter_attached_after_text_load(qtbot, app, tmp_db_cfg, fresh_db):
 
 def test_findbar_works_for_current_tab(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
-    s.setValue("db/path", str(tmp_db_cfg.path))
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))

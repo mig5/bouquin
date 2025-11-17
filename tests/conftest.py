@@ -33,10 +33,10 @@ def isolate_qsettings(tmp_path_factory):
 def tmp_db_cfg(tmp_path):
     from bouquin.db import DBConfig
 
-    db_path = tmp_path / "notebook.db"
+    default_db = tmp_path / "notebook.db"
     key = "test-secret-key"
     return DBConfig(
-        path=db_path, key=key, idle_minutes=0, theme="light", move_todos=True
+        path=default_db, key=key, idle_minutes=0, theme="light", move_todos=True
     )
 
 

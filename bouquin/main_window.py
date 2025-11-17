@@ -329,14 +329,14 @@ class MainWindow(QMainWindow):
         try:
             self.db = DBManager(self.cfg)
             ok = self.db.connect()
+            return ok
         except Exception as e:
             if str(e) == "file is not a database":
                 error = strings._("db_key_incorrect")
             else:
                 error = str(e)
             QMessageBox.critical(self, strings._("db_database_error"), error)
-            return False
-        return ok
+            sys.exit(1)
 
     def _prompt_for_key_until_valid(self, first_time: bool) -> bool:
         """
@@ -349,10 +349,20 @@ class MainWindow(QMainWindow):
             title = strings._("unlock_encrypted_notebook")
             message = strings._("unlock_encrypted_notebook_explanation")
         while True:
-            dlg = KeyPrompt(self, title, message)
+            dlg = KeyPrompt(
+                self, title, message, initial_db_path=self.cfg.path, show_db_change=True
+            )
             if dlg.exec() != QDialog.Accepted:
                 return False
             self.cfg.key = dlg.key()
+
+            # Update DB path if the user changed it
+            new_path = dlg.db_path()
+            if new_path is not None and new_path != self.cfg.path:
+                self.cfg.path = new_path
+                # Persist immediately so next run is pre-filled with this file
+                save_db_config(self.cfg)
+
             if self._try_connect():
                 return True
 

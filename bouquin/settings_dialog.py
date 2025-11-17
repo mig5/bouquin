@@ -12,10 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QVBoxLayout,
-    QWidget,
-    QLineEdit,
     QPushButton,
-    QFileDialog,
     QDialogButtonBox,
     QRadioButton,
     QSizePolicy,
@@ -47,7 +44,7 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(560)
         self.setSizeGripEnabled(True)
 
-        current_settings = load_db_config()
+        self.current_settings = load_db_config()
 
         # Add theme selection
         theme_group = QGroupBox(strings._("theme"))
@@ -58,7 +55,7 @@ class SettingsDialog(QDialog):
         self.theme_dark = QRadioButton(strings._("dark"))
 
         # Load current theme from settings
-        current_theme = current_settings.theme
+        current_theme = self.current_settings.theme
         if current_theme == Theme.DARK.value:
             self.theme_dark.setChecked(True)
         elif current_theme == Theme.LIGHT.value:
@@ -80,7 +77,7 @@ class SettingsDialog(QDialog):
 
         self.locale_combobox = QComboBox()
         self.locale_combobox.addItems(strings._AVAILABLE)
-        self.locale_combobox.setCurrentText(current_settings.locale)
+        self.locale_combobox.setCurrentText(self.current_settings.locale)
         locale_layout.addWidget(self.locale_combobox, 0, Qt.AlignLeft)
 
         # Explanation for locale
@@ -104,25 +101,11 @@ class SettingsDialog(QDialog):
         self.move_todos = QCheckBox(
             strings._("move_yesterdays_unchecked_todos_to_today_on_startup")
         )
-        self.move_todos.setChecked(current_settings.move_todos)
+        self.move_todos.setChecked(self.current_settings.move_todos)
         self.move_todos.setCursor(Qt.PointingHandCursor)
 
         behaviour_layout.addWidget(self.move_todos)
         form.addRow(behaviour_group)
-
-        self.path_edit = QLineEdit(str(self._cfg.path))
-        self.path_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        browse_btn = QPushButton(strings._("browse"))
-        browse_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        browse_btn.clicked.connect(self._browse)
-        path_row = QWidget()
-        h = QHBoxLayout(path_row)
-        h.setContentsMargins(0, 0, 0, 0)
-        h.addWidget(self.path_edit, 1)
-        h.addWidget(browse_btn, 0)
-        h.setStretch(0, 1)
-        h.setStretch(1, 0)
-        form.addRow(strings._("database_path"), path_row)
 
         # Encryption settings
         enc_group = QGroupBox(strings._("encryption"))
@@ -132,7 +115,7 @@ class SettingsDialog(QDialog):
 
         # Checkbox to remember key
         self.save_key_btn = QCheckBox(strings._("remember_key"))
-        self.key = current_settings.key or ""
+        self.key = self.current_settings.key or ""
         self.save_key_btn.setChecked(bool(self.key))
         self.save_key_btn.setCursor(Qt.PointingHandCursor)
         self.save_key_btn.toggled.connect(self._save_key_btn_clicked)
@@ -236,16 +219,6 @@ class SettingsDialog(QDialog):
         v.addLayout(form)
         v.addWidget(bb, 0, Qt.AlignRight)
 
-    def _browse(self):
-        p, _ = QFileDialog.getSaveFileName(
-            self,
-            strings._("database_path"),
-            self.path_edit.text(),
-            "(*.db);;(*)",
-        )
-        if p:
-            self.path_edit.setText(p)
-
     def _save(self):
         # Save the selected theme into QSettings
         if self.theme_dark.isChecked():
@@ -258,7 +231,7 @@ class SettingsDialog(QDialog):
         key_to_save = self.key if self.save_key_btn.isChecked() else ""
 
         self._cfg = DBConfig(
-            path=Path(self.path_edit.text()),
+            path=Path(self.current_settings.path),
             key=key_to_save,
             idle_minutes=self.idle_spin.value(),
             theme=selected_theme.value,

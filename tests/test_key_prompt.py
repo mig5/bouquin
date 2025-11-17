@@ -5,5 +5,5 @@ def test_key_prompt_roundtrip(qtbot):
     kp = KeyPrompt()
     qtbot.addWidget(kp)
     kp.show()
-    kp.edit.setText("swordfish")
+    kp.key_entry.setText("swordfish")
     assert kp.key() == "swordfish"

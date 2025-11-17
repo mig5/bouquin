@@ -1,3 +1,8 @@
+# 0.3.2
+
+ * Add weekday letters on left axis of Statistics page
+ * Add the ability to choose the database path at startup
+
 # 0.3.1
 
  * Make it possible to add a tag from the Tag Browser

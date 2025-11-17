@@ -18,7 +18,7 @@ from unittest.mock import Mock, patch
 
 def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
-    s.setValue("db/path", str(tmp_db_cfg.path))
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
     s.setValue("ui/idle_minutes", 0)
     s.setValue("ui/theme", "light")
@@ -48,7 +48,7 @@ def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
     def _auto_accept_keyprompt():
         for wdg in QApplication.topLevelWidgets():
             if isinstance(wdg, KeyPrompt):
-                wdg.edit.setText(tmp_db_cfg.key)
+                wdg.key_entry.setText(tmp_db_cfg.key)
                 wdg.accept()
 
     w._enter_lock()
@@ -59,7 +59,7 @@ def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
 
 def test_load_yesterday_todos_moves_items(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
-    s.setValue("db/path", str(tmp_db_cfg.path))
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
     s.setValue("db/key", tmp_db_cfg.key)
     s.setValue("ui/move_todos", True)
     s.setValue("ui/theme", "light")
@@ -122,7 +122,7 @@ def test_export_success_and_error(qtbot, app, fresh_db, tmp_path, monkeypatch):
     from bouquin.settings import get_settings
 
     s = get_settings()
-    s.setValue("db/path", str(fresh_db.cfg.path))
+    s.setValue("db/default_db", str(fresh_db.cfg.path))
     s.setValue("db/key", fresh_db.cfg.key)
     s.setValue("ui/idle_minutes", 0)
     s.setValue("ui/theme", "light")
@@ -196,7 +196,7 @@ def test_backup_path(qtbot, app, fresh_db, tmp_path, monkeypatch):
     from bouquin.settings import get_settings
 
     s = get_settings()
-    s.setValue("db/path", str(fresh_db.cfg.path))
+    s.setValue("db/default_db", str(fresh_db.cfg.path))
     s.setValue("db/key", fresh_db.cfg.key)
     s.setValue("ui/idle_minutes", 0)
     s.setValue("ui/theme", "light")
@@ -251,7 +251,7 @@ def test_close_tab_edges_and_autosave(qtbot, app, fresh_db, monkeypatch):
     from bouquin.settings import get_settings
 
     s = get_settings()
-    s.setValue("db/path", str(fresh_db.cfg.path))
+    s.setValue("db/default_db", str(fresh_db.cfg.path))
     s.setValue("db/key", fresh_db.cfg.key)
     s.setValue("ui/idle_minutes", 0)
     s.setValue("ui/theme", "light")
@@ -472,8 +472,24 @@ def test_try_connect_maps_errors(
         mwmod.QMessageBox, "critical", staticmethod(fake_critical), raising=True
     )
 
-    ok = w._try_connect()
-    assert ok is False
+    # Intercept sys.exit so the test process doesn't actually die
+    exited = {}
+
+    def fake_exit(code=0):
+        exited["code"] = code
+        # mimic real behaviour: raise SystemExit so callers see a fatal exit
+        raise SystemExit(code)
+
+    monkeypatch.setattr(mwmod.sys, "exit", fake_exit, raising=True)
+
+    # _try_connect should now raise SystemExit instead of returning
+    with pytest.raises(SystemExit):
+        w._try_connect()
+
+    # We attempted to exit with code 1
+    assert exited["code"] == 1
+
+    # And we still showed the right error message
     assert "database" in shown["title"].lower()
     if expect_key_msg:
         assert "key" in shown["text"].lower()
@@ -499,6 +515,9 @@ def test_prompt_for_key_cancel_returns_false(qtbot, tmp_db_cfg, app, monkeypatch
         def key(self):
             return ""
 
+        def db_path(self) -> Path | None:
+            return "foo.db"
+
     monkeypatch.setattr(mwmod, "KeyPrompt", CancelPrompt, raising=True)
     assert w._prompt_for_key_until_valid(first_time=False) is False
 
@@ -516,6 +535,9 @@ def test_prompt_for_key_accept_then_connects(qtbot, tmp_db_cfg, app, monkeypatch
 
         def key(self):
             return "abc"
+
+        def db_path(self) -> Path | None:
+            return "foo.db"
 
     monkeypatch.setattr(mwmod, "KeyPrompt", OKPrompt, raising=True)
     monkeypatch.setattr(w, "_try_connect", lambda: True, raising=True)
