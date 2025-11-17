@@ -2,6 +2,7 @@
 
  * Add weekday letters on left axis of Statistics page
  * Add the ability to choose the database path at startup
+ * Add in-app bug report functionality
 
 # 0.3.1
 

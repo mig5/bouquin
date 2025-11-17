@@ -11,7 +11,8 @@ for SQLite3. This means that the underlying database for the notebook is encrypt
 To increase security, the SQLCipher key is requested when the app is opened, and is not written
 to disk unless the user configures it to be in the settings.
 
-There is deliberately no network connectivity or syncing intended.
+There is deliberately no network connectivity or syncing intended, other than the option to send a bug
+report from within the app.
 
 ## Screenshots
 

@@ -56,6 +56,7 @@ from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .statistics_dialog import StatisticsDialog
+from .bug_report_dialog import BugReportDialog
 from . import strings
 from .tags_widget import PageTagsWidget
 from .toolbar import ToolBar
@@ -1292,14 +1293,8 @@ class MainWindow(QMainWindow):
             )
 
     def _open_bugs(self):
-        url_str = "https://nr.mig5.net/forms/mig5/contact"
-        url = QUrl.fromUserInput(url_str)
-        if not QDesktopServices.openUrl(url):
-            QMessageBox.warning(
-                self,
-                strings._("report_a_bug"),
-                strings._("couldnt_open") + url.toDisplayString(),
-            )
+        dlg = BugReportDialog(self)
+        dlg.exec()
 
     def _open_version(self):
         version = importlib.metadata.version("bouquin")

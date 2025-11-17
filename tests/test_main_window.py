@@ -80,7 +80,7 @@ def test_load_yesterday_todos_moves_items(qtbot, app, tmp_db_cfg, fresh_db):
     assert "carry me" not in y_txt or "- [ ]" not in y_txt
 
 
-def test_open_docs_and_bugs_warning(qtbot, app, fresh_db, tmp_path, monkeypatch):
+def test_open_docs_warning(qtbot, app, fresh_db, tmp_path, monkeypatch):
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     w = MainWindow(themes=themes)
     qtbot.addWidget(w)
@@ -101,16 +101,12 @@ def test_open_docs_and_bugs_warning(qtbot, app, fresh_db, tmp_path, monkeypatch)
             t = str(text)
             if "wiki" in t:
                 called["docs"] = True
-            if "forms/mig5/contact" in t or "contact" in t:
-                called["bugs"] = True
             return 0
 
     monkeypatch.setattr(mwmod, "QMessageBox", DummyMB, raising=True)  # capture warnings
 
-    # Trigger both actions
     w._open_docs()
-    w._open_bugs()
-    assert called["docs"] and called["bugs"]
+    assert called["docs"]
 
 
 def test_export_success_and_error(qtbot, app, fresh_db, tmp_path, monkeypatch):
@@ -900,9 +896,7 @@ def test_backup_success_and_error(qtbot, tmp_db_cfg, app, monkeypatch, tmp_path)
 # ---- Help openers (1152-1169) ----
 
 
-def test_open_docs_and_bugs_show_warning_on_failure(
-    qtbot, tmp_db_cfg, app, monkeypatch
-):
+def test_open_docs_show_warning_on_failure(qtbot, tmp_db_cfg, app, monkeypatch):
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
     qtbot.addWidget(w)
 
@@ -914,17 +908,14 @@ def test_open_docs_and_bugs_show_warning_on_failure(
     def warn(parent, title, text, *a, **k):
         if "documentation" in title.lower():
             seen["docs"] = True
-        if "bug" in title.lower():
-            seen["bugs"] = True
         return 0
 
     monkeypatch.setattr(
         mwmod, "QMessageBox", type("MB", (), {"warning": staticmethod(warn)})
     )
     w._open_docs()
-    w._open_bugs()
 
-    assert seen["docs"] and seen["bugs"]
+    assert seen["docs"]
 
 
 def test_open_version(qtbot, tmp_db_cfg, app, monkeypatch):

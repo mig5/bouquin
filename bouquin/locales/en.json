@@ -148,6 +148,11 @@
     "stats_metric_words": "Words",
     "stats_metric_revisions": "Revisions",
     "stats_no_data": "No statistics available yet.",
-    "select_notebook": "Select notebook"
-
+    "select_notebook": "Select notebook",
+    "bug_report_explanation": "Describe what went wrong, what you expected to happen, and any steps to reproduce.\n\nWe do not collect anything else except the Bouquin version number.\n\nIf you wish to be contacted, please leave contact information.\n\nYour request will be sent over HTTPS.",
+    "bug_report_placeholder": "Type your bug report here",
+    "bug_report_empty": "Please enter some details about the bug before sending.",
+    "bug_report_send_failed": "Could not send bug report.",
+    "bug_report_sent_ok": "Bug report sent. Thank you!",
+    "send": "Send"
 }
