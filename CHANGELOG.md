@@ -3,6 +3,7 @@
  * Add weekday letters on left axis of Statistics page
  * Add the ability to choose the database path at startup
  * Add in-app bug report functionality
+ * Add ability to take screenshots in-app and insert them into the page
 
 # 0.3.1
 
