@@ -53,6 +53,10 @@ class MarkdownEditor(QTextEdit):
         self._CHECK_UNCHECKED_STORAGE = "[ ]"
         self._CHECK_CHECKED_STORAGE = "[x]"
 
+        # Bullet character (Unicode for display, "- " for markdown)
+        self._BULLET_DISPLAY = "•"
+        self._BULLET_STORAGE = "-"
+
         # Install syntax highlighter
         self.highlighter = MarkdownHighlighter(self.document(), theme_manager)
 
@@ -258,6 +262,13 @@ class MarkdownEditor(QTextEdit):
             f"{self._CHECK_UNCHECKED_DISPLAY} ", f"- {self._CHECK_UNCHECKED_STORAGE} "
         )
 
+        # Convert Unicode bullets back to "- " at the start of a line
+        text = re.sub(
+            rf"(?m)^(\s*){re.escape(self._BULLET_DISPLAY)}\s+",
+            rf"\1{self._BULLET_STORAGE} ",
+            text,
+        )
+
         return text
 
     def _extract_images_to_markdown(self) -> str:
@@ -307,6 +318,14 @@ class MarkdownEditor(QTextEdit):
         display_text = re.sub(
             r"(?m)^([ \t]*)TODO\s",
             lambda m: f"{m.group(1)}\n{self._CHECK_UNCHECKED_DISPLAY} ",
+            display_text,
+        )
+
+        # Convert simple markdown bullets ("- ", "* ", "+ ") to Unicode bullets,
+        # but skip checkbox lines (- [ ] / - [x])
+        display_text = re.sub(
+            r"(?m)^([ \t]*)[-*+]\s+(?!\[[ xX]\])",
+            rf"\1{self._BULLET_DISPLAY} ",
             display_text,
         )
 
@@ -392,7 +411,11 @@ class MarkdownEditor(QTextEdit):
         ):
             return ("checkbox", f"{self._CHECK_UNCHECKED_DISPLAY} ")
 
-        # Bullet list
+        # Bullet list – Unicode bullet
+        if line.startswith(f"{self._BULLET_DISPLAY} "):
+            return ("bullet", f"{self._BULLET_DISPLAY} ")
+
+        # Bullet list - markdown bullet
         if re.match(r"^[-*+]\s", line):
             match = re.match(r"^([-*+]\s)", line)
             return ("bullet", match.group(1))
@@ -524,7 +547,10 @@ class MarkdownEditor(QTextEdit):
                 f"{self._CHECK_UNCHECKED_DISPLAY} "
             ) or stripped.startswith(f"{self._CHECK_CHECKED_DISPLAY} "):
                 prefix_len = leading_spaces + 2  # icon + space
-            # Check for bullet list
+            # Check for Unicode bullet
+            elif stripped.startswith(f"{self._BULLET_DISPLAY} "):
+                prefix_len = leading_spaces + 2  # bullet + space
+            # Check for markdown bullet list (-, *, +)
             elif re.match(r"^[-*+]\s", stripped):
                 prefix_len = leading_spaces + 2  # marker + space
             # Check for numbered list
@@ -951,14 +977,19 @@ class MarkdownEditor(QTextEdit):
             QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor
         )
         line = cursor.selectedText()
+        stripped = line.lstrip()
 
-        # Check if already a bullet
-        if line.lstrip().startswith("- ") or line.lstrip().startswith("* "):
-            # Remove bullet
-            new_line = re.sub(r"^\s*[-*]\s+", "", line)
+        # Consider existing markdown markers OR our Unicode bullet as "a bullet"
+        if (
+            stripped.startswith(f"{self._BULLET_DISPLAY} ")
+            or stripped.startswith("- ")
+            or stripped.startswith("* ")
+        ):
+            # Remove any of those bullet markers
+            pattern = rf"^\s*([{re.escape(self._BULLET_DISPLAY)}\-*])\s+"
+            new_line = re.sub(pattern, "", line)
         else:
-            # Add bullet
-            new_line = "- " + line.lstrip()
+            new_line = f"{self._BULLET_DISPLAY} " + stripped
 
         cursor.insertText(new_line)
 

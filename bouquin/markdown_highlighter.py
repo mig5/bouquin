@@ -98,6 +98,20 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.link_format.setFontUnderline(True)
         self.link_format.setAnchor(True)
 
+        # Base size from the document/editor font
+        doc = self.document()
+        base_font = doc.defaultFont() if doc is not None else QGuiApplication.font()
+        base_size = base_font.pointSizeF()
+        if base_size <= 0:
+            base_size = 10.0  # fallback
+        # Checkboxes: make them a bit bigger so they stand out
+        self.checkbox_format = QTextCharFormat()
+        self.checkbox_format.setFontPointSize(base_size * 1.4)
+
+        # Bullets
+        self.bullet_format = QTextCharFormat()
+        self.bullet_format.setFontPointSize(base_size * 1.2)
+
         # Markdown syntax (the markers themselves) - make invisible
         self.syntax_format = QTextCharFormat()
         # Make the markers invisible by setting font size to 0.1 points
@@ -262,3 +276,11 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             fmt.setAnchorHref(url)
             # Overlay link attributes on top of whatever formatting is already there
             self._overlay_range(start, end - start, fmt)
+
+        # Make checkbox glyphs bigger
+        for m in re.finditer(r"[☐☑]", text):
+            self._overlay_range(m.start(), 1, self.checkbox_format)
+
+        # (If you add Unicode bullets later…)
+        for m in re.finditer(r"•", text):
+            self._overlay_range(m.start(), 1, self.bullet_format)

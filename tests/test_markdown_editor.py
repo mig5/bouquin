@@ -141,7 +141,7 @@ def test_enter_on_nonempty_list_continues(qtbot, editor):
     ev = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Return, Qt.NoModifier, "\n")
     editor.keyPressEvent(ev)
     txt = editor.toPlainText()
-    assert "\n- " in txt
+    assert "\n\u2022 " in txt
 
 
 def test_enter_on_empty_list_marks_empty(qtbot, editor):
@@ -154,7 +154,7 @@ def test_enter_on_empty_list_marks_empty(qtbot, editor):
 
     ev = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Return, Qt.NoModifier, "\n")
     editor.keyPressEvent(ev)
-    assert editor.toPlainText().startswith("- \n")
+    assert editor.toPlainText().startswith("\u2022 \n")
 
 
 def test_triple_backtick_autoexpands(editor, qtbot):

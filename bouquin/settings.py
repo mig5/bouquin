@@ -30,7 +30,7 @@ def load_db_config() -> DBConfig:
         legacy = s.value("db/path", "", type=str)
         if legacy:
             path_str = legacy
-            # Optional: migrate and clean up the old key
+            # migrate and clean up the old key
             s.setValue("db/default_db", legacy)
             s.remove("db/path")
     path = Path(path_str) if path_str else _default_db_location()
