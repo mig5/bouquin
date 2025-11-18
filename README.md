@@ -28,7 +28,7 @@ report from within the app.
  * All changes are version controlled, with ability to view/diff versions and revert
  * Text is Markdown with basic styling
  * Tabs are supported - right-click on a date from the calendar to open it in a new tab.
- * Images are supported, as is the ability to take a screenshot and have it insert into the page automatically.
+ * Images are supported
  * Search all pages, or find text on page (Ctrl+F)
  * Add tags to pages, find pages by tag in the Tag Browser, and customise tag names and colours
  * Automatic periodic saving (or explicitly save)

@@ -978,7 +978,6 @@ class MainWindow(QMainWindow):
 
         tb.historyRequested.connect(self._open_history)
         tb.insertImageRequested.connect(self._on_insert_image)
-        tb.insertScreenshotRequested.connect(self._start_screenshot)
 
         self._toolbar_bound = True
 
@@ -1051,21 +1050,6 @@ class MainWindow(QMainWindow):
         # Insert each image
         for path_str in paths:
             self.editor.insert_image_from_path(Path(path_str))
-
-    # ----------- Screenshot handler ------------#
-    def _start_screenshot(self):
-        ready = QMessageBox.information(
-            self,
-            strings._("screenshot"),
-            strings._("screenshot_get_ready"),
-            QMessageBox.Ok,
-        )
-        if ready == QMessageBox.Ok:
-            QGuiApplication.processEvents()
-            QTimer.singleShot(5000, self._do_screenshot_capture)
-
-    def _do_screenshot_capture(self):
-        self.editor.take_screenshot()
 
     # ----------- Tags handler ----------------#
     def _update_tag_views_for_date(self, date_iso: str):

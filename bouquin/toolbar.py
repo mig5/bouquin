@@ -18,7 +18,6 @@ class ToolBar(QToolBar):
     checkboxesRequested = Signal()
     historyRequested = Signal()
     insertImageRequested = Signal()
-    insertScreenshotRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(strings._("toolbar_format"), parent)
@@ -82,20 +81,15 @@ class ToolBar(QToolBar):
         self.actNumbers.setToolTip(strings._("toolbar_numbered_list"))
         self.actNumbers.setCheckable(True)
         self.actNumbers.triggered.connect(self.numbersRequested)
-        self.actCheckboxes = QAction("☑", self)
+        self.actCheckboxes = QAction("☐", self)
         self.actCheckboxes.setToolTip(strings._("toolbar_toggle_checkboxes"))
         self.actCheckboxes.triggered.connect(self.checkboxesRequested)
 
         # Images
-        self.actInsertImg = QAction("🌄", self)
+        self.actInsertImg = QAction(strings._("images"), self)
         self.actInsertImg.setToolTip(strings._("insert_images"))
         self.actInsertImg.setShortcut("Ctrl+Shift+I")
         self.actInsertImg.triggered.connect(self.insertImageRequested)
-
-        self.actScreenshot = QAction("📸", self)
-        self.actScreenshot.setToolTip(strings._("screenshot"))
-        self.actScreenshot.setShortcut("Ctrl+Shift+O")
-        self.actScreenshot.triggered.connect(self.insertScreenshotRequested)
 
         # History button
         self.actHistory = QAction(strings._("history"), self)
@@ -136,7 +130,6 @@ class ToolBar(QToolBar):
                 self.actNumbers,
                 self.actCheckboxes,
                 self.actInsertImg,
-                self.actScreenshot,
                 self.actHistory,
             ]
         )

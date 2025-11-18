@@ -154,9 +154,5 @@
     "bug_report_empty": "Please enter some details about the bug before sending.",
     "bug_report_send_failed": "Could not send bug report.",
     "bug_report_sent_ok": "Bug report sent. Thank you!",
-    "send": "Send",
-    "screenshot": "Take screenshot",
-    "screenshot_could_not_save": "Could not save screenshot",
-    "screenshot_get_ready": "You will have five seconds to position your screen before a preview is taken.\n\nYou will be able to click and drag to select a specific region of the preview.",
-    "screenshot_click_and_drag": "Click and drag to select a region or press enter to accept the whole region"
+    "send": "Send"
 }

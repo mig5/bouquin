@@ -16,10 +16,9 @@ from PySide6.QtGui import (
     QTextImageFormat,
     QDesktopServices,
 )
-from PySide6.QtCore import Qt, QRect, QTimer, QUrl, QStandardPaths
+from PySide6.QtCore import Qt, QRect, QTimer, QUrl
 from PySide6.QtWidgets import QTextEdit
 
-from .screenshot import ScreenshotMarkdownInserter
 from .theme import ThemeManager
 from .markdown_highlighter import MarkdownHighlighter
 
@@ -1065,8 +1064,3 @@ class MarkdownEditor(QTextEdit):
         cursor = self.textCursor()
         cursor.insertImage(img_format)
         cursor.insertText("\n")  # Add newline after image
-
-    def take_screenshot(self):
-        images_dir = QStandardPaths.writableLocation(QStandardPaths.PicturesLocation)
-        self._screenshot_helper = ScreenshotMarkdownInserter(self, images_dir, self)
-        self._screenshot_helper.capture_and_insert()
