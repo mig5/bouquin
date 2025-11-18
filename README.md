@@ -48,6 +48,7 @@ report from within the app.
  * It is possible to automatically move unchecked checkboxes from yesterday to today, on startup
  * English, French and Italian locales provided
  * Ability to set reminder alarms in the app against the current line of text on today's date
+ * Ability to log time per day and run timesheet reports
 
 
 ## How to install

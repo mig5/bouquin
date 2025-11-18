@@ -51,22 +51,23 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
+from .bug_report_dialog import BugReportDialog
 from .db import DBManager
-from .markdown_editor import MarkdownEditor
 from .find_bar import FindBar
 from .history_dialog import HistoryDialog
 from .key_prompt import KeyPrompt
 from .lock_overlay import LockOverlay
+from .markdown_editor import MarkdownEditor
 from .save_dialog import SaveDialog
 from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .statistics_dialog import StatisticsDialog
-from .bug_report_dialog import BugReportDialog
 from . import strings
 from .tags_widget import PageTagsWidget
-from .toolbar import ToolBar
 from .theme import ThemeManager
+from .time_log import TimeLogWidget, TimeReportDialog
+from .toolbar import ToolBar
 
 
 class MainWindow(QMainWindow):
@@ -102,6 +103,8 @@ class MainWindow(QMainWindow):
         self.search.openDateRequested.connect(self._load_selected_date)
         self.search.resultDatesChanged.connect(self._on_search_dates_changed)
 
+        self.time_log = TimeLogWidget(self.db)
+
         self.tags = PageTagsWidget(self.db)
         self.tags.tagActivated.connect(self._on_tag_activated)
         self.tags.tagAdded.connect(self._on_tag_added)
@@ -113,6 +116,7 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(8, 8, 8, 8)
         left_layout.addWidget(self.calendar)
         left_layout.addWidget(self.search)
+        left_layout.addWidget(self.time_log)
         left_layout.addWidget(self.tags)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
 
@@ -223,6 +227,9 @@ class MainWindow(QMainWindow):
         act_stats.setShortcut("Shift+Ctrl+S")
         act_stats.triggered.connect(self._open_statistics)
         file_menu.addAction(act_stats)
+        act_time_report = QAction(strings._("time_log_report"), self)
+        act_time_report.triggered.connect(self._open_time_report)
+        file_menu.addAction(act_time_report)
         file_menu.addSeparator()
         act_quit = QAction("&" + strings._("quit"), self)
         act_quit.setShortcut("Ctrl+Q")
@@ -1042,10 +1049,10 @@ class MainWindow(QMainWindow):
 
         # Use the current line in the markdown editor as the reminder text
         try:
-            line_text = editor.get_current_line_text().strip()
+            editor.get_current_line_text().strip()
         except AttributeError:
             c = editor.textCursor()
-            line_text = c.block().text().strip()
+            c.block().text().strip()
 
         # Ask user for a time today in HH:MM format
         time_str, ok = QInputDialog.getText(
@@ -1065,9 +1072,6 @@ class MainWindow(QMainWindow):
                 strings._("invalid_time_message"),
             )
             return
-
-        now = QDateTime.currentDateTime()
-        target = QDateTime(now.date(), QTime(hour, minute))
 
         t = QTime(hour, minute)
         if not t.isValid():
@@ -1236,6 +1240,8 @@ class MainWindow(QMainWindow):
     def _update_tag_views_for_date(self, date_iso: str):
         if hasattr(self, "tags"):
             self.tags.set_current_date(date_iso)
+        if hasattr(self, "time_log"):
+            self.time_log.set_current_date(date_iso)
 
     def _on_tag_added(self):
         """Called when a tag is added - trigger autosave for current page"""
@@ -1336,6 +1342,11 @@ class MainWindow(QMainWindow):
                 self._open_date_in_tab(qd)
 
             dlg._heatmap.date_clicked.connect(on_date_clicked)
+        dlg.exec()
+
+    # ------------ Timesheet report handler --------------- #
+    def _open_time_report(self):
+        dlg = TimeReportDialog(self.db, self)
         dlg.exec()
 
     # ------------ Window positioning --------------- #

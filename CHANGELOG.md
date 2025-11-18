@@ -1,4 +1,4 @@
-# 0.3.3
+# 0.4
 
  * Remove screenshot tool
  * Improve width of bug report dialog
@@ -6,6 +6,7 @@
  * Improve size of checkboxes
  * Convert bullet - to actual unicode bullets
  * Add alarm option to set reminders
+ * Add time logging and reporting
 
 # 0.3.2
 
