@@ -50,6 +50,8 @@ class BugReportDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+        self.setMinimumWidth(560)
+
         self.text_edit.setFocus()
 
     # ------------Helpers ------------ #

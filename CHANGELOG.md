@@ -1,3 +1,8 @@
+# 0.3.3
+
+ * Remove screenshot tool
+ * Improve width of bug report dialog
+
 # 0.3.2
 
  * Add weekday letters on left axis of Statistics page
