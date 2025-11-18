@@ -16,6 +16,8 @@ from PySide6.QtCore import (
     QUrl,
     QEvent,
     QSignalBlocker,
+    QDateTime,
+    QTime,
 )
 from PySide6.QtGui import (
     QAction,
@@ -43,6 +45,10 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QInputDialog,
+    QLabel,
+    QPushButton,
+    QApplication,
 )
 
 from .db import DBManager
@@ -164,8 +170,6 @@ class MainWindow(QMainWindow):
         self._locked = False
 
         # reset idle timer on any key press anywhere in the app
-        from PySide6.QtWidgets import QApplication
-
         QApplication.instance().installEventFilter(self)
 
         # Focus on the editor
@@ -292,7 +296,9 @@ class MainWindow(QMainWindow):
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
         self._save_timer.timeout.connect(self._save_current)
-        # Note: textChanged will be connected per-editor in _create_new_tab
+
+        # Reminders / alarms
+        self._reminder_timers: list[QTimer] = []
 
         # First load + mark dates in calendar with content
         if not self._load_yesterday_todos():
@@ -309,6 +315,9 @@ class MainWindow(QMainWindow):
 
         # apply once on startup so links / calendar colors are set immediately
         self._retheme_overrides()
+
+        # Build any alarms for *today* from stored markdown
+        self._rebuild_reminders_for_today()
 
     @property
     def editor(self) -> MarkdownEditor | None:
@@ -966,6 +975,7 @@ class MainWindow(QMainWindow):
         self._tb_bullets = lambda: self._call_editor("toggle_bullets")
         self._tb_numbers = lambda: self._call_editor("toggle_numbers")
         self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
+        self._tb_alarm = self._on_alarm_requested
 
         tb.boldRequested.connect(self._tb_bold)
         tb.italicRequested.connect(self._tb_italic)
@@ -975,9 +985,9 @@ class MainWindow(QMainWindow):
         tb.bulletsRequested.connect(self._tb_bullets)
         tb.numbersRequested.connect(self._tb_numbers)
         tb.checkboxesRequested.connect(self._tb_checkboxes)
-
-        tb.historyRequested.connect(self._open_history)
+        tb.alarmRequested.connect(self._tb_alarm)
         tb.insertImageRequested.connect(self._on_insert_image)
+        tb.historyRequested.connect(self._open_history)
 
         self._toolbar_bound = True
 
@@ -1022,6 +1032,177 @@ class MainWindow(QMainWindow):
         QSignalBlocker(self.toolBar.actNumbers)
         self.toolBar.actBullets.setChecked(bool(bullets_on))
         self.toolBar.actNumbers.setChecked(bool(numbers_on))
+
+    # ----------- Alarms handler ------------#
+    def _on_alarm_requested(self):
+        """Create a one-shot reminder based on the current line in the editor."""
+        editor = getattr(self, "editor", None)
+        if editor is None:
+            return
+
+        # Use the current line in the markdown editor as the reminder text
+        try:
+            line_text = editor.get_current_line_text().strip()
+        except AttributeError:
+            c = editor.textCursor()
+            line_text = c.block().text().strip()
+
+        # Ask user for a time today in HH:MM format
+        time_str, ok = QInputDialog.getText(
+            self,
+            strings._("set_reminder"),
+            strings._("set_reminder_prompt") + " (HH:MM)",
+        )
+        if not ok or not time_str.strip():
+            return
+
+        try:
+            hour, minute = map(int, time_str.strip().split(":", 1))
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                strings._("invalid_time_title"),
+                strings._("invalid_time_message"),
+            )
+            return
+
+        now = QDateTime.currentDateTime()
+        target = QDateTime(now.date(), QTime(hour, minute))
+
+        t = QTime(hour, minute)
+        if not t.isValid():
+            QMessageBox.warning(
+                self,
+                strings._("invalid_time_title"),
+                strings._("invalid_time_message"),
+            )
+            return
+
+        # Normalise to HH:MM
+        time_str = f"{t.hour():02d}:{t.minute():02d}"
+
+        # Insert / update ⏰ in the editor text
+        if hasattr(editor, "insert_alarm_marker"):
+            editor.insert_alarm_marker(time_str)
+
+        # Rebuild timers, but only if this page is for "today"
+        self._rebuild_reminders_for_today()
+
+    def _show_flashing_reminder(self, text: str):
+        """
+        Show a small flashing dialog and request attention from the OS.
+        Called by reminder timers.
+        """
+        # Ask OS to flash / bounce our app in the dock/taskbar
+        QApplication.alert(self, 0)
+
+        # Try to bring the window to the front
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+        # Simple dialog with a flashing background to reinforce the alert
+        dlg = QDialog(self)
+        dlg.setWindowTitle(strings._("reminder"))
+        dlg.setModal(True)
+
+        layout = QVBoxLayout(dlg)
+        label = QLabel(text)
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        btn = QPushButton(strings._("dismiss"))
+        btn.clicked.connect(dlg.accept)
+        layout.addWidget(btn)
+
+        flash_timer = QTimer(dlg)
+        flash_state = {"on": False}
+
+        def toggle():
+            flash_state["on"] = not flash_state["on"]
+            if flash_state["on"]:
+                dlg.setStyleSheet("background-color: #3B3B3B;")
+            else:
+                dlg.setStyleSheet("")
+
+        flash_timer.timeout.connect(toggle)
+        flash_timer.start(500)  # ms
+
+        dlg.exec()
+
+        flash_timer.stop()
+
+    def _clear_reminder_timers(self):
+        """Stop and delete any existing reminder timers."""
+        for t in self._reminder_timers:
+            try:
+                t.stop()
+                t.deleteLater()
+            except Exception:
+                pass
+        self._reminder_timers = []
+
+    def _rebuild_reminders_for_today(self):
+        """
+        Scan the markdown for today's date and create QTimers
+        only for alarms on the *current day* (system date).
+        """
+        # We only ever set timers for the real current date
+        today = QDate.currentDate()
+        today_iso = today.toString("yyyy-MM-dd")
+
+        # Clear any previously scheduled "today" reminders
+        self._clear_reminder_timers()
+
+        # Prefer live editor content if it is showing today's page
+        text = ""
+        if (
+            hasattr(self, "editor")
+            and hasattr(self.editor, "current_date")
+            and self.editor.current_date == today
+        ):
+            text = self.editor.to_markdown()
+        else:
+            # Fallback to DB: still only today's date
+            text = self.db.get_entry(today_iso) if hasattr(self, "db") else ""
+
+        if not text:
+            return
+
+        now = QDateTime.currentDateTime()
+
+        for line in text.splitlines():
+            # Look for "⏰ HH:MM" anywhere in the line
+            m = re.search(r"⏰\s*(\d{1,2}):(\d{2})", line)
+            if not m:
+                continue
+
+            hour = int(m.group(1))
+            minute = int(m.group(2))
+
+            t = QTime(hour, minute)
+            if not t.isValid():
+                continue
+
+            target = QDateTime(today, t)
+
+            # Skip alarms that are already in the past
+            if target <= now:
+                continue
+
+            # The reminder text is the part before the symbol
+            reminder_text = line.split("⏰", 1)[0].strip()
+            if not reminder_text:
+                reminder_text = strings._("reminder_no_text_fallback")
+
+            msecs = now.msecsTo(target)
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(
+                lambda txt=reminder_text: self._show_flashing_reminder(txt)
+            )
+            timer.start(msecs)
+            self._reminder_timers.append(timer)
 
     # ----------- History handler ------------#
     def _open_history(self):

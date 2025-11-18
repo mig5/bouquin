@@ -18,6 +18,7 @@ class ToolBar(QToolBar):
     checkboxesRequested = Signal()
     historyRequested = Signal()
     insertImageRequested = Signal()
+    alarmRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(strings._("toolbar_format"), parent)
@@ -85,6 +86,11 @@ class ToolBar(QToolBar):
         self.actCheckboxes.setToolTip(strings._("toolbar_toggle_checkboxes"))
         self.actCheckboxes.triggered.connect(self.checkboxesRequested)
 
+        # Alarm / reminder
+        self.actAlarm = QAction("⏰", self)
+        self.actAlarm.setToolTip(strings._("toolbar_alarm"))
+        self.actAlarm.triggered.connect(self.alarmRequested)
+
         # Images
         self.actInsertImg = QAction(strings._("images"), self)
         self.actInsertImg.setToolTip(strings._("insert_images"))
@@ -129,6 +135,7 @@ class ToolBar(QToolBar):
                 self.actBullets,
                 self.actNumbers,
                 self.actCheckboxes,
+                self.actAlarm,
                 self.actInsertImg,
                 self.actHistory,
             ]
@@ -151,6 +158,8 @@ class ToolBar(QToolBar):
         # Lists
         self._style_letter_button(self.actBullets, "•")
         self._style_letter_button(self.actNumbers, "1.")
+        self._style_letter_button(self.actCheckboxes, "☐")
+        self._style_letter_button(self.actAlarm, "⏰")
 
         # History
         self._style_letter_button(self.actHistory, strings._("view_history"))

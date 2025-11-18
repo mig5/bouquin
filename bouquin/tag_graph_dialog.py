@@ -281,7 +281,7 @@ class TagGraphDialog(QDialog):
 
         # Update labels
         for i, label in enumerate(self._label_items):
-            label.setPos(float(pos[i, 0]), float(pos[i, 1]) + 0.30)
+            label.setPos(float(pos[i, 0]), float(pos[i, 1]) + 0.15)
 
         # Update halo positions to match nodes
         if self._halo_sizes and self._halo_brushes:

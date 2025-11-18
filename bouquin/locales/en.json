@@ -155,5 +155,12 @@
     "bug_report_empty": "Please enter some details about the bug before sending.",
     "bug_report_send_failed": "Could not send bug report.",
     "bug_report_sent_ok": "Bug report sent. Thank you!",
-    "send": "Send"
+    "send": "Send",
+    "set_reminder": "Set reminder prompt",
+    "set_reminder_prompt": "Enter a time",
+    "reminder_no_text_fallback": "You scheduled a reminder to alert you now!",
+    "invalid_time_title": "Invalid time",
+    "invalid_time_message": "Please enter a time in the format HH:MM",
+    "dismiss": "Dismiss",
+    "toolbar_alarm": "Set reminder alarm"
 }

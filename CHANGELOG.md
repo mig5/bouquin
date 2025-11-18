@@ -5,6 +5,7 @@
  * Add Tag relationship visualisation tool
  * Improve size of checkboxes
  * Convert bullet - to actual unicode bullets
+ * Add alarm option to set reminders
 
 # 0.3.2
 

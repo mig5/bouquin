@@ -16,9 +16,15 @@ report from within the app.
 
 ## Screenshots
 
+### General view
 ![Screenshot of Bouquin](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/screenshot.png)
+
+### History panes
 ![Screenshot of Bouquin History Preview pane](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_preview.png)
 ![Screenshot of Bouquin History Diff pane](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png)
+
+### Tag relationship visualiser
+![Screenshot of Tag Relationship Visualiser](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/bouquin_tag_relationship_graph.png)
 
 ## Features
 
@@ -41,6 +47,7 @@ report from within the app.
  * Automatically generate checkboxes when typing 'TODO'
  * It is possible to automatically move unchecked checkboxes from yesterday to today, on startup
  * English, French and Italian locales provided
+ * Ability to set reminder alarms in the app against the current line of text on today's date
 
 
 ## How to install

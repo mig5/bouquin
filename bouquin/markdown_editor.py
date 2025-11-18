@@ -391,11 +391,40 @@ class MarkdownEditor(QTextEdit):
             cursor.setPosition(match.end(), QTextCursor.MoveMode.KeepAnchor)
             cursor.insertImage(img_format)
 
+    def insert_alarm_marker(self, time_str: str) -> None:
+        """
+        Append or replace an ⏰ HH:MM marker on the current line.
+        time_str is expected to be 'HH:MM'.
+        """
+        cursor = self.textCursor()
+        block = cursor.block()
+        line = block.text()
+
+        # Strip any existing ⏰ HH:MM at the end of the line
+        new_line = re.sub(r"\s*⏰\s*\d{1,2}:\d{2}\s*$", "", line).rstrip()
+
+        # Append the new marker
+        new_line = f"{new_line} ⏰ {time_str}"
+
+        bc = QTextCursor(block)
+        bc.beginEditBlock()
+        bc.select(QTextCursor.SelectionType.BlockUnderCursor)
+        bc.insertText(new_line)
+        bc.endEditBlock()
+
+        # Move cursor to end of the edited line
+        cursor.setPosition(block.position() + len(new_line))
+        self.setTextCursor(cursor)
+
     def _get_current_line(self) -> str:
         """Get the text of the current line."""
         cursor = self.textCursor()
         cursor.select(QTextCursor.SelectionType.LineUnderCursor)
         return cursor.selectedText()
+
+    def get_current_line_text(self) -> str:
+        """Public wrapper used by MainWindow for reminders."""
+        return self._get_current_line()
 
     def _detect_list_type(self, line: str) -> tuple[str | None, str]:
         """
