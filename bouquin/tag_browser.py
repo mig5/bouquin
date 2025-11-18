@@ -14,8 +14,9 @@ from PySide6.QtWidgets import (
 )
 
 from .db import DBManager
-from sqlcipher3.dbapi2 import IntegrityError
+from .tag_graph_dialog import TagGraphDialog
 from . import strings
+from sqlcipher3.dbapi2 import IntegrityError
 
 
 class TagBrowserDialog(QDialog):
@@ -70,6 +71,10 @@ class TagBrowserDialog(QDialog):
         self.delete_btn.clicked.connect(self._delete_tag)
         self.delete_btn.setEnabled(False)
         btn_row.addWidget(self.delete_btn)
+
+        self.tag_graph_btn = QPushButton(strings._("tag_graph"))
+        self.tag_graph_btn.clicked.connect(self._open_tag_graph)
+        btn_row.addWidget(self.tag_graph_btn)
 
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
@@ -251,3 +256,9 @@ class TagBrowserDialog(QDialog):
             self._db.delete_tag(tag_id)
             self._populate(None)
             self.tagsModified.emit()
+
+    # ------------ Tag graph handler --------------- #
+    def _open_tag_graph(self):
+        dlg = TagGraphDialog(self._db, self)
+        dlg.resize(800, 600)
+        dlg.exec()

@@ -2,6 +2,7 @@
 
  * Remove screenshot tool
  * Improve width of bug report dialog
+ * Add Tag relationship visualisation tool
 
 # 0.3.2
 

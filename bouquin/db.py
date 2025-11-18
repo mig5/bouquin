@@ -746,6 +746,49 @@ class DBManager:
             revisions_by_date,
         )
 
+    def get_tag_cooccurrences(self):
+        """
+        Compute tag–tag co-occurrence across pages.
+
+        Returns:
+            tags_by_id: dict[int, TagRow]   # id -> (id, name, color)
+            edges: list[(int, int, int)]    # (tag_id1, tag_id2, page_count)
+            tag_page_counts: dict[int, int] # tag_id -> number of pages it appears on
+        """
+        cur = self.conn.cursor()
+
+        # 1) All tags (reuse existing helper)
+        all_tags: list[TagRow] = self.list_tags()
+        tags_by_id: dict[int, TagRow] = {t[0]: t for t in all_tags}
+
+        # 2) How many pages each tag appears on (for node sizing)
+        rows = cur.execute(
+            """
+            SELECT tag_id, COUNT(DISTINCT page_date) AS c
+            FROM page_tags
+            GROUP BY tag_id;
+            """
+        ).fetchall()
+        tag_page_counts = {r["tag_id"]: r["c"] for r in rows}
+
+        # 3) Co-occurrence of tag pairs on the same page
+        rows = cur.execute(
+            """
+            SELECT
+                pt1.tag_id AS tag1,
+                pt2.tag_id AS tag2,
+                COUNT(DISTINCT pt1.page_date) AS c
+            FROM page_tags AS pt1
+            JOIN page_tags AS pt2
+              ON pt1.page_date = pt2.page_date
+             AND pt1.tag_id < pt2.tag_id
+            GROUP BY pt1.tag_id, pt2.tag_id;
+            """,
+        ).fetchall()
+
+        edges = [(r["tag1"], r["tag2"], r["c"]) for r in rows]
+        return tags_by_id, edges, tag_page_counts
+
     def close(self) -> None:
         if self.conn is not None:
             self.conn.close()

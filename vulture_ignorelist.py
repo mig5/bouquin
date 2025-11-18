@@ -3,10 +3,14 @@ from bouquin.flow_layout import FlowLayout
 from bouquin.markdown_editor import MarkdownEditor
 from bouquin.markdown_highlighter import MarkdownHighlighter
 from bouquin.statistics_dialog import DateHeatMap
+from bouquin.tag_graph_dialog import DraggableGraphItem
 
 DBManager.row_factory
 
 DateHeatMap.minimumSizeHint
+
+DraggableGraphItem.hoverEvent
+DraggableGraphItem.mouseDragEvent
 
 FlowLayout.itemAt
 FlowLayout.expandingDirections
