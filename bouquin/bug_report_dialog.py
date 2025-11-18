@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.metadata
-from pathlib import Path
 
 import requests
 
@@ -32,8 +31,6 @@ class BugReportDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(strings._("report_a_bug"))
 
-        self._attachment_path: Path | None = None
-
         layout = QVBoxLayout(self)
 
         header = QLabel(strings._("bug_report_explanation"))
@@ -48,9 +45,7 @@ class BugReportDialog(QDialog):
 
         # Buttons: Cancel / Send
         button_box = QDialogButtonBox(QDialogButtonBox.Cancel)
-        self.send_button = button_box.addButton(
-            strings._("send"), QDialogButtonBox.AcceptRole
-        )
+        button_box.addButton(strings._("send"), QDialogButtonBox.AcceptRole)
         button_box.accepted.connect(self._send)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
