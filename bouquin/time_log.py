@@ -183,7 +183,7 @@ class TimeLogDialog(QDialog):
         self._current_entry_id: Optional[int] = None
 
         self.setWindowTitle(strings._("time_log_for").format(date=date_iso))
-        self.resize(600, 400)
+        self.resize(900, 600)
 
         root = QVBoxLayout(self)
 
@@ -210,6 +210,12 @@ class TimeLogDialog(QDialog):
         act_row.addWidget(self.activity_edit, 1)
         act_row.addWidget(self.manage_activities_btn)
         form.addRow(strings._("activity"), act_row)
+
+        # Optional Note
+        note_row = QHBoxLayout()
+        self.note = QLineEdit()
+        note_row.addWidget(self.note, 1)
+        form.addRow(strings._("note"), note_row)
 
         # Hours (decimal)
         self.hours_spin = QDoubleSpinBox()
@@ -240,18 +246,20 @@ class TimeLogDialog(QDialog):
 
         # --- Table of entries for this date
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
+        self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(
             [
                 strings._("project"),
                 strings._("activity"),
+                strings._("note"),
                 strings._("hours"),
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeToContents
+            3, QHeaderView.ResizeToContents
         )
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -291,11 +299,13 @@ class TimeLogDialog(QDialog):
             entry_id = r[0]
             project_name = r[3]
             activity_name = r[5]
+            note = r[7] or ""
             minutes = r[6]
             hours = minutes / 60.0
 
             item_proj = QTableWidgetItem(project_name)
             item_act = QTableWidgetItem(activity_name)
+            item_note = QTableWidgetItem(note)
             item_hours = QTableWidgetItem(f"{hours:.2f}")
 
             # store the entry id on the first column
@@ -303,7 +313,8 @@ class TimeLogDialog(QDialog):
 
             self.table.setItem(row_idx, 0, item_proj)
             self.table.setItem(row_idx, 1, item_act)
-            self.table.setItem(row_idx, 2, item_hours)
+            self.table.setItem(row_idx, 2, item_note)
+            self.table.setItem(row_idx, 3, item_hours)
 
         self._current_entry_id = None
         self.delete_btn.setEnabled(False)
@@ -338,6 +349,10 @@ class TimeLogDialog(QDialog):
             )
             return
 
+        note = self.note.text().strip()
+        if not note:
+            note = None
+
         hours = float(self.hours_spin.value())
         minutes = int(round(hours * 60))
 
@@ -346,16 +361,14 @@ class TimeLogDialog(QDialog):
 
         if self._current_entry_id is None:
             # New entry
-            self._db.add_time_log(self._date_iso, proj_id, activity_id, minutes)
+            self._db.add_time_log(self._date_iso, proj_id, activity_id, minutes, note)
         else:
             # Update existing
             self._db.update_time_log(
-                self._current_entry_id,
-                proj_id,
-                activity_id,
-                minutes,
+                self._current_entry_id, proj_id, activity_id, minutes, note
             )
 
+        self.note.setText("")
         self._reload_entries()
 
     def _on_row_selected(self) -> None:
@@ -369,7 +382,8 @@ class TimeLogDialog(QDialog):
         row = items[0].row()
         proj_item = self.table.item(row, 0)
         act_item = self.table.item(row, 1)
-        hours_item = self.table.item(row, 2)
+        note_item = self.table.item(row, 2)
+        hours_item = self.table.item(row, 3)
         entry_id = proj_item.data(Qt.ItemDataRole.UserRole)
 
         self._current_entry_id = int(entry_id)
@@ -379,6 +393,7 @@ class TimeLogDialog(QDialog):
         # push values into the editors
         proj_name = proj_item.text()
         act_name = act_item.text()
+        note = note_item.text()
         hours = float(hours_item.text())
 
         # Set project combo by name
@@ -387,6 +402,7 @@ class TimeLogDialog(QDialog):
             self.project_combo.setCurrentIndex(idx)
 
         self.activity_edit.setText(act_name)
+        self.note.setText(note)
         self.hours_spin.setValue(hours)
 
     def _on_delete_entry(self) -> None:
@@ -787,18 +803,20 @@ class TimeReportDialog(QDialog):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
+        self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(
             [
                 strings._("time_period"),
                 strings._("activity"),
+                strings._("note"),
                 strings._("hours"),
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeToContents
+            3, QHeaderView.ResizeToContents
         )
         root.addWidget(self.table, 1)
 
@@ -833,14 +851,15 @@ class TimeReportDialog(QDialog):
         rows = self._db.time_report(proj_id, start, end, gran)
 
         self._last_rows = rows
-        self._last_total_minutes = sum(r[2] for r in rows)
+        self._last_total_minutes = sum(r[3] for r in rows)
 
         self.table.setRowCount(len(rows))
-        for i, (time_period, activity_name, minutes) in enumerate(rows):
+        for i, (time_period, activity_name, note, minutes) in enumerate(rows):
             hrs = minutes / 60.0
             self.table.setItem(i, 0, QTableWidgetItem(time_period))
             self.table.setItem(i, 1, QTableWidgetItem(activity_name))
-            self.table.setItem(i, 2, QTableWidgetItem(f"{hrs:.2f}"))
+            self.table.setItem(i, 2, QTableWidgetItem(note))
+            self.table.setItem(i, 3, QTableWidgetItem(f"{hrs:.2f}"))
 
         total_hours = self._last_total_minutes / 60.0
         self.total_label.setText(
@@ -874,14 +893,15 @@ class TimeReportDialog(QDialog):
                     [
                         strings._("time_period"),
                         strings._("activity"),
+                        strings._("note"),
                         strings._("hours"),
                     ]
                 )
 
                 # Data rows
-                for time_period, activity_name, minutes in self._last_rows:
+                for time_period, activity_name, note, minutes in self._last_rows:
                     hours = minutes / 60.0
-                    writer.writerow([time_period, activity_name, f"{hours:.2f}"])
+                    writer.writerow([time_period, activity_name, note, f"{hours:.2f}"])
 
                 # Blank line + total
                 total_hours = self._last_total_minutes / 60.0
@@ -914,7 +934,7 @@ class TimeReportDialog(QDialog):
 
         # ---------- Build chart image (hours per period) ----------
         per_period_minutes: dict[str, int] = defaultdict(int)
-        for period, _activity, minutes in self._last_rows:
+        for period, _activity, note, minutes in self._last_rows:
             per_period_minutes[period] += minutes
 
         periods = sorted(per_period_minutes.keys())
@@ -1015,7 +1035,7 @@ class TimeReportDialog(QDialog):
 
         # Table rows (period, activity, hours)
         row_html_parts: list[str] = []
-        for period, activity, minutes in self._last_rows:
+        for period, activity, note, minutes in self._last_rows:
             hours = minutes / 60.0
             row_html_parts.append(
                 "<tr>"

@@ -164,6 +164,7 @@
     "toolbar_alarm": "Set reminder alarm",
    "activities": "Activities",
    "activity": "Activity",
+   "note": "Note",
    "activity_delete_error_message": "A problem occurred deleting the activity",
    "activity_delete_error_title": "Problem deleting activity",
    "activity_rename_error_message": "A problem occurred renaming the activity",

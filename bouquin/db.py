@@ -987,6 +987,7 @@ class DBManager:
             SELECT
                 {bucket_expr} AS bucket,
                 a.name         AS activity_name,
+                t.note         AS note,
                 SUM(t.minutes) AS total_minutes
             FROM time_log t
             JOIN activities a ON a.id = t.activity_id
@@ -998,7 +999,10 @@ class DBManager:
             (project_id, start_date_iso, end_date_iso),
         ).fetchall()
 
-        return [(r["bucket"], r["activity_name"], r["total_minutes"]) for r in rows]
+        return [
+            (r["bucket"], r["activity_name"], r["note"], r["total_minutes"])
+            for r in rows
+        ]
 
     def close(self) -> None:
         if self.conn is not None:

@@ -370,10 +370,10 @@ def test_time_report_by_day(fresh_db):
     yesterday_act1 = next(
         r for r in report if r[0] == _yesterday() and r[1] == "Activity 1"
     )
-    assert yesterday_act1[2] == 60
+    assert yesterday_act1[3] == 60
 
     today_act1 = next(r for r in report if r[0] == _today() and r[1] == "Activity 1")
-    assert today_act1[2] == 90
+    assert today_act1[3] == 90
 
 
 def test_time_report_by_week(fresh_db):
@@ -396,9 +396,9 @@ def test_time_report_by_week(fresh_db):
     assert len(report) == 2
 
     # First week total
-    assert report[0][2] == 90  # 60 + 30
+    assert report[0][3] == 90  # 60 + 30
     # Second week total
-    assert report[1][2] == 45
+    assert report[1][3] == 45
 
 
 def test_time_report_by_month(fresh_db):
@@ -422,11 +422,11 @@ def test_time_report_by_month(fresh_db):
 
     # January total
     jan_row = next(r for r in report if r[0] == "2024-01")
-    assert jan_row[2] == 90  # 60 + 30
+    assert jan_row[3] == 90  # 60 + 30
 
     # February total
     feb_row = next(r for r in report if r[0] == "2024-02")
-    assert feb_row[2] == 45
+    assert feb_row[3] == 45
 
 
 def test_time_report_multiple_activities(fresh_db):
@@ -443,10 +443,10 @@ def test_time_report_multiple_activities(fresh_db):
 
     assert len(report) == 2
     act1_row = next(r for r in report if r[1] == "Activity 1")
-    assert act1_row[2] == 90  # 60 + 30 aggregated
+    assert act1_row[3] == 90  # 60 + 30 aggregated
 
     act2_row = next(r for r in report if r[1] == "Activity 2")
-    assert act2_row[2] == 45
+    assert act2_row[3] == 45
 
 
 def test_time_report_filters_by_project(fresh_db):
@@ -461,7 +461,7 @@ def test_time_report_filters_by_project(fresh_db):
     report = fresh_db.time_report(proj1_id, _today(), _today(), "day")
 
     assert len(report) == 1
-    assert report[0][2] == 60
+    assert report[0][3] == 60
 
 
 def test_time_report_empty(fresh_db):
@@ -658,8 +658,8 @@ def test_time_log_dialog_loads_existing_entries(qtbot, fresh_db):
     assert "Project" in dialog.table.item(0, 0).text()
     assert "Activity" in dialog.table.item(0, 1).text()
     assert (
-        "1.5" in dialog.table.item(0, 2).text()
-        or "1.50" in dialog.table.item(0, 2).text()
+        "1.5" in dialog.table.item(0, 3).text()
+        or "1.50" in dialog.table.item(0, 3).text()
     )
 
 
@@ -725,8 +725,8 @@ def test_time_log_dialog_add_entry_success(qtbot, fresh_db):
     assert dialog.table.rowCount() == 1
     assert "New Activity" in dialog.table.item(0, 1).text()
     assert (
-        "2.5" in dialog.table.item(0, 2).text()
-        or "2.50" in dialog.table.item(0, 2).text()
+        "2.5" in dialog.table.item(0, 3).text()
+        or "2.50" in dialog.table.item(0, 3).text()
     )
 
 
@@ -774,8 +774,8 @@ def test_time_log_dialog_update_entry(qtbot, fresh_db):
     assert dialog.table.rowCount() == 1
     assert "Project 2" in dialog.table.item(0, 0).text()
     assert (
-        "2.0" in dialog.table.item(0, 2).text()
-        or "2.00" in dialog.table.item(0, 2).text()
+        "2.0" in dialog.table.item(0, 3).text()
+        or "2.00" in dialog.table.item(0, 3).text()
     )
 
 
@@ -1429,7 +1429,7 @@ def test_time_report_dialog_granularity_week(qtbot, fresh_db):
 
     # Should aggregate to single week
     assert dialog.table.rowCount() == 1
-    hours_text = dialog.table.item(0, 2).text()
+    hours_text = dialog.table.item(0, 3).text()
     assert "2.5" in hours_text or "2.50" in hours_text
 
 
@@ -1457,7 +1457,7 @@ def test_time_report_dialog_granularity_month(qtbot, fresh_db):
 
     # Should aggregate to single month
     assert dialog.table.rowCount() == 1
-    hours_text = dialog.table.item(0, 2).text()
+    hours_text = dialog.table.item(0, 3).text()
     assert "2.5" in hours_text or "2.50" in hours_text
 
 
@@ -2196,8 +2196,8 @@ def test_full_workflow_add_project_activity_log_report(
     assert report_dialog.table.rowCount() == 1
     assert "Test Activity" in report_dialog.table.item(0, 1).text()
     assert (
-        "2.5" in report_dialog.table.item(0, 2).text()
-        or "2.50" in report_dialog.table.item(0, 2).text()
+        "2.5" in report_dialog.table.item(0, 3).text()
+        or "2.50" in report_dialog.table.item(0, 3).text()
     )
 
     # 5. Export CSV
