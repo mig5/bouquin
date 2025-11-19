@@ -320,10 +320,10 @@ def test_tag_graph_dialog_on_positions_changed_updates_labels_and_halo(
     pos = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=float)
     dlg._on_positions_changed(pos)
 
-    # Each label should be slightly below its node (y + 0.30)
+    # Each label should be slightly below its node (y + 0.15)
     for i, label in enumerate(dlg._label_items):
         assert label.pos().x() == pytest.approx(pos[i, 0])
-        assert label.pos().y() == pytest.approx(pos[i, 1] + 0.30)
+        assert label.pos().y() == pytest.approx(pos[i, 1] + 0.15)
 
     # Halo layer should receive the updated coordinates and our sizes/brushes
     assert captured["x"] == [1.0, 3.0, 5.0]
