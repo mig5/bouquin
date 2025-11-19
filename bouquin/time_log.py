@@ -161,7 +161,7 @@ class TimeLogWidget(QFrame):
         # Always refresh summary + header totals
         self._reload_summary()
 
-        if self.toggle_btn.isChecked():
+        if not self.toggle_btn.isChecked():
             self.summary_label.setText(strings._("time_log_collapsed_hint"))
 
 

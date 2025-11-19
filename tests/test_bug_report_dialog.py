@@ -1,5 +1,8 @@
 import bouquin.bug_report_dialog as bugmod
 from bouquin.bug_report_dialog import BugReportDialog
+from bouquin import strings
+from PySide6.QtWidgets import QMessageBox
+from PySide6.QtGui import QTextCursor
 
 
 def test_bug_report_truncates_text_to_max_chars(qtbot):
@@ -193,3 +196,129 @@ def test_bug_report_send_failure_non_201_shows_critical_and_not_accepted(
 
     # Dialog should NOT be accepted on failure
     assert accepted.get("called") is not True
+
+
+def test_bug_report_dialog_text_limit_clamps_cursor(qtbot):
+    """Test that cursor position is clamped when text exceeds limit."""
+    strings.load_strings("en")
+    dialog = BugReportDialog()
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    # Set text that exceeds MAX_CHARS
+    max_chars = dialog.MAX_CHARS
+    long_text = "A" * (max_chars + 100)
+
+    # Set text and move cursor to end
+    dialog.text_edit.setPlainText(long_text)
+    dialog.text_edit.moveCursor(QTextCursor.MoveOperation.End)
+
+    # Text should be truncated
+    assert len(dialog.text_edit.toPlainText()) == max_chars
+
+    # Cursor should be clamped to max position
+    final_cursor = dialog.text_edit.textCursor()
+    assert final_cursor.position() <= max_chars
+
+
+def test_bug_report_dialog_empty_text_shows_warning(qtbot, monkeypatch):
+    """Test that sending empty report shows warning."""
+    strings.load_strings("en")
+    dialog = BugReportDialog()
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    # Clear any text
+    dialog.text_edit.clear()
+
+    warning_shown = {"shown": False}
+
+    def mock_warning(*args):
+        warning_shown["shown"] = True
+
+    monkeypatch.setattr(QMessageBox, "warning", mock_warning)
+
+    # Try to send empty report
+    dialog._send()
+
+    assert warning_shown["shown"]
+
+
+def test_bug_report_dialog_whitespace_only_shows_warning(qtbot, monkeypatch):
+    """Test that sending whitespace-only report shows warning."""
+    strings.load_strings("en")
+    dialog = BugReportDialog()
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    # Set whitespace only
+    dialog.text_edit.setPlainText("   \n\n   \t\t  ")
+
+    warning_shown = {"shown": False}
+
+    def mock_warning(*args):
+        warning_shown["shown"] = True
+
+    monkeypatch.setattr(QMessageBox, "warning", mock_warning)
+
+    dialog._send()
+
+    assert warning_shown["shown"]
+
+
+def test_bug_report_dialog_network_error(qtbot, monkeypatch):
+    """Test handling network error during send."""
+    strings.load_strings("en")
+    dialog = BugReportDialog()
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    dialog.text_edit.setPlainText("Test bug report")
+
+    # Mock requests.post to raise exception
+    import requests
+
+    def mock_post(*args, **kwargs):
+        raise requests.exceptions.ConnectionError("Network error")
+
+    monkeypatch.setattr(requests, "post", mock_post)
+
+    critical_shown = {"shown": False}
+
+    def mock_critical(*args):
+        critical_shown["shown"] = True
+
+    monkeypatch.setattr(QMessageBox, "critical", mock_critical)
+
+    dialog._send()
+
+    assert critical_shown["shown"]
+
+
+def test_bug_report_dialog_timeout_error(qtbot, monkeypatch):
+    """Test handling timeout error during send."""
+    strings.load_strings("en")
+    dialog = BugReportDialog()
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    dialog.text_edit.setPlainText("Test bug report")
+
+    # Mock requests.post to raise timeout
+    import requests
+
+    def mock_post(*args, **kwargs):
+        raise requests.exceptions.Timeout("Request timed out")
+
+    monkeypatch.setattr(requests, "post", mock_post)
+
+    critical_shown = {"shown": False}
+
+    def mock_critical(*args):
+        critical_shown["shown"] = True
+
+    monkeypatch.setattr(QMessageBox, "critical", mock_critical)
+
+    dialog._send()
+
+    assert critical_shown["shown"]

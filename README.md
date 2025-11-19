@@ -3,7 +3,11 @@
 
 ## Introduction
 
-Bouquin ("Book-ahn") is a simple, opinionated notebook application written in Python, PyQt and SQLCipher.
+Bouquin ("Book-ahn") is a notebook and planner application written in Python, PyQt and SQLCipher.
+
+It is designed to treat each day as its own 'page', complete with Markdown rendering, tagging,
+search, reminders and time logging for those of us who need to keep track of not just TODOs, but
+also how long we spent on them.
 
 It uses [SQLCipher bindings](https://pypi.org/project/sqlcipher3-wheels) as a drop-in replacement
 for SQLite3. This means that the underlying database for the notebook is encrypted at rest.
@@ -23,27 +27,22 @@ report from within the app.
 ![Screenshot of Bouquin History Preview pane](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_preview.png)
 ![Screenshot of Bouquin History Diff pane](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png)
 
-### Tag relationship visualiser
-![Screenshot of Tag Relationship Visualiser](https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/bouquin_tag_relationship_graph.png)
-
-## Features
+## Some of the features
 
  * Data is encrypted at rest
  * Encryption key is prompted for and never stored, unless user chooses to via Settings
- * Every 'page' is linked to the calendar day
  * All changes are version controlled, with ability to view/diff versions and revert
- * Text is Markdown with basic styling
+ * Automatic rendering of basic Markdown syntax
  * Tabs are supported - right-click on a date from the calendar to open it in a new tab.
  * Images are supported
- * Search all pages, or find text on page (Ctrl+F)
- * Add tags to pages, find pages by tag in the Tag Browser, and customise tag names and colours
+ * Search all pages, or find text on current page
+ * Add and manage tags
  * Automatic periodic saving (or explicitly save)
- * Transparent integrity checking of the database when it opens
  * Automatic locking of the app after a period of inactivity (default 15 min)
  * Rekey the database (change the password)
  * Export the database to json, html, csv, markdown or .sql (for sqlite3)
  * Backup the database to encrypted SQLCipher format (which can then be loaded back in to a Bouquin)
- * Dark and light themes
+ * Dark and light theme support
  * Automatically generate checkboxes when typing 'TODO'
  * It is possible to automatically move unchecked checkboxes from yesterday to today, on startup
  * English, French and Italian locales provided

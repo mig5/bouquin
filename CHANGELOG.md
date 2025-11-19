@@ -2,7 +2,6 @@
 
  * Remove screenshot tool
  * Improve width of bug report dialog
- * Add Tag relationship visualisation tool
  * Improve size of checkboxes
  * Convert bullet - to actual unicode bullets
  * Add alarm option to set reminders

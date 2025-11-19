@@ -1,6 +1,6 @@
 import pytest
 from PySide6.QtCore import Qt, QPoint, QEvent
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QMouseEvent, QColor
 from PySide6.QtWidgets import QApplication, QMessageBox, QInputDialog, QColorDialog
 from bouquin.db import DBManager
 from bouquin.strings import load_strings
@@ -8,6 +8,8 @@ from bouquin.tags_widget import PageTagsWidget, TagChip
 from bouquin.tag_browser import TagBrowserDialog
 from bouquin.flow_layout import FlowLayout
 from sqlcipher3.dbapi2 import IntegrityError
+
+import bouquin.strings as strings
 
 
 # ============================================================================
@@ -1798,3 +1800,360 @@ def test_multiple_widgets_same_database(app, fresh_db):
     widget2._on_toggle(True)
 
     assert widget2.chip_layout.count() == 1
+
+
+def test_tag_browser_add_tag_with_color(qtbot, fresh_db, monkeypatch):
+    """Test adding a new tag with color selection."""
+    strings.load_strings("en")
+
+    browser = TagBrowserDialog(fresh_db)
+    qtbot.addWidget(browser)
+    browser.show()
+
+    # Mock input dialog and color dialog
+    def mock_get_text(*args, **kwargs):
+        return "NewTag", True
+
+    def mock_get_color(initial, parent):
+        return QColor("#ff0000")
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+
+    tags_before = len(fresh_db.list_tags())
+
+    # Trigger add tag
+    browser._add_a_tag()
+
+    # Should have added tag
+    tags_after = len(fresh_db.list_tags())
+    assert tags_after == tags_before + 1
+
+
+def test_tag_browser_add_tag_cancelled_at_name(qtbot, fresh_db, monkeypatch):
+    """Test cancelling tag addition at name input."""
+    strings.load_strings("en")
+
+    browser = TagBrowserDialog(fresh_db)
+    qtbot.addWidget(browser)
+    browser.show()
+
+    # Mock cancelled input
+    def mock_get_text(*args, **kwargs):
+        return "", False
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+
+    tags_before = len(fresh_db.list_tags())
+
+    browser._add_a_tag()
+
+    # Should not have added tag
+    tags_after = len(fresh_db.list_tags())
+    assert tags_after == tags_before
+
+
+def test_tag_browser_add_tag_cancelled_at_color(qtbot, fresh_db, monkeypatch):
+    """Test cancelling tag addition at color selection."""
+    strings.load_strings("en")
+
+    browser = TagBrowserDialog(fresh_db)
+    qtbot.addWidget(browser)
+    browser.show()
+
+    # Name input succeeds, color cancelled
+    def mock_get_text(*args, **kwargs):
+        return "NewTag", True
+
+    def mock_get_color(initial, parent):
+        return QColor()  # Invalid color = cancelled
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+
+    tags_before = len(fresh_db.list_tags())
+
+    browser._add_a_tag()
+
+    # Should not have added tag
+    tags_after = len(fresh_db.list_tags())
+    assert tags_after == tags_before
+
+
+def test_tag_browser_add_duplicate_tag_shows_error(qtbot, fresh_db, monkeypatch):
+    """Test adding duplicate tag shows error."""
+    strings.load_strings("en")
+
+    # Add existing tag
+    fresh_db.add_tag("Existing", "#ff0000")
+
+    browser = TagBrowserDialog(fresh_db)
+    qtbot.addWidget(browser)
+    browser.show()
+
+    # Try to add same tag
+    def mock_get_text(*args, **kwargs):
+        return "Existing", True
+
+    def mock_get_color(initial, parent):
+        return QColor("#00ff00")
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+
+    critical_shown = {"shown": False}
+
+    def mock_critical(*args):
+        critical_shown["shown"] = True
+
+    monkeypatch.setattr(QMessageBox, "critical", mock_critical)
+
+    browser._add_a_tag()
+
+    # Should show error
+    assert critical_shown["shown"]
+
+
+def test_tag_browser_edit_tag_integrity_error(qtbot, fresh_db, monkeypatch):
+    """Test editing tag to duplicate name shows error."""
+    strings.load_strings("en")
+
+    # Add two tags
+    fresh_db.add_tag("Tag1", "#ff0000")
+    fresh_db.add_tag("Tag2", "#00ff00")
+
+    browser = TagBrowserDialog(fresh_db)
+    qtbot.addWidget(browser)
+    browser.show()
+
+    # Select first tag
+    browser._populate(None)
+    tree = browser.tree
+    if tree.topLevelItemCount() > 0:
+        tree.setCurrentItem(tree.topLevelItem(0))
+
+    # Try to rename to Tag2 (duplicate)
+    def mock_get_text(*args, **kwargs):
+        return "Tag2", True
+
+    monkeypatch.setattr(QInputDialog, "getText", mock_get_text)
+
+    critical_shown = {"shown": False}
+
+    def mock_critical(*args):
+        critical_shown["shown"] = True
+
+    monkeypatch.setattr(QMessageBox, "critical", mock_critical)
+
+    browser._edit_tag_name()
+
+    # Should show error
+    assert critical_shown["shown"]
+
+
+def test_tag_browser_change_tag_color_integrity_error(qtbot, fresh_db, monkeypatch):
+    """Test changing tag color with integrity error."""
+    strings.load_strings("en")
+
+    fresh_db.add_tag("TestTag", "#ff0000")
+
+    browser = TagBrowserDialog(fresh_db)
+    qtbot.addWidget(browser)
+    browser.show()
+
+    browser._populate(None)
+    tree = browser.tree
+    if tree.topLevelItemCount() > 0:
+        tree.setCurrentItem(tree.topLevelItem(0))
+
+    # Mock color dialog
+    def mock_get_color(initial, parent):
+        return QColor("#00ff00")
+
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+
+    # Mock update_tag to raise IntegrityError
+    fresh_db.update_tag
+
+    def bad_update(*args):
+        raise IntegrityError("Simulated error")
+
+    monkeypatch.setattr(fresh_db, "update_tag", bad_update)
+
+    critical_shown = {"shown": False}
+
+    def mock_critical(*args):
+        critical_shown["shown"] = True
+
+    monkeypatch.setattr(QMessageBox, "critical", mock_critical)
+
+    browser._change_tag_color()
+
+    # Should show error
+    assert critical_shown["shown"]
+
+
+def test_tag_browser_change_tag_color_cancelled(qtbot, fresh_db, monkeypatch):
+    """Test cancelling color change."""
+    strings.load_strings("en")
+
+    fresh_db.add_tag("TestTag", "#ff0000")
+
+    browser = TagBrowserDialog(fresh_db)
+    qtbot.addWidget(browser)
+    browser.show()
+
+    browser._populate(None)
+    tree = browser.tree
+    if tree.topLevelItemCount() > 0:
+        tree.setCurrentItem(tree.topLevelItem(0))
+
+    # Mock cancelled color dialog
+    def mock_get_color(initial, parent):
+        return QColor()  # Invalid = cancelled
+
+    monkeypatch.setattr(QColorDialog, "getColor", mock_get_color)
+
+    # Should not crash
+    browser._change_tag_color()
+
+
+def test_tag_chip_runtime_error_on_mouse_release(qtbot, monkeypatch):
+    """Test TagChip handles RuntimeError on mouseReleaseEvent."""
+    chip = TagChip(1, "test", "#ff0000")
+    qtbot.addWidget(chip)
+    chip.show()
+
+    # Mock super().mouseReleaseEvent to raise RuntimeError
+    from PySide6.QtWidgets import QFrame
+
+    original_mouse_release = QFrame.mouseReleaseEvent
+
+    def bad_mouse_release(self, event):
+        raise RuntimeError("Widget deleted")
+
+    monkeypatch.setattr(QFrame, "mouseReleaseEvent", bad_mouse_release)
+
+    clicked_names = []
+    chip.clicked.connect(clicked_names.append)
+
+    # Simulate left click
+    from PySide6.QtTest import QTest
+
+    QTest.mouseClick(chip, Qt.LeftButton)
+
+    # Should have emitted signal despite RuntimeError
+    assert "test" in clicked_names
+
+    # Restore original
+    monkeypatch.setattr(QFrame, "mouseReleaseEvent", original_mouse_release)
+
+
+def test_page_tags_widget_many_tags(qtbot, fresh_db):
+    """Test page tags widget with many tags."""
+    strings.load_strings("en")
+
+    # Add many tags
+    for i in range(20):
+        fresh_db.add_tag(f"Tag{i}", f"#{i:02x}0000")
+
+    fresh_db.save_new_version("2024-01-01", "Content", "test")
+
+    # Add all tags to page
+    tag_names = [f"Tag{i}" for i in range(20)]
+    fresh_db.set_tags_for_page("2024-01-01", tag_names)
+
+    widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(widget)
+    widget.show()
+
+    # Set current date
+    widget.set_current_date("2024-01-01")
+
+    # Should display all tags
+    qtbot.wait(50)
+
+
+def test_page_tags_widget_tag_click(qtbot, fresh_db):
+    """Test clicking on a tag in PageTagsWidget."""
+    strings.load_strings("en")
+
+    fresh_db.add_tag("Clickable", "#ff0000")
+    fresh_db.save_new_version("2024-01-01", "Content", "test")
+    fresh_db.set_tags_for_page("2024-01-01", ["Clickable"])
+
+    widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(widget)
+    widget.show()
+
+    widget.set_current_date("2024-01-01")
+    widget.toggle_btn.setChecked(True)
+    widget._on_toggle(True)
+
+    # Find the tag chip
+    chips = widget.findChildren(TagChip)
+    assert len(chips) > 0
+
+    # Click it - shouldn't crash
+    from PySide6.QtTest import QTest
+
+    QTest.mouseClick(chips[0], Qt.LeftButton)
+
+
+def test_page_tags_widget_no_date_set(qtbot, fresh_db):
+    """Test PageTagsWidget with no date set."""
+    strings.load_strings("en")
+
+    widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(widget)
+    widget.show()
+
+    # Should handle no date gracefully
+    widget.set_current_date(None)
+    qtbot.wait(10)
+
+
+def test_page_tags_widget_date_with_no_tags(qtbot, fresh_db):
+    """Test PageTagsWidget for date with no tags."""
+    strings.load_strings("en")
+
+    fresh_db.save_new_version("2024-01-01", "Content", "test")
+
+    widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(widget)
+    widget.show()
+
+    widget.set_current_date("2024-01-01")
+
+    # Should show no tags
+    pills = widget.findChildren(TagChip)
+    assert len(pills) == 0
+
+
+def test_page_tags_widget_updates_on_tag_change(qtbot, fresh_db):
+    """Test PageTagsWidget updates when tags change."""
+    strings.load_strings("en")
+
+    fresh_db.add_tag("Initial", "#ff0000")
+    fresh_db.save_new_version("2024-01-01", "Content", "test")
+    fresh_db.set_tags_for_page("2024-01-01", ["Initial"])
+
+    widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(widget)
+    widget.show()
+
+    widget.set_current_date("2024-01-01")
+    widget.toggle_btn.setChecked(True)
+    widget._on_toggle(True)
+
+    assert widget.chip_layout.count() == 1
+
+    # Add another tag
+    fresh_db.add_tag("Second", "#00ff00")
+    fresh_db.set_tags_for_page("2024-01-01", ["Initial", "Second"])
+
+    # Reload
+    widget.set_current_date("2024-01-01")
+    qtbot.wait(100)
+
+    assert widget.chip_layout.count() == 2

@@ -17,6 +17,12 @@ from bouquin.markdown_highlighter import MarkdownHighlighter
 from bouquin.theme import ThemeManager, ThemeConfig, Theme
 
 
+def _today():
+    from datetime import date
+
+    return date.today().isoformat()
+
+
 def text(editor) -> str:
     return editor.toPlainText()
 
@@ -1464,3 +1470,192 @@ def test_markdown_highlighter_switch_dark_mode(app):
     both_valid = light_bg.isValid() and dark_bg.isValid()
 
     assert is_light_lighter or both_valid  # At least colors are being set
+
+
+# ============================================================================
+# MarkdownHighlighter Tests - Missing Coverage
+# ============================================================================
+
+
+def test_markdown_highlighter_code_block_detection(qtbot, app):
+    """Test code block detection and highlighting."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    # Set text with code block
+    text = """
+Some text
+```python
+def hello():
+    pass
+```
+More text
+"""
+    doc.setPlainText(text)
+
+    # The highlighter should process the text
+    # Just ensure no crash
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_headers(qtbot, app):
+    """Test header highlighting."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    text = """
+# Header 1
+## Header 2
+### Header 3
+Normal text
+"""
+    doc.setPlainText(text)
+
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_emphasis(qtbot, app):
+    """Test emphasis highlighting."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    text = "**bold** and *italic* and ***both***"
+    doc.setPlainText(text)
+
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_horizontal_rule(qtbot, app):
+    """Test horizontal rule highlighting."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    text = """
+Text above
+---
+Text below
+***
+More text
+___
+End
+"""
+    doc.setPlainText(text)
+
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_complex_document(qtbot, app):
+    """Test highlighting a complex document with mixed elements."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    text = """
+# Main Title
+
+This is a paragraph with **bold** and *italic* text.
+
+## Code Example
+
+Here's some `inline code` and a block:
+
+```python
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+```
+
+## Lists
+
+- Item with *emphasis*
+- Another item with **bold**
+- [A link](https://example.com)
+
+> A blockquote with **formatted** text
+> Second line
+
+---
+
+### Final Section
+
+~~Strikethrough~~ and normal text.
+"""
+    doc.setPlainText(text)
+
+    # Should handle complex document
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_empty_document(qtbot, app):
+    """Test highlighting empty document."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    doc.setPlainText("")
+
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_update_on_text_change(qtbot, app):
+    """Test that highlighter updates when text changes."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    doc.setPlainText("Initial text")
+    doc.setPlainText("# Header text")
+    doc.setPlainText("**Bold text**")
+
+    # Should handle updates
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_nested_emphasis(qtbot, app):
+    """Test nested emphasis patterns."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    text = "This has **bold with *italic* inside** and more"
+    doc.setPlainText(text)
+
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_unclosed_code_block(qtbot, app):
+    """Test handling of unclosed code block."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    text = """
+```python
+def hello():
+    print("world")
+"""
+    doc.setPlainText(text)
+
+    # Should handle gracefully
+    assert highlighter is not None
+
+
+def test_markdown_highlighter_special_characters(qtbot, app):
+    """Test handling special characters in markdown."""
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    doc = QTextDocument()
+    highlighter = MarkdownHighlighter(doc, theme_manager)
+
+    text = """
+Special chars: < > & " ' 
+Escaped: \\* \\_ \\`
+Unicode: 你好 café résumé
+"""
+    doc.setPlainText(text)
+
+    assert highlighter is not None

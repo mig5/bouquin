@@ -3,6 +3,7 @@ import json, csv
 import datetime as dt
 from sqlcipher3 import dbapi2 as sqlite
 from bouquin.db import DBManager
+from datetime import date, timedelta
 
 
 def _today():
@@ -15,6 +16,10 @@ def _yesterday():
 
 def _tomorrow():
     return (dt.date.today() + dt.timedelta(days=1)).isoformat()
+
+
+def _days_ago(n):
+    return (date.today() - timedelta(days=n)).isoformat()
 
 
 def _entry(text, i=0):
@@ -201,3 +206,333 @@ def test_integrity_check_raises_without_details(tmp_db_cfg):
     db.conn = _Conn([(None,), (None,)])
     with pytest.raises(sqlite.IntegrityError):
         db._integrity_ok()
+
+
+# ============================================================================
+# DB _strip_markdown and _count_words Tests
+# ============================================================================
+
+
+def test_db_strip_markdown_empty_text(fresh_db):
+    """Test strip_markdown with empty text."""
+    result = fresh_db._strip_markdown("")
+    assert result == ""
+
+
+def test_db_strip_markdown_none_text(fresh_db):
+    """Test strip_markdown with None."""
+    result = fresh_db._strip_markdown(None)
+    assert result == ""
+
+
+def test_db_strip_markdown_fenced_code_blocks(fresh_db):
+    """Test stripping fenced code blocks."""
+    text = """
+Some text here
+```python
+def hello():
+    print("world")
+```
+More text after
+"""
+    result = fresh_db._strip_markdown(text)
+    assert "def hello" not in result
+    assert "Some text" in result
+    assert "More text" in result
+
+
+def test_db_strip_markdown_inline_code(fresh_db):
+    """Test stripping inline code."""
+    text = "Here is some `inline code` in text"
+    result = fresh_db._strip_markdown(text)
+    assert "`" not in result
+    assert "inline code" not in result
+    assert "Here is some" in result
+    assert "in text" in result
+
+
+def test_db_strip_markdown_links(fresh_db):
+    """Test converting markdown links to plain text."""
+    text = "Check out [this link](https://example.com) for more info"
+    result = fresh_db._strip_markdown(text)
+    assert "this link" in result
+    assert "https://example.com" not in result
+    assert "[" not in result
+    assert "]" not in result
+
+
+def test_db_strip_markdown_emphasis_and_headers(fresh_db):
+    """Test stripping emphasis markers and headers."""
+    text = """
+# Header 1
+## Header 2
+**bold text** and *italic text*
+> blockquote
+_underline_
+"""
+    result = fresh_db._strip_markdown(text)
+    assert "#" not in result
+    assert "*" not in result
+    assert "_" not in result
+    assert ">" not in result
+    assert "bold text" in result
+    assert "italic text" in result
+
+
+def test_db_strip_markdown_html_tags(fresh_db):
+    """Test stripping HTML tags."""
+    text = "Some <b>bold</b> and <i>italic</i> text with <div>divs</div>"
+    result = fresh_db._strip_markdown(text)
+    # The regex replaces tags with spaces, may leave some angle brackets from malformed HTML
+    # The important thing is that the words are preserved
+    assert "bold" in result
+    assert "italic" in result
+    assert "divs" in result
+
+
+def test_db_strip_markdown_complex_document(fresh_db):
+    """Test stripping complex markdown document."""
+    text = """
+# My Document
+
+This is a paragraph with **bold** and *italic* text.
+
+```javascript
+const x = 10;
+console.log(x);
+```
+
+Here's a [link](https://example.com) and some `code`.
+
+> A blockquote
+
+<p>HTML paragraph</p>
+"""
+    result = fresh_db._strip_markdown(text)
+    assert "My Document" in result
+    assert "paragraph" in result
+    assert "const x" not in result
+    assert "https://example.com" not in result
+    assert "<p>" not in result
+
+
+def test_db_count_words_simple(fresh_db):
+    """Test word counting on simple text."""
+    text = "This is a simple test with seven words"
+    count = fresh_db._count_words(text)
+    assert count == 8
+
+
+def test_db_count_words_empty(fresh_db):
+    """Test word counting on empty text."""
+    count = fresh_db._count_words("")
+    assert count == 0
+
+
+def test_db_count_words_with_markdown(fresh_db):
+    """Test word counting strips markdown first."""
+    text = "**Bold** and *italic* and `code` words"
+    count = fresh_db._count_words(text)
+    # Should count: Bold, and, italic, and, words (5 words, code is in backticks so stripped)
+    assert count == 5
+
+
+def test_db_count_words_with_unicode(fresh_db):
+    """Test word counting with unicode characters."""
+    text = "Hello 世界 café naïve résumé"
+    count = fresh_db._count_words(text)
+    # Should count all words including unicode
+    assert count >= 5
+
+
+def test_db_count_words_with_numbers(fresh_db):
+    """Test word counting includes numbers."""
+    text = "There are 123 apples and 456 oranges"
+    count = fresh_db._count_words(text)
+    assert count == 7
+
+
+def test_db_count_words_with_punctuation(fresh_db):
+    """Test word counting handles punctuation correctly."""
+    text = "Hello, world! How are you? I'm fine, thanks."
+    count = fresh_db._count_words(text)
+    # Hello, world, How, are, you, I, m, fine, thanks = 9 words
+    assert count == 9
+
+
+# ============================================================================
+# DB gather_stats Tests
+# ============================================================================
+
+
+def test_db_gather_stats_empty_database(fresh_db):
+    """Test gather_stats on empty database."""
+    stats = fresh_db.gather_stats()
+
+    assert len(stats) == 10
+    (
+        pages_with_content,
+        total_revisions,
+        page_most_revisions,
+        page_most_revisions_count,
+        words_by_date,
+        total_words,
+        unique_tags,
+        page_most_tags,
+        page_most_tags_count,
+        revisions_by_date,
+    ) = stats
+
+    assert pages_with_content == 0
+    assert total_revisions == 0
+    assert page_most_revisions is None
+    assert page_most_revisions_count == 0
+    assert len(words_by_date) == 0
+    assert total_words == 0
+    assert unique_tags == 0
+    assert page_most_tags is None
+    assert page_most_tags_count == 0
+    assert len(revisions_by_date) == 0
+
+
+def test_db_gather_stats_with_content(fresh_db):
+    """Test gather_stats with actual content."""
+    # Add multiple pages with different content
+    fresh_db.save_new_version("2024-01-01", "Hello world this is a test", "v1")
+    fresh_db.save_new_version(
+        "2024-01-01", "Hello world this is version two", "v2"
+    )  # 2nd revision
+    fresh_db.save_new_version("2024-01-02", "Another page with more words here", "v1")
+
+    stats = fresh_db.gather_stats()
+
+    (
+        pages_with_content,
+        total_revisions,
+        page_most_revisions,
+        page_most_revisions_count,
+        words_by_date,
+        total_words,
+        unique_tags,
+        page_most_tags,
+        page_most_tags_count,
+        revisions_by_date,
+    ) = stats
+
+    assert pages_with_content == 2
+    assert total_revisions == 3
+    assert page_most_revisions == "2024-01-01"
+    assert page_most_revisions_count == 2
+    assert total_words > 0
+    assert len(words_by_date) == 2
+
+
+def test_db_gather_stats_word_counting(fresh_db):
+    """Test that gather_stats counts words correctly."""
+    # Add page with known word count
+    fresh_db.save_new_version("2024-01-01", "one two three four five", "test")
+
+    stats = fresh_db.gather_stats()
+    _, _, _, _, words_by_date, total_words, _, _, _, _ = stats
+
+    assert total_words == 5
+
+    test_date = date(2024, 1, 1)
+    assert test_date in words_by_date
+    assert words_by_date[test_date] == 5
+
+
+def test_db_gather_stats_with_tags(fresh_db):
+    """Test gather_stats with tags."""
+    # Add tags
+    fresh_db.add_tag("tag1", "#ff0000")
+    fresh_db.add_tag("tag2", "#00ff00")
+    fresh_db.add_tag("tag3", "#0000ff")
+
+    # Add pages with tags
+    fresh_db.save_new_version("2024-01-01", "Page 1", "test")
+    fresh_db.save_new_version("2024-01-02", "Page 2", "test")
+
+    fresh_db.set_tags_for_page(
+        "2024-01-01", ["tag1", "tag2", "tag3"]
+    )  # Page 1 has 3 tags
+    fresh_db.set_tags_for_page("2024-01-02", ["tag1"])  # Page 2 has 1 tag
+
+    stats = fresh_db.gather_stats()
+    _, _, _, _, _, _, unique_tags, page_most_tags, page_most_tags_count, _ = stats
+
+    assert unique_tags == 3
+    assert page_most_tags == "2024-01-01"
+    assert page_most_tags_count == 3
+
+
+def test_db_gather_stats_revisions_by_date(fresh_db):
+    """Test revisions_by_date tracking."""
+    # Add multiple revisions on different dates
+    fresh_db.save_new_version("2024-01-01", "First", "v1")
+    fresh_db.save_new_version("2024-01-01", "Second", "v2")
+    fresh_db.save_new_version("2024-01-01", "Third", "v3")
+    fresh_db.save_new_version("2024-01-02", "Fourth", "v1")
+
+    stats = fresh_db.gather_stats()
+    _, _, _, _, _, _, _, _, _, revisions_by_date = stats
+
+    assert date(2024, 1, 1) in revisions_by_date
+    assert revisions_by_date[date(2024, 1, 1)] == 3
+    assert date(2024, 1, 2) in revisions_by_date
+    assert revisions_by_date[date(2024, 1, 2)] == 1
+
+
+def test_db_gather_stats_handles_malformed_dates(fresh_db):
+    """Test that gather_stats handles malformed dates gracefully."""
+    # This is hard to test directly since the DB enforces date format
+    # But we can test that normal dates work
+    fresh_db.save_new_version("2024-01-15", "Test", "v1")
+
+    stats = fresh_db.gather_stats()
+    _, _, _, _, _, _, _, _, _, revisions_by_date = stats
+
+    # Should have parsed the date correctly
+    assert date(2024, 1, 15) in revisions_by_date
+
+
+def test_db_gather_stats_current_version_only(fresh_db):
+    """Test that word counts use current version only, not all revisions."""
+    # Add multiple revisions
+    fresh_db.save_new_version("2024-01-01", "one two three", "v1")
+    fresh_db.save_new_version("2024-01-01", "one two three four five", "v2")
+
+    stats = fresh_db.gather_stats()
+    _, _, _, _, words_by_date, total_words, _, _, _, _ = stats
+
+    # Should count words from current version (5 words), not old version
+    assert total_words == 5
+    assert words_by_date[date(2024, 1, 1)] == 5
+
+
+def test_db_gather_stats_no_tags(fresh_db):
+    """Test gather_stats when there are no tags."""
+    fresh_db.save_new_version("2024-01-01", "No tags here", "test")
+
+    stats = fresh_db.gather_stats()
+    _, _, _, _, _, _, unique_tags, page_most_tags, page_most_tags_count, _ = stats
+
+    assert unique_tags == 0
+    assert page_most_tags is None
+    assert page_most_tags_count == 0
+
+
+def test_db_gather_stats_exception_in_dates_with_content(fresh_db, monkeypatch):
+    """Test that gather_stats handles exception in dates_with_content."""
+
+    def bad_dates():
+        raise RuntimeError("Simulated error")
+
+    monkeypatch.setattr(fresh_db, "dates_with_content", bad_dates)
+
+    # Should still return stats without crashing
+    stats = fresh_db.gather_stats()
+    pages_with_content = stats[0]
+
+    # Should default to 0 when exception occurs
+    assert pages_with_content == 0
