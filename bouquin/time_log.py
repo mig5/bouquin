@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import csv
+import html
 
+from collections import defaultdict
 from typing import Optional
 from sqlcipher3.dbapi2 import IntegrityError
 
-from PySide6.QtCore import Qt, QDate
-
+from PySide6.QtCore import Qt, QDate, QUrl
+from PySide6.QtGui import QPainter, QColor, QImage, QTextDocument, QPageLayout
+from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -97,9 +100,8 @@ class TimeLogWidget(QFrame):
 
     def set_current_date(self, date_iso: str) -> None:
         self._current_date = date_iso
-        if self.toggle_btn.isChecked():
-            self._reload_summary()
-        else:
+        self._reload_summary()
+        if not self.toggle_btn.isChecked():
             self.summary_label.setText(strings._("time_log_collapsed_hint"))
 
     # ----- internals ---------------------------------------------------
@@ -110,18 +112,32 @@ class TimeLogWidget(QFrame):
         if checked and self._current_date:
             self._reload_summary()
 
+    def _update_title(self, total_hours: Optional[float]) -> None:
+        """Update the header text, optionally including total hours."""
+        if total_hours is None:
+            self.toggle_btn.setText(strings._("time_log"))
+        else:
+            self.toggle_btn.setText(
+                strings._("time_log_with_total").format(hours=total_hours)
+            )
+
     def _reload_summary(self) -> None:
         if not self._current_date:
+            self._update_title(None)
             self.summary_label.setText(strings._("time_log_no_date"))
             return
 
         rows = self._db.time_log_for_date(self._current_date)
         if not rows:
+            self._update_title(None)
             self.summary_label.setText(strings._("time_log_no_entries"))
             return
 
         total_minutes = sum(r[6] for r in rows)  # index 6 = minutes
         total_hours = total_minutes / 60.0
+
+        # Update header with running total (visible even when collapsed)
+        self._update_title(total_hours)
 
         # Per-project totals
         per_project: dict[str, int] = {}
@@ -198,7 +214,7 @@ class TimeLogDialog(QDialog):
         self.hours_spin.setRange(0.0, 24.0)
         self.hours_spin.setDecimals(2)
         self.hours_spin.setSingleStep(0.25)
-        form.addRow(strings._("hours_decimal"), self.hours_spin)
+        form.addRow(strings._("hours"), self.hours_spin)
 
         root.addLayout(form)
 
@@ -211,9 +227,13 @@ class TimeLogDialog(QDialog):
         self.delete_btn.clicked.connect(self._on_delete_entry)
         self.delete_btn.setEnabled(False)
 
+        self.report_btn = QPushButton(strings._("run_report"))
+        self.report_btn.clicked.connect(self._on_run_report)
+
         btn_row.addStretch(1)
         btn_row.addWidget(self.add_update_btn)
         btn_row.addWidget(self.delete_btn)
+        btn_row.addWidget(self.report_btn)
         root.addLayout(btn_row)
 
         # --- Table of entries for this date
@@ -223,7 +243,7 @@ class TimeLogDialog(QDialog):
             [
                 strings._("project"),
                 strings._("activity"),
-                strings._("hours_decimal"),
+                strings._("hours"),
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -372,6 +392,10 @@ class TimeLogDialog(QDialog):
             return
         self._db.delete_time_log(self._current_entry_id)
         self._reload_entries()
+
+    def _on_run_report(self) -> None:
+        dlg = TimeReportDialog(self._db, self)
+        dlg.exec()
 
     # ----- Project / activity management -------------------------------
 
@@ -703,6 +727,10 @@ class TimeReportDialog(QDialog):
         # state for last run
         self._last_rows: list[tuple[str, str, int]] = []
         self._last_total_minutes: int = 0
+        self._last_project_name: str = ""
+        self._last_start: str = ""
+        self._last_end: str = ""
+        self._last_gran_label: str = ""
 
         self.setWindowTitle(strings._("time_log_report"))
         self.resize(600, 400)
@@ -746,9 +774,13 @@ class TimeReportDialog(QDialog):
         export_btn = QPushButton(strings._("export_csv"))
         export_btn.clicked.connect(self._export_csv)
 
+        pdf_btn = QPushButton(strings._("export_pdf"))
+        pdf_btn.clicked.connect(self._export_pdf)
+
         run_row.addStretch(1)
         run_row.addWidget(run_btn)
         run_row.addWidget(export_btn)
+        run_row.addWidget(pdf_btn)
         root.addLayout(run_row)
 
         # Table
@@ -758,7 +790,7 @@ class TimeReportDialog(QDialog):
             [
                 strings._("time_period"),
                 strings._("activity"),
-                strings._("hours_decimal"),
+                strings._("hours"),
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -790,8 +822,13 @@ class TimeReportDialog(QDialog):
         end = self.to_date.date().toString("yyyy-MM-dd")
         gran = self.granularity.currentData()
 
+        # Keep human-friendly copies for PDF header
+        self._last_project_name = self.project_combo.currentText()
+        self._last_start = start
+        self._last_end = end
+        self._last_gran_label = self.granularity.currentText()
+
         rows = self._db.time_report(proj_id, start, end, gran)
-        # rows: (time_period, activity_name, minutes)
 
         self._last_rows = rows
         self._last_total_minutes = sum(r[2] for r in rows)
@@ -835,7 +872,7 @@ class TimeReportDialog(QDialog):
                     [
                         strings._("time_period"),
                         strings._("activity"),
-                        strings._("hours_decimal"),
+                        strings._("hours"),
                     ]
                 )
 
@@ -853,4 +890,217 @@ class TimeReportDialog(QDialog):
                 self,
                 strings._("export_csv_error_title"),
                 strings._("export_csv_error_message").format(error=str(exc)),
+            )
+
+    def _export_pdf(self):
+        if not self._last_rows:
+            QMessageBox.information(
+                self,
+                strings._("no_report_title"),
+                strings._("no_report_message"),
+            )
+            return
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            strings._("export_pdf"),
+            "",
+            "PDF Files (*.pdf);;All Files (*)",
+        )
+        if not filename:
+            return
+
+        # ---------- Build chart image (hours per period) ----------
+        per_period_minutes: dict[str, int] = defaultdict(int)
+        for period, _activity, minutes in self._last_rows:
+            per_period_minutes[period] += minutes
+
+        periods = sorted(per_period_minutes.keys())
+        chart_w, chart_h = 800, 220
+        chart = QImage(chart_w, chart_h, QImage.Format_ARGB32)
+        chart.fill(Qt.white)
+
+        if periods:
+            painter = QPainter(chart)
+            try:
+                painter.setRenderHint(QPainter.Antialiasing, True)
+
+                margin = 50
+                left = margin + 30  # extra space for Y labels
+                top = margin
+                right = chart_w - margin
+                bottom = chart_h - margin - 20  # room for X labels
+                width = right - left
+                height = bottom - top
+
+                painter.setPen(Qt.black)
+
+                # Y-axis label "Hours" above the axis
+                painter.drawText(
+                    left - 50,  # left of the axis
+                    top - 30,  # higher up so it doesn't touch the axis line
+                    50,
+                    20,
+                    Qt.AlignRight | Qt.AlignVCenter,
+                    strings._("hours"),
+                )
+
+                # Border
+                painter.drawRect(left, top, width, height)
+
+                max_hours = max(per_period_minutes[p] for p in periods) / 60.0
+                if max_hours > 0:
+                    n = len(periods)
+                    bar_spacing = width / max(1, n)
+                    bar_width = bar_spacing * 0.6
+
+                    # Y-axis ticks (0, 1/3, 2/3, max)
+                    num_ticks = 3
+                    for i in range(num_ticks + 1):
+                        val = max_hours * i / num_ticks
+                        y_tick = bottom - int((val / max_hours) * height)
+                        # small tick mark
+                        painter.drawLine(left - 5, y_tick, left, y_tick)
+                        # label to the left
+                        painter.drawText(
+                            left - 40,
+                            y_tick - 7,
+                            35,
+                            14,
+                            Qt.AlignRight | Qt.AlignVCenter,
+                            f"{val:.1f}",
+                        )
+
+                    # Bars
+                    painter.setBrush(QColor(80, 140, 200))
+                    painter.setPen(Qt.NoPen)
+
+                    for i, period in enumerate(periods):
+                        hours = per_period_minutes[period] / 60.0
+                        bar_h = int((hours / max_hours) * (height - 10))
+                        if bar_h <= 0:
+                            continue
+
+                        x_center = left + bar_spacing * (i + 0.5)
+                        x = int(x_center - bar_width / 2)
+                        y_top_bar = bottom - bar_h
+
+                        painter.drawRect(x, y_top_bar, int(bar_width), bar_h)
+
+                    # X labels after bars, in black
+                    painter.setPen(Qt.black)
+                    for i, period in enumerate(periods):
+                        x_center = left + bar_spacing * (i + 0.5)
+                        x = int(x_center - bar_width / 2)
+                        painter.drawText(
+                            x,
+                            bottom + 5,
+                            int(bar_width),
+                            20,
+                            Qt.AlignHCenter | Qt.AlignTop,
+                            period,
+                        )
+            finally:
+                painter.end()
+
+        # ---------- Build HTML report ----------
+        project = html.escape(self._last_project_name or "")
+        start = html.escape(self._last_start or "")
+        end = html.escape(self._last_end or "")
+        gran = html.escape(self._last_gran_label or "")
+
+        total_hours = self._last_total_minutes / 60.0
+
+        # Table rows (period, activity, hours)
+        row_html_parts: list[str] = []
+        for period, activity, minutes in self._last_rows:
+            hours = minutes / 60.0
+            row_html_parts.append(
+                "<tr>"
+                f"<td>{html.escape(period)}</td>"
+                f"<td>{html.escape(activity)}</td>"
+                f"<td style='text-align:right'>{hours:.2f}</td>"
+                "</tr>"
+            )
+        rows_html = "\n".join(row_html_parts)
+
+        html_doc = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body {{
+    font-family: sans-serif;
+    font-size: 10pt;
+  }}
+  h1 {{
+    font-size: 16pt;
+    margin-bottom: 4pt;
+  }}
+  p.meta {{
+    margin-top: 0;
+    color: #555;
+  }}
+  img.chart {{
+    display: block;
+    margin: 12pt 0;
+    max-width: 100%;
+    height: auto;
+  }}
+  table {{
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 12pt;
+  }}
+  th, td {{
+    border: 1px solid #ccc;
+    padding: 4pt 6pt;
+  }}
+  th {{
+    background-color: #f0f0f0;
+  }}
+  td.hours {{
+    text-align: right;
+  }}
+</style>
+</head>
+<body>
+  <h1>{html.escape(strings._("time_log_report_title").format(project=project))}</h1>
+  <p class="meta">
+    {html.escape(strings._("time_log_report_meta").format(
+        start=start, end=end, granularity=gran))}
+  </p>
+  <p><img src="chart" class="chart" /></p>
+  <table>
+    <tr>
+      <th>{html.escape(strings._("time_period"))}</th>
+      <th>{html.escape(strings._("activity"))}</th>
+      <th>{html.escape(strings._("hours"))}</th>
+    </tr>
+    {rows_html}
+  </table>
+  <p><b>{html.escape(strings._("time_report_total").format(hours=total_hours))}</b></p>
+</body>
+</html>
+"""
+
+        # ---------- Render HTML to PDF ----------
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(filename)
+        printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+
+        doc = QTextDocument()
+        # attach the chart image as a resource
+        doc.addResource(QTextDocument.ImageResource, QUrl("chart"), chart)
+        doc.setHtml(html_doc)
+
+        try:
+            doc.print_(printer)
+        except Exception as exc:  # very defensive
+            QMessageBox.warning(
+                self,
+                strings._("export_pdf_error_title"),
+                strings._("export_pdf_error_message").format(error=str(exc)),
             )
