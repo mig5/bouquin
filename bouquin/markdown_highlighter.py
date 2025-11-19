@@ -106,7 +106,8 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             base_size = 10.0  # fallback
         # Checkboxes: make them a bit bigger so they stand out
         self.checkbox_format = QTextCharFormat()
-        self.checkbox_format.setFontPointSize(base_size * 1.4)
+        self.checkbox_format.setFontPointSize(base_size * 1.3)
+        self.checkbox_format.setVerticalAlignment(QTextCharFormat.AlignMiddle)
 
         # Bullets
         self.bullet_format = QTextCharFormat()

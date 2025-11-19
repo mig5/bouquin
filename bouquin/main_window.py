@@ -228,6 +228,7 @@ class MainWindow(QMainWindow):
         act_stats.triggered.connect(self._open_statistics)
         file_menu.addAction(act_stats)
         act_time_report = QAction(strings._("time_log_report"), self)
+        act_time_report.setShortcut("Ctrl+Shift+L")
         act_time_report.triggered.connect(self._open_time_report)
         file_menu.addAction(act_time_report)
         file_menu.addSeparator()

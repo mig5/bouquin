@@ -92,7 +92,7 @@ class ToolBar(QToolBar):
         self.actAlarm.triggered.connect(self.alarmRequested)
 
         # Images
-        self.actInsertImg = QAction(strings._("images"), self)
+        self.actInsertImg = QAction("📸", self)
         self.actInsertImg.setToolTip(strings._("insert_images"))
         self.actInsertImg.setShortcut("Ctrl+Shift+I")
         self.actInsertImg.triggered.connect(self.insertImageRequested)
