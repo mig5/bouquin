@@ -158,9 +158,11 @@ class TimeLogWidget(QFrame):
         dlg = TimeLogDialog(self._db, self._current_date, self)
         dlg.exec()
 
-        # Always refresh summary when the dialog closes; the user may have changed entries
+        # Always refresh summary + header totals
+        self._reload_summary()
+
         if self.toggle_btn.isChecked():
-            self._reload_summary()
+            self.summary_label.setText(strings._("time_log_collapsed_hint"))
 
 
 class TimeLogDialog(QDialog):
