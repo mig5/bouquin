@@ -228,7 +228,7 @@
    "time_log_total_hours": "Total for day: {hours:.2f}h",
    "title_key": "title",
    "update_time_entry": "Update time entry",
-   "time_report_total": "Total: {hours:2f} hours",
+   "time_report_total": "Total: {hours:.2f} hours",
    "no_report_title": "No report",
    "no_report_message": "Please run a report before exporting.",
    "total": "Total",
