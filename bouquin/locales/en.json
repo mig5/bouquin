@@ -107,6 +107,8 @@
     "toolbar_italic": "Italic",
     "toolbar_strikethrough": "Strikethrough",
     "toolbar_normal_paragraph_text": "Normal paragraph text",
+    "toolbar_font_smaller": "Smaller text",
+    "toolbar_font_larger": "Larger text",
     "toolbar_bulleted_list": "Bulleted list",
     "toolbar_numbered_list": "Numbered list",
     "toolbar_code_block": "Code block",

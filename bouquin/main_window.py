@@ -92,6 +92,8 @@ class MainWindow(QMainWindow):
         else:
             self._try_connect()
 
+        self.settings = QSettings(APP_ORG, APP_NAME)
+
         # ---- UI: Left fixed panel (calendar) + right editor -----------------
         self.calendar = QCalendarWidget()
         self.calendar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -319,7 +321,6 @@ class MainWindow(QMainWindow):
             self.time_log.hide()
 
         # Restore window position from settings
-        self.settings = QSettings(APP_ORG, APP_NAME)
         self._restore_window_position()
 
         # re-apply all runtime color tweaks when theme changes
@@ -484,6 +485,9 @@ class MainWindow(QMainWindow):
             return self.tab_widget.widget(existing)
 
         editor = MarkdownEditor(self.themes)
+
+        # Apply user’s preferred font size
+        self._apply_font_size(editor)
 
         # Set up the editor's event connections
         editor.currentCharFormatChanged.connect(lambda _f: self._sync_toolbar())
@@ -912,6 +916,15 @@ class MainWindow(QMainWindow):
             pass
 
     # ----------------- Some theme helpers -------------------#
+    def _apply_font_size(self, editor: MarkdownEditor) -> None:
+        """Apply the saved font size to a newly created editor."""
+        size = self.cfg.font_size
+        editor.qfont.setPointSize(size)
+        editor.setFont(editor.qfont)
+        # save size to settings
+        self.cfg.font_size = size
+        save_db_config(self.cfg)
+
     def _retheme_overrides(self):
         self._apply_calendar_text_colors()
         self._apply_search_highlights(getattr(self, "_search_highlighted_dates", set()))
@@ -995,6 +1008,8 @@ class MainWindow(QMainWindow):
         self._tb_numbers = lambda: self._call_editor("toggle_numbers")
         self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
         self._tb_alarm = self._on_alarm_requested
+        self._tb_font_larger = self._on_font_larger_requested
+        self._tb_font_smaller = self._on_font_smaller_requested
 
         tb.boldRequested.connect(self._tb_bold)
         tb.italicRequested.connect(self._tb_italic)
@@ -1007,6 +1022,8 @@ class MainWindow(QMainWindow):
         tb.alarmRequested.connect(self._tb_alarm)
         tb.insertImageRequested.connect(self._on_insert_image)
         tb.historyRequested.connect(self._open_history)
+        tb.fontSizeLargerRequested.connect(self._tb_font_larger)
+        tb.fontSizeSmallerRequested.connect(self._tb_font_smaller)
 
         self._toolbar_bound = True
 
@@ -1051,6 +1068,28 @@ class MainWindow(QMainWindow):
         QSignalBlocker(self.toolBar.actNumbers)
         self.toolBar.actBullets.setChecked(bool(bullets_on))
         self.toolBar.actNumbers.setChecked(bool(numbers_on))
+
+    def _change_font_size(self, delta: int) -> None:
+        """Change font size for all editor tabs and save the setting."""
+        old_size = self.cfg.font_size
+        new_size = old_size + delta
+
+        self.cfg.font_size = new_size
+        save_db_config(self.cfg)
+
+        # Apply font size change to all open editors
+        for i in range(self.tab_widget.count()):
+            ed = self.tab_widget.widget(i)
+            if not isinstance(ed, MarkdownEditor):
+                continue
+            ed.qfont.setPointSize(new_size)
+            ed.setFont(ed.qfont)
+
+    def _on_font_larger_requested(self) -> None:
+        self._change_font_size(+1)
+
+    def _on_font_smaller_requested(self) -> None:
+        self._change_font_size(-1)
 
     # ----------- Alarms handler ------------#
     def _on_alarm_requested(self):

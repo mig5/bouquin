@@ -64,6 +64,7 @@ class DBConfig:
     tags: bool = True
     time_log: bool = True
     locale: str = "en"
+    font_size: int = 11
 
 
 class DBManager:

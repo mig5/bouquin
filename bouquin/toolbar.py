@@ -19,6 +19,8 @@ class ToolBar(QToolBar):
     historyRequested = Signal()
     insertImageRequested = Signal()
     alarmRequested = Signal()
+    fontSizeLargerRequested = Signal()
+    fontSizeSmallerRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(strings._("toolbar_format"), parent)
@@ -72,6 +74,14 @@ class ToolBar(QToolBar):
         self.actNormal.setCheckable(True)
         self.actNormal.setShortcut("Ctrl+N")
         self.actNormal.triggered.connect(lambda: self.headingRequested.emit(0))
+
+        self.actFontSmaller = QAction("N-", self)
+        self.actFontSmaller.setToolTip(strings._("toolbar_font_smaller"))
+        self.actFontSmaller.triggered.connect(self.fontSizeSmallerRequested)
+
+        self.actFontLarger = QAction("N+", self)
+        self.actFontLarger.setToolTip(strings._("toolbar_font_larger"))
+        self.actFontLarger.triggered.connect(self.fontSizeLargerRequested)
 
         # Lists
         self.actBullets = QAction("•", self)
@@ -132,6 +142,8 @@ class ToolBar(QToolBar):
                 self.actH2,
                 self.actH3,
                 self.actNormal,
+                self.actFontSmaller,
+                self.actFontLarger,
                 self.actBullets,
                 self.actNumbers,
                 self.actCheckboxes,
@@ -154,6 +166,8 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actH2, "H2")
         self._style_letter_button(self.actH3, "H3")
         self._style_letter_button(self.actNormal, "N")
+        self._style_letter_button(self.actFontSmaller, "N-")
+        self._style_letter_button(self.actFontLarger, "N+")
 
         # Lists
         self._style_letter_button(self.actBullets, "•")
