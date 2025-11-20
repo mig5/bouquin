@@ -1,3 +1,8 @@
+# 0.4.2
+
+ * Improve Statistics widget height
+ * Improve SaveDialog widget width
+
 # 0.4.1
 
  * Allow time log entries to be edited directly in their table cells

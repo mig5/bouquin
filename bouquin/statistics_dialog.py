@@ -98,7 +98,7 @@ class DateHeatmap(QWidget):
 
     def minimumSizeHint(self) -> QSize:
         sz = self.sizeHint()
-        return QSize(min(300, sz.width()), sz.height())
+        return QSize(min(350, sz.width()), sz.height())
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -249,6 +249,7 @@ class StatisticsDialog(QDialog):
 
         self.setWindowTitle(strings._("statistics"))
         self.setMinimumWidth(600)
+        self.setMinimumHeight(350)
         root = QVBoxLayout(self)
 
         (
