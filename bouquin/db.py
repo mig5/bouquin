@@ -61,6 +61,8 @@ class DBConfig:
     idle_minutes: int = 15  # 0 = never lock
     theme: str = "system"
     move_todos: bool = False
+    tags: bool = True
+    time_log: bool = True
     locale: str = "en"
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime
 
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,

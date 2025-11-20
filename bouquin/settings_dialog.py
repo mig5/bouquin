@@ -98,13 +98,26 @@ class SettingsDialog(QDialog):
         behaviour_group = QGroupBox(strings._("behaviour"))
         behaviour_layout = QVBoxLayout(behaviour_group)
 
+        # Checkbox moving
         self.move_todos = QCheckBox(
             strings._("move_yesterdays_unchecked_todos_to_today_on_startup")
         )
         self.move_todos.setChecked(self.current_settings.move_todos)
         self.move_todos.setCursor(Qt.PointingHandCursor)
-
         behaviour_layout.addWidget(self.move_todos)
+
+        # Tags
+        self.tags = QCheckBox(strings._("enable_tags_feature"))
+        self.tags.setChecked(self.current_settings.tags)
+        self.tags.setCursor(Qt.PointingHandCursor)
+        behaviour_layout.addWidget(self.tags)
+
+        # Time logging
+        self.time_log = QCheckBox(strings._("enable_time_log_feature"))
+        self.time_log.setChecked(self.current_settings.time_log)
+        self.time_log.setCursor(Qt.PointingHandCursor)
+        behaviour_layout.addWidget(self.time_log)
+
         form.addRow(behaviour_group)
 
         # Encryption settings
@@ -236,6 +249,8 @@ class SettingsDialog(QDialog):
             idle_minutes=self.idle_spin.value(),
             theme=selected_theme.value,
             move_todos=self.move_todos.isChecked(),
+            tags=self.tags.isChecked(),
+            time_log=self.time_log.isChecked(),
             locale=self.locale_combobox.currentText(),
         )
 

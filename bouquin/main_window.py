@@ -66,7 +66,7 @@ from .statistics_dialog import StatisticsDialog
 from . import strings
 from .tags_widget import PageTagsWidget
 from .theme import ThemeManager
-from .time_log import TimeLogWidget, TimeReportDialog
+from .time_log import TimeLogWidget
 from .toolbar import ToolBar
 
 
@@ -219,18 +219,10 @@ class MainWindow(QMainWindow):
         act_backup.setShortcut("Ctrl+Shift+B")
         act_backup.triggered.connect(self._backup)
         file_menu.addAction(act_backup)
-        act_tags = QAction(strings._("main_window_manage_tags_accessible_flag"), self)
-        act_tags.setShortcut("Ctrl+T")
-        act_tags.triggered.connect(self.tags._open_manager)
-        file_menu.addAction(act_tags)
         act_stats = QAction(strings._("main_window_statistics_accessible_flag"), self)
         act_stats.setShortcut("Shift+Ctrl+S")
         act_stats.triggered.connect(self._open_statistics)
         file_menu.addAction(act_stats)
-        act_time_report = QAction(strings._("time_log_report"), self)
-        act_time_report.setShortcut("Ctrl+Shift+L")
-        act_time_report.triggered.connect(self._open_time_report)
-        file_menu.addAction(act_time_report)
         file_menu.addSeparator()
         act_quit = QAction("&" + strings._("quit"), self)
         act_quit.setShortcut("Ctrl+Q")
@@ -319,6 +311,12 @@ class MainWindow(QMainWindow):
         if not self._load_yesterday_todos():
             self._load_selected_date()
         self._refresh_calendar_marks()
+
+        # Hide tags and time log widgets if not enabled
+        if not self.cfg.tags:
+            self.tags.hide()
+        if not self.cfg.time_log:
+            self.time_log.hide()
 
         # Restore window position from settings
         self.settings = QSettings(APP_ORG, APP_NAME)
@@ -1320,11 +1318,12 @@ class MainWindow(QMainWindow):
         self.cfg.idle_minutes = getattr(new_cfg, "idle_minutes", self.cfg.idle_minutes)
         self.cfg.theme = getattr(new_cfg, "theme", self.cfg.theme)
         self.cfg.move_todos = getattr(new_cfg, "move_todos", self.cfg.move_todos)
+        self.cfg.tags = getattr(new_cfg, "tags", self.cfg.tags)
+        self.cfg.time_log = getattr(new_cfg, "time_log", self.cfg.time_log)
         self.cfg.locale = getattr(new_cfg, "locale", self.cfg.locale)
 
         # Persist once
         save_db_config(self.cfg)
-
         # Apply idle setting immediately (restart the timer with new interval if it changed)
         self._apply_idle_minutes(self.cfg.idle_minutes)
 
@@ -1341,6 +1340,13 @@ class MainWindow(QMainWindow):
             self._load_selected_date()
             self._refresh_calendar_marks()
 
+        # Show or hide the tags and time_log features depending on what the settings are now.
+        self.tags.hide() if not self.cfg.tags else self.tags.show()
+        if not self.cfg.time_log:
+            self.time_log.hide()
+        else:
+            self.time_log.show()
+
     # ------------ Statistics handler --------------- #
 
     def _open_statistics(self):
@@ -1356,11 +1362,6 @@ class MainWindow(QMainWindow):
                 self._open_date_in_tab(qd)
 
             dlg._heatmap.date_clicked.connect(on_date_clicked)
-        dlg.exec()
-
-    # ------------ Timesheet report handler --------------- #
-    def _open_time_report(self):
-        dlg = TimeReportDialog(self.db, self)
         dlg.exec()
 
     # ------------ Window positioning --------------- #

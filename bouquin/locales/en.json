@@ -238,5 +238,7 @@
     "export_csv_error_message": "Could not write CSV file:\n{error}",
     "export_pdf": "Export PDF",
     "export_pdf_error_title": "PDF export failed",
-    "export_pdf_error_message": "Could not write PDF file:\n{error}"
+    "export_pdf_error_message": "Could not write PDF file:\n{error}",
+    "enable_tags_feature": "Enable Tags",
+    "enable_time_log_feature": "Enable Time Logging"
 }

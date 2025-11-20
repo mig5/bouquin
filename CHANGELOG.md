@@ -2,6 +2,7 @@
 
  * Improve Statistics widget height
  * Improve SaveDialog widget width
+ * Make Tags and TimeLog optional features that can be switched on/off in Settings (enabled by default)
 
 # 0.4.1
 

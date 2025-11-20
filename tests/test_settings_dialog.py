@@ -20,6 +20,8 @@ def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db):
     dlg.idle_spin.setValue(3)
     dlg.theme_light.setChecked(True)
     dlg.move_todos.setChecked(True)
+    dlg.tags.setChecked(False)
+    dlg.time_log.setChecked(False)
 
     # Auto-accept the modal QMessageBox that _compact_btn_clicked() shows
     def _auto_accept_msgbox():
@@ -34,6 +36,9 @@ def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db):
     dlg._save()
     cfg = dlg.config
     assert cfg.idle_minutes == 3
+    assert cfg.move_todos is True
+    assert cfg.tags is False
+    assert cfg.time_log is False
     assert cfg.theme in ("light", "dark", "system")
 
 
