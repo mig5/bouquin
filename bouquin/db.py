@@ -736,12 +736,8 @@ class DBManager:
                 page_most_revisions_count = c
                 page_most_revisions = date_iso
 
-            try:
-                d = _dt.date.fromisoformat(date_iso)
-                revisions_by_date[d] = c
-            except ValueError:
-                # Ignore malformed dates
-                pass
+            d = _dt.date.fromisoformat(date_iso)
+            revisions_by_date[d] = c
 
         # 4) total words + per-date words (current version only)
         entries = self.get_all_entries()
@@ -751,11 +747,8 @@ class DBManager:
         for date_iso, content in entries:
             wc = self._count_words(content or "")
             total_words += wc
-            try:
-                d = _dt.date.fromisoformat(date_iso)
-                words_by_date[d] = wc
-            except ValueError:
-                pass
+            d = _dt.date.fromisoformat(date_iso)
+            words_by_date[d] = wc
 
         # tags + page with most tags
 

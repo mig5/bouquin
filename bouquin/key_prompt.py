@@ -99,8 +99,9 @@ class KeyPrompt(QDialog):
 
     def db_path(self) -> Path | None:
         """Return the chosen DB path (or None if unchanged/not shown)."""
+        p = self._db_path
         if self.path_edit is not None:
             text = self.path_edit.text().strip()
             if text:
-                return Path(text)
-        return self._db_path
+                p = Path(text)
+        return p

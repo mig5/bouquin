@@ -70,10 +70,6 @@ class BugReportDialog(QDialog):
         self.text_edit.setPlainText(text[: self.MAX_CHARS])
         self.text_edit.blockSignals(False)
 
-        # Clamp cursor position to end of text
-        if pos > self.MAX_CHARS:
-            pos = self.MAX_CHARS
-
         cursor.setPosition(pos)
         self.text_edit.setTextCursor(cursor)
 
@@ -88,10 +84,7 @@ class BugReportDialog(QDialog):
             return
 
         # Get current app version
-        try:
-            version = importlib.metadata.version("bouquin")
-        except importlib.metadata.PackageNotFoundError:
-            version = "unknown"
+        version = importlib.metadata.version("bouquin")
 
         payload: dict[str, str] = {
             "message": text,
