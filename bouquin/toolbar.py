@@ -77,10 +77,12 @@ class ToolBar(QToolBar):
 
         self.actFontSmaller = QAction("N-", self)
         self.actFontSmaller.setToolTip(strings._("toolbar_font_smaller"))
+        self.actFontSmaller.setShortcut("Ctrl+Shift+-")
         self.actFontSmaller.triggered.connect(self.fontSizeSmallerRequested)
 
         self.actFontLarger = QAction("N+", self)
         self.actFontLarger.setToolTip(strings._("toolbar_font_larger"))
+        self.actFontLarger.setShortcut("Ctrl+Shift+=")
         self.actFontLarger.triggered.connect(self.fontSizeLargerRequested)
 
         # Lists
