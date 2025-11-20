@@ -52,21 +52,21 @@ class TagBrowserDialog(QDialog):
         # Tag management buttons
         btn_row = QHBoxLayout()
 
-        self.add_tag_btn = QPushButton(strings._("add_a_tag"))
+        self.add_tag_btn = QPushButton("&" + strings._("add_a_tag"))
         self.add_tag_btn.clicked.connect(self._add_a_tag)
         btn_row.addWidget(self.add_tag_btn)
 
-        self.edit_name_btn = QPushButton(strings._("edit_tag_name"))
+        self.edit_name_btn = QPushButton("&" + strings._("edit_tag_name"))
         self.edit_name_btn.clicked.connect(self._edit_tag_name)
         self.edit_name_btn.setEnabled(False)
         btn_row.addWidget(self.edit_name_btn)
 
-        self.change_color_btn = QPushButton(strings._("change_color"))
+        self.change_color_btn = QPushButton("&" + strings._("change_color"))
         self.change_color_btn.clicked.connect(self._change_tag_color)
         self.change_color_btn.setEnabled(False)
         btn_row.addWidget(self.change_color_btn)
 
-        self.delete_btn = QPushButton(strings._("delete_tag"))
+        self.delete_btn = QPushButton("&" + strings._("delete_tag"))
         self.delete_btn.clicked.connect(self._delete_tag)
         self.delete_btn.setEnabled(False)
         btn_row.addWidget(self.delete_btn)

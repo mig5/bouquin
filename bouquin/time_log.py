@@ -231,14 +231,14 @@ class TimeLogDialog(QDialog):
 
         # --- Buttons for entry
         btn_row = QHBoxLayout()
-        self.add_update_btn = QPushButton(strings._("add_time_entry"))
+        self.add_update_btn = QPushButton("&" + strings._("add_time_entry"))
         self.add_update_btn.clicked.connect(self._on_add_or_update)
 
-        self.delete_btn = QPushButton(strings._("delete_time_entry"))
+        self.delete_btn = QPushButton("&" + strings._("delete_time_entry"))
         self.delete_btn.clicked.connect(self._on_delete_entry)
         self.delete_btn.setEnabled(False)
 
-        self.report_btn = QPushButton(strings._("run_report"))
+        self.report_btn = QPushButton("&" + strings._("run_report"))
         self.report_btn.clicked.connect(self._on_run_report)
 
         btn_row.addStretch(1)
@@ -274,7 +274,7 @@ class TimeLogDialog(QDialog):
         # --- Close button
         close_row = QHBoxLayout()
         close_row.addStretch(1)
-        close_btn = QPushButton(strings._("close"))
+        close_btn = QPushButton("&" + strings._("close"))
         close_btn.clicked.connect(self.accept)
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
@@ -333,7 +333,7 @@ class TimeLogDialog(QDialog):
 
         self._current_entry_id = None
         self.delete_btn.setEnabled(False)
-        self.add_update_btn.setText(strings._("add_time_entry"))
+        self.add_update_btn.setText("&" + strings._("add_time_entry"))
 
     # ----- Actions -----------------------------------------------------
 
@@ -383,7 +383,6 @@ class TimeLogDialog(QDialog):
                 self._current_entry_id, proj_id, activity_id, minutes, note
             )
 
-        self.note.setText("")
         self._reload_entries()
 
     def _on_row_selected(self) -> None:
@@ -391,7 +390,7 @@ class TimeLogDialog(QDialog):
         if not items:
             self._current_entry_id = None
             self.delete_btn.setEnabled(False)
-            self.add_update_btn.setText(strings._("add_time_entry"))
+            self.add_update_btn.setText("&" + strings._("add_time_entry"))
             return
 
         row = items[0].row()
@@ -403,7 +402,7 @@ class TimeLogDialog(QDialog):
 
         self._current_entry_id = int(entry_id)
         self.delete_btn.setEnabled(True)
-        self.add_update_btn.setText(strings._("update_time_entry"))
+        self.add_update_btn.setText("&" + strings._("update_time_entry"))
 
         # push values into the editors
         proj_name = proj_item.text()
@@ -543,15 +542,15 @@ class TimeCodeManagerDialog(QDialog):
         proj_layout.addWidget(self.project_list, 1)
 
         proj_btn_row = QHBoxLayout()
-        self.proj_add_btn = QPushButton(strings._("add_project"))
-        self.proj_rename_btn = QPushButton(strings._("rename_project"))
-        self.proj_delete_btn = QPushButton(strings._("delete_project"))
+        self.proj_add_btn = QPushButton("&" + strings._("add_project"))
+        self.proj_rename_btn = QPushButton("&" + strings._("rename_project"))
+        self.proj_delete_btn = QPushButton("&" + strings._("delete_project"))
         proj_btn_row.addWidget(self.proj_add_btn)
         proj_btn_row.addWidget(self.proj_rename_btn)
         proj_btn_row.addWidget(self.proj_delete_btn)
         proj_layout.addLayout(proj_btn_row)
 
-        self.tabs.addTab(proj_tab, strings._("projects"))
+        self.tabs.addTab(proj_tab, "&" + strings._("projects"))
 
         # Activities tab
         act_tab = QWidget()
@@ -560,9 +559,9 @@ class TimeCodeManagerDialog(QDialog):
         act_layout.addWidget(self.activity_list, 1)
 
         act_btn_row = QHBoxLayout()
-        self.act_add_btn = QPushButton(strings._("add_activity"))
-        self.act_rename_btn = QPushButton(strings._("rename_activity"))
-        self.act_delete_btn = QPushButton(strings._("delete_activity"))
+        self.act_add_btn = QPushButton("&" + strings._("add_activity"))
+        self.act_rename_btn = QPushButton("&" + strings._("rename_activity"))
+        self.act_delete_btn = QPushButton("&" + strings._("delete_activity"))
         act_btn_row.addWidget(self.act_add_btn)
         act_btn_row.addWidget(self.act_rename_btn)
         act_btn_row.addWidget(self.act_delete_btn)
@@ -573,7 +572,7 @@ class TimeCodeManagerDialog(QDialog):
         # Close
         close_row = QHBoxLayout()
         close_row.addStretch(1)
-        close_btn = QPushButton(strings._("close"))
+        close_btn = QPushButton("&" + strings._("close"))
         close_btn.clicked.connect(self.accept)
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
@@ -917,7 +916,7 @@ class TimeReportDialog(QDialog):
         # Close
         close_row = QHBoxLayout()
         close_row.addStretch(1)
-        close_btn = QPushButton(strings._("close"))
+        close_btn = QPushButton("&" + strings._("close"))
         close_btn.clicked.connect(self.accept)
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
