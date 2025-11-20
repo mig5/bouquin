@@ -406,9 +406,14 @@ class MarkdownEditor(QTextEdit):
         # Append the new marker
         new_line = f"{new_line} ⏰ {time_str}"
 
-        bc = QTextCursor(block)
+        # --- : only replace the block's text, not its newline ---
+        block_start = block.position()
+        block_end = block_start + len(line)
+
+        bc = QTextCursor(self.document())
         bc.beginEditBlock()
-        bc.select(QTextCursor.SelectionType.BlockUnderCursor)
+        bc.setPosition(block_start)
+        bc.setPosition(block_end, QTextCursor.KeepAnchor)
         bc.insertText(new_line)
         bc.endEditBlock()
 
@@ -425,6 +430,35 @@ class MarkdownEditor(QTextEdit):
     def get_current_line_text(self) -> str:
         """Public wrapper used by MainWindow for reminders."""
         return self._get_current_line()
+
+    def _list_prefix_length_for_block(self, block) -> int:
+        """Return the length (in chars) of the visual list prefix for the given
+        block (including leading indentation), or 0 if it's not a list item.
+        """
+        line = block.text()
+        stripped = line.lstrip()
+        leading_spaces = len(line) - len(stripped)
+
+        # Checkbox (Unicode display)
+        if stripped.startswith(
+            f"{self._CHECK_UNCHECKED_DISPLAY} "
+        ) or stripped.startswith(f"{self._CHECK_CHECKED_DISPLAY} "):
+            return leading_spaces + 2  # icon + space
+
+        # Unicode bullet
+        if stripped.startswith(f"{self._BULLET_DISPLAY} "):
+            return leading_spaces + 2  # bullet + space
+
+        # Markdown bullet list (-, *, +)
+        if re.match(r"^[-*+]\s", stripped):
+            return leading_spaces + 2  # marker + space
+
+        # Numbered list: e.g. "1. "
+        m = re.match(r"^(\d+\.\s)", stripped)
+        if m:
+            return leading_spaces + leading_spaces + (len(m.group(1)) - leading_spaces)
+
+        return 0
 
     def _detect_list_type(self, line: str) -> tuple[str | None, str]:
         """
@@ -559,48 +593,102 @@ class MarkdownEditor(QTextEdit):
                     self._update_code_block_row_backgrounds()
                 return
 
-        # Handle Home and Left arrow keys to prevent going left of list markers
+        # Handle Backspace on empty list items so the marker itself can be deleted
+        if event.key() == Qt.Key.Key_Backspace:
+            cursor = self.textCursor()
+            # Let Backspace behave normally when deleting a selection.
+            if not cursor.hasSelection():
+                block = cursor.block()
+                prefix_len = self._list_prefix_length_for_block(block)
+
+                if prefix_len > 0:
+                    block_start = block.position()
+                    line = block.text()
+                    pos_in_block = cursor.position() - block_start
+                    after_text = line[prefix_len:]
+
+                    # If there is no real content after the marker, treat Backspace
+                    # as "remove the list marker".
+                    if after_text.strip() == "" and pos_in_block >= prefix_len:
+                        cursor.beginEditBlock()
+                        cursor.setPosition(block_start)
+                        cursor.setPosition(
+                            block_start + prefix_len, QTextCursor.KeepAnchor
+                        )
+                        cursor.removeSelectedText()
+                        cursor.endEditBlock()
+                        self.setTextCursor(cursor)
+                        return
+
+        # Handle Home and Left arrow keys to keep the caret to the *right*
+        # of list prefixes (checkboxes / bullets / numbers).
         if event.key() in (Qt.Key.Key_Home, Qt.Key.Key_Left):
+            # Let Ctrl+Home / Ctrl+Left keep their usual meaning (start of
+            # document / word-left) – we don't interfere with those.
+            if event.modifiers() & Qt.ControlModifier:
+                pass
+            else:
+                cursor = self.textCursor()
+                block = cursor.block()
+                prefix_len = self._list_prefix_length_for_block(block)
+
+                if prefix_len > 0:
+                    block_start = block.position()
+                    pos_in_block = cursor.position() - block_start
+                    target = block_start + prefix_len
+
+                    if event.key() == Qt.Key.Key_Home:
+                        # Home should jump to just after the prefix; with Shift
+                        # it should *select* back to that position.
+                        if event.modifiers() & Qt.ShiftModifier:
+                            cursor.setPosition(target, QTextCursor.KeepAnchor)
+                        else:
+                            cursor.setPosition(target)
+                        self.setTextCursor(cursor)
+                        return
+
+                    # Left arrow: don't allow the caret to move into the prefix
+                    # region; snap it to just after the marker instead.
+                    if event.key() == Qt.Key.Key_Left and pos_in_block <= prefix_len:
+                        if event.modifiers() & Qt.ShiftModifier:
+                            cursor.setPosition(target, QTextCursor.KeepAnchor)
+                        else:
+                            cursor.setPosition(target)
+                        self.setTextCursor(cursor)
+                        return
+
+        # After moving vertically, make sure we don't land *inside* a list
+        # prefix. We let QTextEdit perform the move first and then adjust.
+        if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down) and not (
+            event.modifiers() & Qt.ControlModifier
+        ):
+            super().keyPressEvent(event)
+
             cursor = self.textCursor()
             block = cursor.block()
-            line = block.text()
-            pos_in_block = cursor.position() - block.position()
 
-            # Detect list prefix length
-            prefix_len = 0
-            stripped = line.lstrip()
-            leading_spaces = len(line) - len(stripped)
+            # Don't interfere with code blocks (they can contain literal
+            # markdown-looking text).
+            if self._is_inside_code_block(block):
+                return
 
-            # Check for checkbox (Unicode display format)
-            if stripped.startswith(
-                f"{self._CHECK_UNCHECKED_DISPLAY} "
-            ) or stripped.startswith(f"{self._CHECK_CHECKED_DISPLAY} "):
-                prefix_len = leading_spaces + 2  # icon + space
-            # Check for Unicode bullet
-            elif stripped.startswith(f"{self._BULLET_DISPLAY} "):
-                prefix_len = leading_spaces + 2  # bullet + space
-            # Check for markdown bullet list (-, *, +)
-            elif re.match(r"^[-*+]\s", stripped):
-                prefix_len = leading_spaces + 2  # marker + space
-            # Check for numbered list
-            elif re.match(r"^\d+\.\s", stripped):
-                match = re.match(r"^(\d+\.\s)", stripped)
-                if match:
-                    prefix_len = leading_spaces + len(match.group(1))
-
+            prefix_len = self._list_prefix_length_for_block(block)
             if prefix_len > 0:
-                if event.key() == Qt.Key.Key_Home:
-                    # Move to after the list marker
-                    cursor.setPosition(block.position() + prefix_len)
+                block_start = block.position()
+                pos_in_block = cursor.position() - block_start
+                if pos_in_block < prefix_len:
+                    target = block_start + prefix_len
+                    if event.modifiers() & Qt.ShiftModifier:
+                        # Preserve the current anchor while snapping the visual
+                        # caret to just after the marker.
+                        anchor = cursor.anchor()
+                        cursor.setPosition(anchor)
+                        cursor.setPosition(target, QTextCursor.KeepAnchor)
+                    else:
+                        cursor.setPosition(target)
                     self.setTextCursor(cursor)
-                    return
-                elif event.key() == Qt.Key.Key_Left and pos_in_block <= prefix_len:
-                    # Prevent moving left of the list marker
-                    if pos_in_block > prefix_len:
-                        # Allow normal left movement if we're past the prefix
-                        super().keyPressEvent(event)
-                    # Otherwise block the movement
-                    return
+
+            return
 
         # Handle Enter key for smart list continuation AND code blocks
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:

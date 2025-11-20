@@ -1,6 +1,7 @@
 # 0.4.1
 
  * Allow time log entries to be edited directly in their table cells
+ * Miscellaneous bug fixes for editing (list cursor positions/text selectivity, alarm removing newline)
 
 # 0.4
 

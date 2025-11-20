@@ -1659,3 +1659,152 @@ Unicode: 你好 café résumé
     doc.setPlainText(text)
 
     assert highlighter is not None
+
+
+@pytest.mark.parametrize(
+    "markdown_line",
+    [
+        "- [ ] Task",  # checkbox
+        "- Task",  # bullet
+        "1. Task",  # numbered
+    ],
+)
+def test_home_on_list_line_moves_to_text_start(qtbot, editor, markdown_line):
+    """Home on a list line should jump to just after the list marker."""
+    editor.from_markdown(markdown_line)
+
+    # Put caret at end of the line
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    # Press Home (no modifiers)
+    qtbot.keyPress(editor, Qt.Key_Home)
+    qtbot.wait(0)
+
+    c = editor.textCursor()
+    block = c.block()
+    line = block.text()
+    pos_in_block = c.position() - block.position()
+
+    # The first character of the user text is the 'T' in "Task"
+    logical_start = line.index("Task")
+
+    assert not c.hasSelection()
+    assert pos_in_block == logical_start
+
+
+@pytest.mark.parametrize(
+    "markdown_line",
+    [
+        "- [ ] Task",  # checkbox
+        "- Task",  # bullet
+        "1. Task",  # numbered
+    ],
+)
+def test_shift_home_on_list_line_selects_text_after_marker(
+    qtbot, editor, markdown_line
+):
+    """
+    Shift+Home from the end of a list line should select the text after the marker,
+    not the marker itself.
+    """
+    editor.from_markdown(markdown_line)
+
+    # Put caret at end of the line
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    # Shift+Home: extend selection back to "logical home"
+    qtbot.keyPress(editor, Qt.Key_Home, Qt.ShiftModifier)
+    qtbot.wait(0)
+
+    c = editor.textCursor()
+    block = c.block()
+    line = block.text()
+    block_start = block.position()
+
+    logical_start = line.index("Task")
+    expected_start = block_start + logical_start
+    expected_end = block_start + len(line)
+
+    assert c.hasSelection()
+    assert c.selectionStart() == expected_start
+    assert c.selectionEnd() == expected_end
+    # Selected text is exactly the user-visible text, not the marker
+    assert c.selectedText() == line[logical_start:]
+
+
+def test_up_from_below_checkbox_moves_to_text_start(qtbot, editor):
+    """
+    Up from the line below a checkbox should land to the right of the checkbox,
+    where the text starts, not to the left of the marker.
+    """
+    editor.from_markdown("- [ ] Task\nSecond line")
+
+    # Put caret somewhere on the second line (end of document is fine)
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    # Press Up to move to the checkbox line
+    qtbot.keyPress(editor, Qt.Key_Up)
+    qtbot.wait(0)
+
+    c = editor.textCursor()
+    block = c.block()
+    line = block.text()
+    pos_in_block = c.position() - block.position()
+
+    logical_start = line.index("Task")
+    assert pos_in_block >= logical_start
+
+
+def test_backspace_on_empty_checkbox_removes_marker(qtbot, editor):
+    """
+    When a checkbox line has no text after the marker, Backspace at/after the
+    text position should delete the marker itself, leaving a plain empty line.
+    """
+    editor.from_markdown("- [ ] ")
+
+    # Put caret at end of the checkbox line (after the marker)
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    qtbot.keyPress(editor, Qt.Key_Backspace)
+    qtbot.wait(0)
+
+    first_block = editor.document().firstBlock()
+    # Marker should be gone
+    assert first_block.text() == ""
+    assert editor._CHECK_UNCHECKED_DISPLAY not in editor.toPlainText()
+
+
+def test_insert_alarm_marker_on_checkbox_line_does_not_merge_lines(editor, qtbot):
+    # Two checkbox lines
+    editor.from_markdown("- [ ] Test\n- [ ] Foobar")
+
+    # Move caret to second line ("Foobar")
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.Start)
+    cursor.movePosition(QTextCursor.Down)
+    editor.setTextCursor(cursor)
+
+    # Add an alarm to the second line
+    editor.insert_alarm_marker("16:54")
+    qtbot.wait(0)
+
+    lines = lines_keep(editor)
+
+    # Still two separate lines
+    assert len(lines) == 2
+
+    # First line unchanged (no alarm)
+    assert "Test" in lines[0]
+    assert "⏰" not in lines[0]
+
+    # Second line has the alarm marker
+    assert "Foobar" in lines[1]
+    assert "⏰ 16:54" in lines[1]
