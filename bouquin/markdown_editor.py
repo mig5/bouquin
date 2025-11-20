@@ -753,6 +753,19 @@ class MarkdownEditor(QTextEdit):
                 super().keyPressEvent(event)
                 return
 
+            # Auto-insert an extra blank line after headings (#, ##, ###)
+            # when pressing Enter at the end of the line.
+            if re.match(r"^#{1,3}\s+", stripped) and pos_in_block >= len(line_text):
+                cursor.beginEditBlock()
+                # First blank line: visual separator between heading and body
+                cursor.insertBlock()
+                # Second blank line: where body text will start (caret ends here)
+                cursor.insertBlock()
+                cursor.endEditBlock()
+
+                self.setTextCursor(cursor)
+                return
+
             # Check for list continuation
             list_type, prefix = self._detect_list_type(current_line)
 

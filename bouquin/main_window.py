@@ -260,6 +260,13 @@ class MainWindow(QMainWindow):
         nav_menu.addAction(act_today)
         self.addAction(act_today)
 
+        act_close_tab = QAction(strings._("close_tab"), self)
+        act_close_tab.setShortcut("Ctrl+W")
+        act_close_tab.setShortcutContext(Qt.ApplicationShortcut)
+        act_close_tab.triggered.connect(self._close_current_tab)
+        nav_menu.addAction(act_close_tab)
+        self.addAction(act_close_tab)
+
         act_find = QAction(strings._("find_on_page"), self)
         act_find.setShortcut(QKeySequence.Find)
         act_find.triggered.connect(self.findBar.show_bar)
@@ -519,6 +526,12 @@ class MainWindow(QMainWindow):
             self._dirty = False
 
         self.tab_widget.removeTab(index)
+
+    def _close_current_tab(self):
+        """Close the currently active tab via shortcuts (Ctrl+W)."""
+        idx = self.tab_widget.currentIndex()
+        if idx >= 0:
+            self._close_tab(idx)
 
     def _on_tab_changed(self, index: int):
         """Handle tab change - reconnect toolbar and sync UI."""

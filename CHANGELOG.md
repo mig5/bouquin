@@ -2,6 +2,7 @@
 
  * Allow time log entries to be edited directly in their table cells
  * Miscellaneous bug fixes for editing (list cursor positions/text selectivity, alarm removing newline)
+ * Add 'Close tab' nav item and shortcut
 
 # 0.4
 
