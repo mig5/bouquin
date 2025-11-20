@@ -181,6 +181,9 @@ class TimeLogDialog(QDialog):
         self._db = db
         self._date_iso = date_iso
         self._current_entry_id: Optional[int] = None
+        # Guard flag used when repopulating the table so we don’t treat
+        # programmatic item changes as user edits.
+        self._reloading_entries: bool = False
 
         self.setWindowTitle(strings._("time_log_for").format(date=date_iso))
         self.resize(900, 600)
@@ -264,6 +267,8 @@ class TimeLogDialog(QDialog):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
+        # When a cell is edited inline, commit the change back to the DB.
+        self.table.itemChanged.connect(self._on_table_item_changed)
         root.addWidget(self.table, 1)
 
         # --- Close button
@@ -293,28 +298,38 @@ class TimeLogDialog(QDialog):
         self.activity_edit.setCompleter(completer)
 
     def _reload_entries(self) -> None:
-        rows = self._db.time_log_for_date(self._date_iso)
-        self.table.setRowCount(len(rows))
-        for row_idx, r in enumerate(rows):
-            entry_id = r[0]
-            project_name = r[3]
-            activity_name = r[5]
-            note = r[7] or ""
-            minutes = r[6]
-            hours = minutes / 60.0
+        """Reload the table from the database.
 
-            item_proj = QTableWidgetItem(project_name)
-            item_act = QTableWidgetItem(activity_name)
-            item_note = QTableWidgetItem(note)
-            item_hours = QTableWidgetItem(f"{hours:.2f}")
+        While we are repopulating the QTableWidget we temporarily disable the
+        itemChanged handler so that programmatic changes do not get written
+        back to the database.
+        """
+        self._reloading_entries = True
+        try:
+            rows = self._db.time_log_for_date(self._date_iso)
+            self.table.setRowCount(len(rows))
+            for row_idx, r in enumerate(rows):
+                entry_id = r[0]
+                project_name = r[3]
+                activity_name = r[5]
+                note = r[7] or ""
+                minutes = r[6]
+                hours = minutes / 60.0
 
-            # store the entry id on the first column
-            item_proj.setData(Qt.ItemDataRole.UserRole, entry_id)
+                item_proj = QTableWidgetItem(project_name)
+                item_act = QTableWidgetItem(activity_name)
+                item_note = QTableWidgetItem(note)
+                item_hours = QTableWidgetItem(f"{hours:.2f}")
 
-            self.table.setItem(row_idx, 0, item_proj)
-            self.table.setItem(row_idx, 1, item_act)
-            self.table.setItem(row_idx, 2, item_note)
-            self.table.setItem(row_idx, 3, item_hours)
+                # store the entry id on the first column
+                item_proj.setData(Qt.ItemDataRole.UserRole, entry_id)
+
+                self.table.setItem(row_idx, 0, item_proj)
+                self.table.setItem(row_idx, 1, item_act)
+                self.table.setItem(row_idx, 2, item_note)
+                self.table.setItem(row_idx, 3, item_hours)
+        finally:
+            self._reloading_entries = False
 
         self._current_entry_id = None
         self.delete_btn.setEnabled(False)
@@ -404,6 +419,81 @@ class TimeLogDialog(QDialog):
         self.activity_edit.setText(act_name)
         self.note.setText(note)
         self.hours_spin.setValue(hours)
+
+    def _on_table_item_changed(self, item: QTableWidgetItem) -> None:
+        """Commit inline edits in the table back to the database.
+
+        Editing a cell should behave like selecting that row and pressing
+        the Add/Update button, so we reuse the same validation and DB logic.
+        """
+        if self._reloading_entries:
+            # Ignore changes that come from _reload_entries().
+            return
+
+        if item is None:
+            return
+
+        row = item.row()
+
+        proj_item = self.table.item(row, 0)
+        act_item = self.table.item(row, 1)
+        note_item = self.table.item(row, 2)
+        hours_item = self.table.item(row, 3)
+
+        if proj_item is None or act_item is None or hours_item is None:
+            # Incomplete row – nothing to do.
+            return
+
+        # Recover the entry id from the hidden UserRole on the project cell
+        entry_id = proj_item.data(Qt.ItemDataRole.UserRole)
+        self._current_entry_id = int(entry_id) if entry_id is not None else None
+
+        # Push values into the editors (similar to _on_row_selected).
+        proj_name = proj_item.text()
+        act_name = act_item.text()
+        note_text = note_item.text() if note_item is not None else ""
+        hours_text = hours_item.text()
+
+        # Set project combo by name, creating a project on the fly if needed.
+        idx = self.project_combo.findText(proj_name, Qt.MatchFixedString)
+        if idx < 0 and proj_name:
+            # Allow creating a new project directly from the table.
+            proj_id = self._db.add_project(proj_name)
+            self._reload_projects()
+            idx = self.project_combo.findData(proj_id)
+        if idx >= 0:
+            self.project_combo.setCurrentIndex(idx)
+        else:
+            self.project_combo.setCurrentIndex(-1)
+
+        self.activity_edit.setText(act_name)
+        self.note.setText(note_text)
+
+        # Parse hours; if invalid, show the same style of warning as elsewhere.
+        try:
+            hours = float(hours_text)
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                strings._("invalid_time_title"),
+                strings._("invalid_time_message"),
+            )
+            # Reset table back to the last known-good state.
+            self._reload_entries()
+            return
+
+        self.hours_spin.setValue(hours)
+
+        # Mirror button state to reflect whether we're updating or adding.
+        if self._current_entry_id is None:
+            self.delete_btn.setEnabled(False)
+            self.add_update_btn.setText(strings._("add_time_entry"))
+        else:
+            self.delete_btn.setEnabled(True)
+            self.add_update_btn.setText(strings._("update_time_entry"))
+
+        # Finally, reuse the existing validation + DB logic.
+        self._on_add_or_update()
 
     def _on_delete_entry(self) -> None:
         if self._current_entry_id is None:

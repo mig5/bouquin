@@ -1,3 +1,7 @@
+# 0.4.1
+
+ * Allow time log entries to be edited directly in their table cells
+
 # 0.4
 
  * Remove screenshot tool
