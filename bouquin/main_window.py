@@ -921,9 +921,11 @@ class MainWindow(QMainWindow):
         size = self.cfg.font_size
         editor.qfont.setPointSize(size)
         editor.setFont(editor.qfont)
-        # save size to settings
         self.cfg.font_size = size
-        save_db_config(self.cfg)
+        # save size to settings
+        cfg = load_db_config()
+        cfg.font_size = self.cfg.font_size
+        save_db_config(cfg)
 
     def _retheme_overrides(self):
         self._apply_calendar_text_colors()
@@ -1075,7 +1077,10 @@ class MainWindow(QMainWindow):
         new_size = old_size + delta
 
         self.cfg.font_size = new_size
-        save_db_config(self.cfg)
+        # save size to settings
+        cfg = load_db_config()
+        cfg.font_size = self.cfg.font_size
+        save_db_config(cfg)
 
         # Apply font size change to all open editors
         self._apply_font_size_to_all_tabs(new_size)
