@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QFormLayout,
     QFrame,
     QGroupBox,
     QLabel,
@@ -18,6 +17,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QMessageBox,
+    QWidget,
+    QTabWidget,
 )
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QPalette
@@ -39,14 +40,45 @@ class SettingsDialog(QDialog):
         self._db = db
         self.key = ""
 
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        self.setMinimumWidth(560)
-        self.setSizeGripEnabled(True)
-
         self.current_settings = load_db_config()
 
-        # Add theme selection
+        self.setMinimumWidth(480)
+        self.setSizeGripEnabled(True)
+
+        # --- Tabs ----------------------------------------------------------
+        tabs = QTabWidget()
+        tabs.setTabPosition(QTabWidget.North)
+        tabs.setDocumentMode(True)
+        tabs.setMovable(False)
+
+        tabs.addTab(self._create_appearance_page(cfg), strings._("appearance"))
+        tabs.addTab(self._create_features_page(), strings._("features"))
+        tabs.addTab(self._create_security_page(cfg), strings._("security"))
+        tabs.addTab(self._create_database_page(), strings._("database"))
+
+        # --- Buttons -------------------------------------------------------
+        bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self._save)
+        bb.rejected.connect(self.reject)
+
+        # Root layout
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
+        root.addWidget(tabs)
+        root.addWidget(bb, 0, Qt.AlignRight)
+
+    # ------------------------------------------------------------------ #
+    #  Pages
+    # ------------------------------------------------------------------ #
+
+    def _create_appearance_page(self, cfg: DBConfig) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        # --- Theme group --------------------------------------------------
         theme_group = QGroupBox(strings._("theme"))
         theme_layout = QVBoxLayout(theme_group)
 
@@ -54,7 +86,6 @@ class SettingsDialog(QDialog):
         self.theme_light = QRadioButton(strings._("light"))
         self.theme_dark = QRadioButton(strings._("dark"))
 
-        # Load current theme from settings
         current_theme = self.current_settings.theme
         if current_theme == Theme.DARK.value:
             self.theme_dark.setChecked(True)
@@ -67,66 +98,98 @@ class SettingsDialog(QDialog):
         theme_layout.addWidget(self.theme_light)
         theme_layout.addWidget(self.theme_dark)
 
-        form.addRow(theme_group)
+        # font size row
+        font_row = QHBoxLayout()
+        self.font_heading = QLabel(strings._("font_size"))
+        self.font_size = QSpinBox()
+        self.font_size.setRange(1, 24)
+        self.font_size.setSingleStep(1)
+        self.font_size.setAccelerated(True)
+        self.font_size.setValue(getattr(cfg, "font_size", 11))
+        font_row.addWidget(self.font_heading)
+        font_row.addWidget(self.font_size)
+        font_row.addStretch()
+        theme_layout.addLayout(font_row)
 
-        # Locale settings
+        # explanation
+        self.font_size_label = QLabel(strings._("font_size_explanation"))
+        self.font_size_label.setWordWrap(True)
+        self.font_size_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        pal = self.font_size_label.palette()
+        self.font_size_label.setForegroundRole(QPalette.PlaceholderText)
+        self.font_size_label.setPalette(pal)
+
+        font_exp_row = QHBoxLayout()
+        font_exp_row.setContentsMargins(24, 0, 0, 0)
+        font_exp_row.addWidget(self.font_size_label)
+        theme_layout.addLayout(font_exp_row)
+
+        layout.addWidget(theme_group)
+
+        # --- Locale group -------------------------------------------------
         locale_group = QGroupBox(strings._("locale"))
         locale_layout = QVBoxLayout(locale_group)
-        locale_layout.setContentsMargins(12, 8, 12, 12)
-        locale_layout.setSpacing(6)
 
         self.locale_combobox = QComboBox()
         self.locale_combobox.addItems(strings._AVAILABLE)
         self.locale_combobox.setCurrentText(self.current_settings.locale)
         locale_layout.addWidget(self.locale_combobox, 0, Qt.AlignLeft)
 
-        # Explanation for locale
         self.locale_label = QLabel(strings._("locale_restart"))
         self.locale_label.setWordWrap(True)
         self.locale_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # make it look secondary
         lpal = self.locale_label.palette()
         self.locale_label.setForegroundRole(QPalette.PlaceholderText)
         self.locale_label.setPalette(lpal)
-        locale_row = QHBoxLayout()
-        locale_row.setContentsMargins(24, 0, 0, 0)
-        locale_row.addWidget(self.locale_label)
-        locale_layout.addLayout(locale_row)
-        form.addRow(locale_group)
+        loc_row = QHBoxLayout()
+        loc_row.setContentsMargins(24, 0, 0, 0)
+        loc_row.addWidget(self.locale_label)
+        locale_layout.addLayout(loc_row)
 
-        # Add Behaviour
-        behaviour_group = QGroupBox(strings._("behaviour"))
-        behaviour_layout = QVBoxLayout(behaviour_group)
+        layout.addWidget(locale_group)
+        layout.addStretch()
+        return page
 
-        # Checkbox moving
+    def _create_features_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        features_group = QGroupBox(strings._("features"))
+        features_layout = QVBoxLayout(features_group)
+
         self.move_todos = QCheckBox(
             strings._("move_yesterdays_unchecked_todos_to_today_on_startup")
         )
         self.move_todos.setChecked(self.current_settings.move_todos)
         self.move_todos.setCursor(Qt.PointingHandCursor)
-        behaviour_layout.addWidget(self.move_todos)
+        features_layout.addWidget(self.move_todos)
 
-        # Tags
         self.tags = QCheckBox(strings._("enable_tags_feature"))
         self.tags.setChecked(self.current_settings.tags)
         self.tags.setCursor(Qt.PointingHandCursor)
-        behaviour_layout.addWidget(self.tags)
+        features_layout.addWidget(self.tags)
 
-        # Time logging
         self.time_log = QCheckBox(strings._("enable_time_log_feature"))
         self.time_log.setChecked(self.current_settings.time_log)
         self.time_log.setCursor(Qt.PointingHandCursor)
-        behaviour_layout.addWidget(self.time_log)
+        features_layout.addWidget(self.time_log)
 
-        form.addRow(behaviour_group)
+        layout.addWidget(features_group)
+        layout.addStretch()
+        return page
 
-        # Encryption settings
+    def _create_security_page(self, cfg: DBConfig) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        # --- Encryption group ---------------------------------------------
         enc_group = QGroupBox(strings._("encryption"))
         enc = QVBoxLayout(enc_group)
-        enc.setContentsMargins(12, 8, 12, 12)
-        enc.setSpacing(6)
 
-        # Checkbox to remember key
         self.save_key_btn = QCheckBox(strings._("remember_key"))
         self.key = self.current_settings.key or ""
         self.save_key_btn.setChecked(bool(self.key))
@@ -134,17 +197,15 @@ class SettingsDialog(QDialog):
         self.save_key_btn.toggled.connect(self._save_key_btn_clicked)
         enc.addWidget(self.save_key_btn, 0, Qt.AlignLeft)
 
-        # Explanation for remembering key
         self.save_key_label = QLabel(strings._("save_key_warning"))
         self.save_key_label.setWordWrap(True)
         self.save_key_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # make it look secondary
         pal = self.save_key_label.palette()
         self.save_key_label.setForegroundRole(QPalette.PlaceholderText)
         self.save_key_label.setPalette(pal)
 
         exp_row = QHBoxLayout()
-        exp_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the checkbox
+        exp_row.setContentsMargins(24, 0, 0, 0)
         exp_row.addWidget(self.save_key_label)
         enc.addLayout(exp_row)
 
@@ -153,20 +214,16 @@ class SettingsDialog(QDialog):
         line.setFrameShadow(QFrame.Sunken)
         enc.addWidget(line)
 
-        # Change key button
         self.rekey_btn = QPushButton(strings._("change_encryption_key"))
         self.rekey_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.rekey_btn.clicked.connect(self._change_key)
-
         enc.addWidget(self.rekey_btn, 0, Qt.AlignLeft)
 
-        form.addRow(enc_group)
+        layout.addWidget(enc_group)
 
-        # Privacy settings
+        # --- Idle lock group ----------------------------------------------
         priv_group = QGroupBox(strings._("lock_screen_when_idle"))
         priv = QVBoxLayout(priv_group)
-        priv.setContentsMargins(12, 8, 12, 12)
-        priv.setSpacing(6)
 
         self.idle_spin = QSpinBox()
         self.idle_spin.setRange(0, 240)
@@ -176,39 +233,40 @@ class SettingsDialog(QDialog):
         self.idle_spin.setSpecialValueText(strings._("Never"))
         self.idle_spin.setValue(getattr(cfg, "idle_minutes", 15))
         priv.addWidget(self.idle_spin, 0, Qt.AlignLeft)
-        # Explanation for idle option (autolock)
+
         self.idle_spin_label = QLabel(strings._("autolock_explanation"))
         self.idle_spin_label.setWordWrap(True)
         self.idle_spin_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # make it look secondary
         spal = self.idle_spin_label.palette()
         self.idle_spin_label.setForegroundRole(QPalette.PlaceholderText)
         self.idle_spin_label.setPalette(spal)
 
         spin_row = QHBoxLayout()
-        spin_row.setContentsMargins(24, 0, 0, 0)  # indent to line up under the spinbox
+        spin_row.setContentsMargins(24, 0, 0, 0)
         spin_row.addWidget(self.idle_spin_label)
         priv.addLayout(spin_row)
 
-        form.addRow(priv_group)
+        layout.addWidget(priv_group)
+        layout.addStretch()
+        return page
 
-        # Maintenance settings
+    def _create_database_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
         maint_group = QGroupBox(strings._("database_maintenance"))
         maint = QVBoxLayout(maint_group)
-        maint.setContentsMargins(12, 8, 12, 12)
-        maint.setSpacing(6)
 
         self.compact_btn = QPushButton(strings._("database_compact"))
         self.compact_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.compact_btn.clicked.connect(self._compact_btn_clicked)
-
         maint.addWidget(self.compact_btn, 0, Qt.AlignLeft)
 
-        # Explanation for compacting button
         self.compact_label = QLabel(strings._("database_compact_explanation"))
         self.compact_label.setWordWrap(True)
         self.compact_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # make it look secondary
         cpal = self.compact_label.palette()
         self.compact_label.setForegroundRole(QPalette.PlaceholderText)
         self.compact_label.setPalette(cpal)
@@ -218,22 +276,15 @@ class SettingsDialog(QDialog):
         maint_row.addWidget(self.compact_label)
         maint.addLayout(maint_row)
 
-        form.addRow(maint_group)
+        layout.addWidget(maint_group)
+        layout.addStretch()
+        return page
 
-        # Buttons
-        bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        bb.accepted.connect(self._save)
-        bb.rejected.connect(self.reject)
-
-        # Root layout (adjust margins/spacing a bit)
-        v = QVBoxLayout(self)
-        v.setContentsMargins(12, 12, 12, 12)
-        v.setSpacing(10)
-        v.addLayout(form)
-        v.addWidget(bb, 0, Qt.AlignRight)
+    # ------------------------------------------------------------------ #
+    #  Save settings
+    # ------------------------------------------------------------------ #
 
     def _save(self):
-        # Save the selected theme into QSettings
         if self.theme_dark.isChecked():
             selected_theme = Theme.DARK
         elif self.theme_light.isChecked():
@@ -252,6 +303,7 @@ class SettingsDialog(QDialog):
             tags=self.tags.isChecked(),
             time_log=self.time_log.isChecked(),
             locale=self.locale_combobox.currentText(),
+            font_size=self.font_size.value(),
         )
 
         save_db_config(self._cfg)

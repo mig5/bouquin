@@ -1078,11 +1078,14 @@ class MainWindow(QMainWindow):
         save_db_config(self.cfg)
 
         # Apply font size change to all open editors
+        self._apply_font_size_to_all_tabs(new_size)
+
+    def _apply_font_size_to_all_tabs(self, size: int) -> None:
         for i in range(self.tab_widget.count()):
             ed = self.tab_widget.widget(i)
             if not isinstance(ed, MarkdownEditor):
                 continue
-            ed.qfont.setPointSize(new_size)
+            ed.qfont.setPointSize(size)
             ed.setFont(ed.qfont)
 
     def _on_font_larger_requested(self) -> None:
@@ -1360,11 +1363,14 @@ class MainWindow(QMainWindow):
         self.cfg.tags = getattr(new_cfg, "tags", self.cfg.tags)
         self.cfg.time_log = getattr(new_cfg, "time_log", self.cfg.time_log)
         self.cfg.locale = getattr(new_cfg, "locale", self.cfg.locale)
+        self.cfg.font_size = getattr(new_cfg, "font_size", self.cfg.font_size)
 
         # Persist once
         save_db_config(self.cfg)
         # Apply idle setting immediately (restart the timer with new interval if it changed)
         self._apply_idle_minutes(self.cfg.idle_minutes)
+        # Apply font size to all tabs
+        self._apply_font_size_to_all_tabs(self.cfg.font_size)
 
         # If the DB path changed, reconnect
         if self.cfg.path != old_path:

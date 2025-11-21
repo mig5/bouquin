@@ -1643,6 +1643,7 @@ def test_main_window_settings_path_change_success(
         new_cfg.theme = "light"
         new_cfg.move_todos = True
         new_cfg.locale = "en"
+        new_cfg.font_size = 11
 
         mock_instance.config = new_cfg
         mock_dialog.return_value = mock_instance
@@ -1686,6 +1687,7 @@ def test_main_window_settings_path_change_failure(
         new_cfg.theme = "light"
         new_cfg.move_todos = True
         new_cfg.locale = "en"
+        new_cfg.font_size = 11
 
         mock_instance.config = new_cfg
         mock_dialog.return_value = mock_instance
@@ -1727,6 +1729,7 @@ def test_main_window_settings_no_path_change(app, fresh_db, tmp_db_cfg, monkeypa
         new_cfg.theme = "dark"  # Changed
         new_cfg.move_todos = False  # Changed
         new_cfg.locale = "fr"  # Changed
+        new_cfg.font_size = 12  # Changed
 
         mock_instance.config = new_cfg
         mock_dialog.return_value = mock_instance
@@ -1738,6 +1741,7 @@ def test_main_window_settings_no_path_change(app, fresh_db, tmp_db_cfg, monkeypa
         assert window.cfg.idle_minutes == 20
         assert window.cfg.theme == "dark"
         assert window.cfg.path == old_path
+        assert window.cfg.font_size == 12
 
 
 def test_main_window_settings_cancelled(app, fresh_db, tmp_db_cfg, monkeypatch):
