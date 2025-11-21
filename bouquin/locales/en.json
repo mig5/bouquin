@@ -104,7 +104,7 @@
     "database": "Database",
     "save_key_warning": "If you don't want to be prompted for your encryption key, check this to remember it.\nWARNING: the key is saved to disk and could be recoverable if your disk is compromised.",
     "lock_screen_when_idle": "Lock screen when idle",
-    "autolock_explanation": "Bouquin will automatically lock the notepad after this length of time, after which you'll need to re-enter the key to unlock it.'nSet to 0 (never) to never lock.",
+    "autolock_explanation": "Bouquin will automatically lock the notepad after this length of time, after which you'll need to re-enter the key to unlock it.\nSet to 0 (never) to never lock.",
     "font_size": "Font size",
     "font_size_explanation": "Changing this value will change the size of all paragraph text in all tabs. It does not affect heading or code block size",
     "search_for_notes_here": "Search for notes here",
