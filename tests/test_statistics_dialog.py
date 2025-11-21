@@ -1,11 +1,12 @@
 import datetime as _dt
+from datetime import datetime, timedelta, date
 
 from bouquin import strings
 
-from datetime import date
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtWidgets import QLabel
 from PySide6.QtTest import QTest
+from PySide6.QtCore import QDate
 
 from bouquin.statistics_dialog import DateHeatmap, StatisticsDialog
 
@@ -417,3 +418,100 @@ def test_statistics_dialog_gather_stats_exception_handling(
 
     # Should handle error gracefully
     assert dialog.isVisible()
+
+
+def test_statistics_dialog_with_sparse_data(qtbot, tmp_db_cfg, fresh_db):
+    """Test statistics dialog with sparse data"""
+    # Add some entries on non-consecutive days
+    dates = ["2024-01-01", "2024-01-05", "2024-01-10", "2024-01-20"]
+    for _date in dates:
+        content = "Word " * 100  # 100 words
+        fresh_db.save_new_version(_date, content, "note")
+
+    dialog = StatisticsDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    # Should create without crashing
+    assert dialog is not None
+
+
+def test_statistics_dialog_with_empty_data(qtbot, tmp_db_cfg, fresh_db):
+    """Test statistics dialog with no data"""
+    dialog = StatisticsDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    # Should handle empty data gracefully
+    assert dialog is not None
+
+
+def test_statistics_dialog_date_range_selection(qtbot, tmp_db_cfg, fresh_db):
+    """Test changing metric in statistics dialog"""
+    # Add some test data
+    for i in range(10):
+        date = QDate.currentDate().addDays(-i).toString("yyyy-MM-dd")
+        fresh_db.save_new_version(date, f"Content for day {i}", "note")
+
+    dialog = StatisticsDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    # Change metric to revisions
+    idx = dialog.metric_combo.findData("revisions")
+    if idx >= 0:
+        dialog.metric_combo.setCurrentIndex(idx)
+        qtbot.wait(50)
+
+    # Change back to words
+    idx = dialog.metric_combo.findData("words")
+    if idx >= 0:
+        dialog.metric_combo.setCurrentIndex(idx)
+        qtbot.wait(50)
+
+
+def test_heatmap_with_varying_word_counts(qtbot):
+    """Test heatmap color scaling with varying word counts"""
+    today = datetime.now().date()
+    start = today - timedelta(days=30)
+
+    entries = {}
+    # Create entries with varying word counts
+    for i in range(31):
+        date = start + timedelta(days=i)
+        entries[date] = i * 50  # Increasing word counts
+
+    heatmap = DateHeatmap()
+    heatmap.set_data(entries)
+    qtbot.addWidget(heatmap)
+    heatmap.show()
+
+    # Should paint without errors
+    assert heatmap.isVisible()
+
+
+def test_heatmap_single_day(qtbot):
+    """Test heatmap with single day of data"""
+    today = datetime.now().date()
+    entries = {today: 500}
+
+    heatmap = DateHeatmap()
+    heatmap.set_data(entries)
+    qtbot.addWidget(heatmap)
+    heatmap.show()
+
+    assert heatmap.isVisible()
+
+
+def test_statistics_dialog_metric_changes(qtbot, tmp_db_cfg, fresh_db):
+    """Test various metric selections"""
+    # Add data spanning multiple months
+    base_date = QDate.currentDate().addDays(-90)
+    for i in range(90):
+        date = base_date.addDays(i).toString("yyyy-MM-dd")
+        fresh_db.save_new_version(date, f"Day {i} content with many words", "note")
+
+    dialog = StatisticsDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    # Test each metric option
+    for i in range(dialog.metric_combo.count()):
+        dialog.metric_combo.setCurrentIndex(i)
+        qtbot.wait(50)

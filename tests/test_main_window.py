@@ -1812,3 +1812,279 @@ def test_main_window_update_tag_views_no_tags_widget(
     window._update_tag_views_for_date("2024-01-15")
 
     assert True
+
+
+def test_main_window_with_tags_disabled(qtbot, app, tmp_path):
+    """Test MainWindow with tags disabled in config - covers line 319"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/tags", False)  # Disable tags
+    s.setValue("ui/time_log", True)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Tags widget should be hidden
+    assert w.tags.isHidden()
+
+
+def test_main_window_with_time_log_disabled(qtbot, app, tmp_path):
+    """Test MainWindow with time_log disabled in config - covers line 321"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", False)  # Disable time log
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Time log widget should be hidden
+    assert w.time_log.isHidden()
+
+
+def test_export_csv_format(qtbot, app, tmp_path, monkeypatch):
+    """Test exporting to CSV format - covers export path lines"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Add some data
+    w.db.save_new_version("2024-01-01", "Test content", "test")
+
+    # Mock file dialog to return CSV
+    dest = tmp_path / "export_test.csv"
+    monkeypatch.setattr(
+        mwmod.QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(dest), "CSV (*.csv)")),
+    )
+
+    # Mock QMessageBox to auto-accept
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "exec", lambda self: mwmod.QMessageBox.Yes, raising=False
+    )
+    monkeypatch.setattr(
+        mwmod.QMessageBox, "information", staticmethod(lambda *a, **k: 0), raising=False
+    )
+
+    w._export()
+    assert dest.exists()
+
+
+def test_settings_dialog_with_locale_change(qtbot, app, tmp_path, monkeypatch):
+    """Test opening settings dialog and changing locale - covers settings dialog paths"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Mock the settings dialog to auto-accept
+    from bouquin.settings_dialog import SettingsDialog
+
+    SettingsDialog.exec
+
+    def fake_exec(self):
+        # Change locale before accepting
+        idx = self.locale_combobox.findData("fr")
+        if idx >= 0:
+            self.locale_combobox.setCurrentIndex(idx)
+        return mwmod.QDialog.Accepted
+
+    monkeypatch.setattr(SettingsDialog, "exec", fake_exec)
+
+    w._open_settings()
+    qtbot.wait(50)
+
+
+def test_statistics_dialog_open(qtbot, app, tmp_path, monkeypatch):
+    """Test opening statistics dialog - covers statistics dialog paths"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Add some data
+    w.db.save_new_version("2024-01-01", "Test content", "test")
+
+    from bouquin.statistics_dialog import StatisticsDialog
+
+    StatisticsDialog.exec
+
+    def fake_exec(self):
+        # Just accept immediately
+        return mwmod.QDialog.Accepted
+
+    monkeypatch.setattr(StatisticsDialog, "exec", fake_exec)
+
+    w._open_statistics()
+    qtbot.wait(50)
+
+
+def test_bug_report_dialog_open(qtbot, app, tmp_path, monkeypatch):
+    """Test opening bug report dialog"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    from bouquin.bug_report_dialog import BugReportDialog
+
+    BugReportDialog.exec
+
+    def fake_exec(self):
+        return mwmod.QDialog.Rejected
+
+    monkeypatch.setattr(BugReportDialog, "exec", fake_exec)
+
+    w._open_bugs()
+    qtbot.wait(50)
+
+
+def test_history_dialog_open_and_restore(qtbot, app, tmp_path, monkeypatch):
+    """Test opening history dialog and restoring a version"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Add some data
+    date_str = QDate.currentDate().toString("yyyy-MM-dd")
+    w.db.save_new_version(date_str, "Version 1", "v1")
+    w.db.save_new_version(date_str, "Version 2", "v2")
+
+    from bouquin.history_dialog import HistoryDialog
+
+    def fake_exec(self):
+        # Simulate selecting first version and accepting
+        if self.list.count() > 0:
+            self.list.setCurrentRow(0)
+            self._revert()
+        return mwmod.QDialog.Accepted
+
+    monkeypatch.setattr(HistoryDialog, "exec", fake_exec)
+
+    w._open_history()
+    qtbot.wait(50)
+
+
+def test_goto_today_button(qtbot, app, tmp_path):
+    """Test going to today's date"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Move to a different date
+    past_date = QDate.currentDate().addDays(-30)
+    w.calendar.setSelectedDate(past_date)
+
+    # Go back to today
+    w._adjust_today()
+    qtbot.wait(50)
+
+    assert w.calendar.selectedDate() == QDate.currentDate()
+
+
+def test_adjust_font_size(qtbot, app, tmp_path):
+    """Test adjusting font size"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/font_size", 12)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    initial_size = w.editor.font().pointSize()
+
+    # Increase font size
+    w._on_font_larger_requested()
+    qtbot.wait(50)
+    assert w.editor.font().pointSize() > initial_size
+
+    # Decrease font size
+    w._on_font_smaller_requested()
+    qtbot.wait(50)
+
+
+def test_calendar_date_selection(qtbot, app, tmp_path):
+    """Test selecting a date from calendar"""
+    db_path = tmp_path / "notebook.db"
+    s = get_settings()
+    s.setValue("db/default_db", str(db_path))
+    s.setValue("db/key", "test-key")
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    w = MainWindow(themes=themes)
+    qtbot.addWidget(w)
+    w.show()
+
+    # Select a specific date
+    test_date = QDate(2024, 6, 15)
+    w.calendar.setSelectedDate(test_date)
+    qtbot.wait(50)
+
+    # The window should load that date
+    assert test_date.toString("yyyy-MM-dd") in str(w._current_date_iso())

@@ -1,7 +1,14 @@
 import pytest
-from PySide6.QtCore import Qt, QPoint, QEvent
+
+from PySide6.QtCore import Qt, QPoint, QEvent, QDate
 from PySide6.QtGui import QMouseEvent, QColor
-from PySide6.QtWidgets import QApplication, QMessageBox, QInputDialog, QColorDialog
+from PySide6.QtWidgets import (
+    QApplication,
+    QMessageBox,
+    QInputDialog,
+    QColorDialog,
+    QDialog,
+)
 from bouquin.db import DBManager
 from bouquin.strings import load_strings
 from bouquin.tags_widget import PageTagsWidget, TagChip
@@ -2157,3 +2164,156 @@ def test_page_tags_widget_updates_on_tag_change(qtbot, fresh_db):
     qtbot.wait(100)
 
     assert widget.chip_layout.count() == 2
+
+
+def test_tags_widget_open_manager_and_accept(qtbot, tmp_db_cfg, fresh_db, monkeypatch):
+    """Test opening tag manager dialog and accepting - covers lines 248-256"""
+    tags_widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(tags_widget)
+
+    # Set a current date
+    date = QDate.currentDate().toString("yyyy-MM-dd")
+    tags_widget.set_current_date(date)
+
+    # Add some tags first
+    fresh_db.add_tag("Test Tag", date)
+    tags_widget._reload_tags()
+
+    # Mock the tag browser dialog
+    from bouquin.tag_browser import TagBrowserDialog
+
+    dialog_executed = []
+
+    def fake_exec(self):
+        dialog_executed.append(True)
+        # Simulate the dialog being accepted
+        return QDialog.Accepted
+
+    monkeypatch.setattr(TagBrowserDialog, "exec", fake_exec)
+
+    # Open the manager
+    tags_widget._open_manager()
+    qtbot.wait(50)
+
+    # Dialog should have been executed
+    assert len(dialog_executed) > 0
+
+
+def test_tags_widget_open_manager_and_reject(qtbot, tmp_db_cfg, fresh_db, monkeypatch):
+    """Test opening tag manager dialog and rejecting"""
+    tags_widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(tags_widget)
+
+    # Set a current date
+    date = QDate.currentDate().toString("yyyy-MM-dd")
+    tags_widget.set_current_date(date)
+
+    # Mock the tag browser dialog
+    from bouquin.tag_browser import TagBrowserDialog
+
+    dialog_executed = []
+
+    def fake_exec(self):
+        dialog_executed.append(True)
+        # Simulate the dialog being rejected
+        return QDialog.Rejected
+
+    monkeypatch.setattr(TagBrowserDialog, "exec", fake_exec)
+
+    # Open the manager
+    tags_widget._open_manager()
+    qtbot.wait(50)
+
+    # Dialog should have been executed
+    assert len(dialog_executed) > 0
+
+
+def test_tags_widget_open_manager_without_current_date(
+    qtbot, tmp_db_cfg, fresh_db, monkeypatch
+):
+    """Test opening tag manager when no current date is set"""
+    tags_widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(tags_widget)
+
+    # Don't set a current date
+    tags_widget._current_date = None
+
+    # Mock the tag browser dialog
+    from bouquin.tag_browser import TagBrowserDialog
+
+    dialog_executed = []
+
+    def fake_exec(self):
+        dialog_executed.append(True)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(TagBrowserDialog, "exec", fake_exec)
+
+    # Open the manager
+    tags_widget._open_manager()
+    qtbot.wait(50)
+
+    # Dialog should still execute
+    assert len(dialog_executed) > 0
+
+
+def test_tags_widget_manager_with_date_click_signal(
+    qtbot, tmp_db_cfg, fresh_db, monkeypatch
+):
+    """Test tag manager emitting openDateRequested signal"""
+    tags_widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(tags_widget)
+
+    date = QDate.currentDate().toString("yyyy-MM-dd")
+    tags_widget.set_current_date(date)
+
+    activated_tags = []
+
+    def capture_tag(tag):
+        activated_tags.append(tag)
+
+    tags_widget.tagActivated.connect(capture_tag)
+
+    # Mock the tag browser dialog
+    from bouquin.tag_browser import TagBrowserDialog
+
+    def fake_exec(self):
+        # Simulate clicking a date in the browser
+        self.openDateRequested.emit("2024-01-01")
+        return QDialog.Accepted
+
+    monkeypatch.setattr(TagBrowserDialog, "exec", fake_exec)
+
+    # Open the manager
+    tags_widget._open_manager()
+    qtbot.wait(50)
+
+    # Should have captured the activated tag/date
+    assert len(activated_tags) > 0
+    assert "2024-01-01" in activated_tags
+
+
+def test_tags_widget_chip_click(qtbot, tmp_db_cfg, fresh_db):
+    """Test clicking on a tag chip"""
+    tags_widget = PageTagsWidget(fresh_db)
+    qtbot.addWidget(tags_widget)
+
+    date = QDate.currentDate().toString("yyyy-MM-dd")
+    tags_widget.set_current_date(date)
+
+    # Add a tag
+    fresh_db.add_tag("ClickMe", date)
+    tags_widget._reload_tags()
+
+    activated_tags = []
+
+    def capture_tag(tag):
+        activated_tags.append(tag)
+
+    tags_widget.tagActivated.connect(capture_tag)
+
+    # Simulate chip click
+    tags_widget._on_chip_clicked("ClickMe")
+    qtbot.wait(50)
+
+    assert "ClickMe" in activated_tags
