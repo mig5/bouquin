@@ -54,6 +54,8 @@ report from within the app.
 
 Make sure you have `libxcb-cursor0` installed (it may be called something else on non-Debian distributions).
 
+It's also recommended that you have Noto Sans fonts installed, but it's up to you. It just can impact the display of unicode symbols such as checkboxes.
+
 If downloading from my Forgejo's Releases page, you may wish to verify the GPG signatures with my [GPG key](https://mig5.net/static/mig5.asc).
 
 ### From PyPi/pip

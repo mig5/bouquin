@@ -41,9 +41,11 @@ class MarkdownEditor(QTextEdit):
         self.setAcceptRichText(False)
 
         # Normal text
-        self.qfont = QFont()
+        self.qfont = QFont("Noto Sans")
+        self.qfont.setStyleName("Regular")
         self.qfont.setPointSize(11)
         self.setFont(self.qfont)
+        self.document().setDefaultFont(self.qfont)
 
         self._apply_line_spacing()  # 1.25× initial spacing
 

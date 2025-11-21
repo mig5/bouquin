@@ -1,3 +1,7 @@
+# 0.4.3
+
+ * Favour Noto Sans font which seems to work better for unicode symbols on Fedora
+
 # 0.4.2
 
  * Improve Statistics widget height
