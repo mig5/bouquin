@@ -230,7 +230,7 @@ class SettingsDialog(QDialog):
         self.idle_spin.setSingleStep(1)
         self.idle_spin.setAccelerated(True)
         self.idle_spin.setSuffix(" min")
-        self.idle_spin.setSpecialValueText(strings._("Never"))
+        self.idle_spin.setSpecialValueText(strings._("never"))
         self.idle_spin.setValue(getattr(cfg, "idle_minutes", 15))
         priv.addWidget(self.idle_spin, 0, Qt.AlignLeft)
 
