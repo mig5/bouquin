@@ -62,10 +62,13 @@ class KeyParamFinder(ast.NodeVisitor):
         self.current_func_name_stack.append(funcname)
         self.current_param_positions_stack.append(param_positions)
 
-        self.func_info.setdefault(funcname, {
-            "param_positions": param_positions,
-            "key_param_positions": set(),
-        })
+        self.func_info.setdefault(
+            funcname,
+            {
+                "param_positions": param_positions,
+                "key_param_positions": set(),
+            },
+        )
         # If the function name is reused, last definition wins
         self.func_info[funcname]["param_positions"] = param_positions
 
@@ -153,7 +156,9 @@ class UsedKeyCollector(ast.NodeVisitor):
                 if isinstance(first, ast.Constant) and isinstance(first.value, str):
                     self.used_keys.add(first.value)
             for kw in node.keywords or []:
-                if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                if isinstance(kw.value, ast.Constant) and isinstance(
+                    kw.value.value, str
+                ):
                     self.used_keys.add(kw.value.value)
 
         # 2) Wrapper calls: functions whose params we know are translation-key params
@@ -170,7 +175,11 @@ class UsedKeyCollector(ast.NodeVisitor):
 
             # positional args
             for idx, arg in enumerate(node.args):
-                if idx in key_positions and isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                if (
+                    idx in key_positions
+                    and isinstance(arg, ast.Constant)
+                    and isinstance(arg.value, str)
+                ):
                     self.used_keys.add(arg.value)
 
             # keyword args
@@ -238,4 +247,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
