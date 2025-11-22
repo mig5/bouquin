@@ -34,6 +34,19 @@ report from within the app.
   <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png" alt="Screenshot of Bouquin History Diff Pane" width="500" style="margin: 0 10px;" /></a>
 </div>
 
+### Tags and Time Logging
+<div align="center">
+  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/tags.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/tags.png" alt="Screenshot of Bouquin Tag Manager screen" width="500" style="margin: 0 10px;" /></a>
+  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/time.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/time.png" alt="Screenshot of Bouquin Time Log screens" width="500" style="margin: 0 10px;" /></a>
+</div>
+
+
+### Statistics
+<div align="center">
+  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/statistics.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/statistics.png" alt="Bouquin statistics" /></a>
+</div>
+
+
 ## Some of the features
 
  * Data is encrypted at rest
