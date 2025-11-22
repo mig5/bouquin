@@ -210,7 +210,7 @@ class MainWindow(QMainWindow):
         act_history.triggered.connect(self._open_history)
         file_menu.addAction(act_history)
         act_settings = QAction(strings._("main_window_settings_accessible_flag"), self)
-        act_settings.setShortcut("Ctrl+G")
+        act_settings.setShortcut("Ctrl+Shift+G")
         act_settings.triggered.connect(self._open_settings)
         file_menu.addAction(act_settings)
         act_export = QAction(strings._("export_accessible_flag"), self)
