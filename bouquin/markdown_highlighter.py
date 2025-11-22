@@ -98,22 +98,12 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.link_format.setFontUnderline(True)
         self.link_format.setAnchor(True)
 
-        # Base size from the document/editor font
-        doc = self.document()
-        base_font = doc.defaultFont() if doc is not None else QGuiApplication.font()
-        base_size = base_font.pointSizeF()
-        if base_size <= 0:
-            base_size = 10.0  # fallback
-        # Checkboxes: make them a bit bigger so they stand out
-        fixed = QFont("Noto Sans", 11)
-        fixed.setStyleName("Regular")
+        # Checkboxes
         self.checkbox_format = QTextCharFormat()
-        self.checkbox_format.setFontFamily(fixed.family())
         self.checkbox_format.setVerticalAlignment(QTextCharFormat.AlignMiddle)
 
         # Bullets
         self.bullet_format = QTextCharFormat()
-        self.checkbox_format.setFontFamily(fixed.family())
 
         # Markdown syntax (the markers themselves) - make invisible
         self.syntax_format = QTextCharFormat()

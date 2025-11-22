@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PySide6.QtGui import (
     QFont,
+    QFontDatabase,
     QFontMetrics,
     QImage,
     QTextCharFormat,
@@ -41,11 +42,13 @@ class MarkdownEditor(QTextEdit):
         self.setAcceptRichText(False)
 
         # Normal text
-        self.qfont = QFont("Noto Sans")
-        self.qfont.setStyleName("Regular")
-        self.qfont.setPointSize(11)
+        base_dir = Path(__file__).resolve().parent
+        font_path = base_dir / "fonts" / "NotoSansSymbols2-Regular.ttf"
+        font_id = QFontDatabase.addApplicationFont(str(font_path))
+        families = QFontDatabase.applicationFontFamilies(font_id)
+        font_family = families[0]
+        self.qfont = QFont(font_family, 11)
         self.setFont(self.qfont)
-        self.document().setDefaultFont(self.qfont)
 
         self._apply_line_spacing()  # 1.25× initial spacing
 

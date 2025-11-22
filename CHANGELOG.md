@@ -1,6 +1,6 @@
 # 0.4.3
 
- * Favour Noto Sans font which seems to work better for unicode symbols on Fedora
+ * Ship Noto Sans Symbols2 font, which seems to work better for unicode symbols on Fedora
 
 # 0.4.2
 
