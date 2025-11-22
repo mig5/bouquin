@@ -1,6 +1,8 @@
 # Bouquin
 
-![Bouquin logo](bouquin/icons/bouquin.svg)
+<div align="center">
+  <img src="bouquin/icons/bouquin.svg" alt="Bouquin logo" width="120" />
+</div>
 
 ## Introduction
 
