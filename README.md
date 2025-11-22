@@ -1,7 +1,7 @@
 # Bouquin
 
 <div align="center">
-  <img src=https://git.mig5.net/mig5/bouquin/raw/branch/main/bouquin/icons/bouquin.svg" alt="Bouquin logo" width="240" />
+  <img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/bouquin/icons/bouquin.svg" alt="Bouquin logo" width="240" />
 </div>
 
 ## Introduction
@@ -25,13 +25,13 @@ report from within the app.
 
 ### General view
 <div align="center">
-  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/screenshot.png"><img src=https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/screenshot.png" alt="Bouquin screenshot" /></a>
+  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/screenshot.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/screenshot.png" alt="Bouquin screenshot" /></a>
 </div>
 
 ### History panes
 <div style="text-align: center;">
-  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_preview.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_preview.png" alt="Screenshot of Bouquin History Preview Pane" width="50%" style="margin: 0 10px;" /></a>
-  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png" alt="Screenshot of Bouquin History Diff Pane" width="50%" style="margin: 0 10px;" /></a>
+  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_preview.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_preview.png" alt="Screenshot of Bouquin History Preview Pane" width="500" style="margin: 0 10px;" /></a>
+  <a href="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png"><img src="https://git.mig5.net/mig5/bouquin/raw/branch/main/screenshots/history_diff.png" alt="Screenshot of Bouquin History Diff Pane" width="500" style="margin: 0 10px;" /></a>
 </div>
 
 ## Some of the features
