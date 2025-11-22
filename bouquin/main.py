@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
 
 from .settings import APP_NAME, APP_ORG, get_settings
 from .main_window import MainWindow
@@ -13,6 +15,11 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_ORG)
+    # Icon
+    BASE_DIR = Path(__file__).resolve().parent
+    ICON_PATH = BASE_DIR / "icons" / "bouquin-light.svg"
+    icon = QIcon(str(ICON_PATH))
+    app.setWindowIcon(icon)
 
     s = get_settings()
     theme_str = s.value("ui/theme", "system")

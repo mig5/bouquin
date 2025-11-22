@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Bouquin
+Exec=Bouquin.AppImage
+Categories=Office;TextEditor

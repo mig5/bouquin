@@ -1,5 +1,6 @@
 # Bouquin
 
+![Bouquin logo](bouquin/icons/bouquin.svg)
 
 ## Introduction
 

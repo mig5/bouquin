@@ -31,6 +31,8 @@ pyproject-appimage = "^4.2"
 [tool.pyproject-appimage]
 script = "bouquin"
 output = "Bouquin.AppImage"
+icon = "bouquin/icons/bouquin-light.svg"
+desktop-entry = "bouquin.desktop"
 
 [tool.vulture]
 paths = ["bouquin", "vulture_ignorelist.py"]

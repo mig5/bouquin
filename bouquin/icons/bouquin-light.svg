@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Bouquin</title>
+  <desc id="desc">
+    A notebook with a centered B-shaped right edge, a shield and keyhole as the upper hole of a B,
+    and a green-blue neon version control fork as the lower hole, on a lighter toolbar-friendly background.
+  </desc>
+
+  <defs>
+    <!-- Lighter background gradient for toolbar use -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e5f2ff"/>  <!-- very light blue -->
+      <stop offset="100%" stop-color="#cbd5f5"/> <!-- soft indigo-ish -->
+    </linearGradient>
+
+    <!-- Shield gradient -->
+    <linearGradient id="shieldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+
+    <!-- Version control neon stroke gradient (used for all segments) -->
+    <linearGradient id="vcGradAll" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#6ee7b7"/>  <!-- mint green -->
+      <stop offset="35%"  stop-color="#22c55e"/>  <!-- bright green -->
+      <stop offset="75%"  stop-color="#38bdf8"/>  <!-- teal-blue -->
+      <stop offset="100%" stop-color="#0ea5e9"/>  <!-- blue neon -->
+    </linearGradient>
+
+    <!-- Soft glow for version control lines -->
+    <filter id="vcGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="
+          0 0 0 0 0.30
+          0 0 0 0 0.90
+          0 0 0 0 0.85
+          0 0 0 0.85 0" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded square (now light) -->
+  <rect x="32" y="32" width="448" height="448" rx="96" ry="96"
+        fill="url(#bgGrad)" stroke="#94a3b8" stroke-width="2"/>
+
+  <!-- Notebook body with centered, deeper B-like indent on the right edge -->
+  <path
+    d="
+      M 148 96
+      H 360
+      Q 384 96 384 120
+      V 224
+      Q 304 256 384 288
+      V 392
+      Q 384 416 360 416
+      H 148
+      Q 128 416 128 396
+      V 116
+      Q 128 96 148 96
+      Z
+    "
+    fill="#202738"
+    stroke="#3a4254"
+    stroke-width="4"
+  />
+
+  <!-- Notebook spine -->
+  <rect x="128" y="96" width="20" height="320" rx="12" ry="12" fill="#3ddc97"/>
+
+  <!-- Shield + keyhole (upper "hole" of the B) -->
+  <g transform="translate(0,-56)">
+    <!-- Shield -->
+    <path d="M 256 180 L 296 196 L 296 244 C 296 269 281 296 256 308 C 231 296 216 269 216 244 L 216 196 Z"
+          fill="url(#shieldGrad)" stroke="#0f172a" stroke-width="4"/>
+
+    <!-- Keyhole -->
+    <circle cx="256" cy="216" r="10" fill="#020617"/>
+    <rect x="248" y="226" width="16" height="26" rx="8" ry="8" fill="#020617"/>
+  </g>
+
+  <!-- Version control graph: lower "hole" of the B with green-blue neon -->
+  <!-- Glow layer behind -->
+  <g transform="translate(0,-66)"
+     stroke="#22c55e" stroke-width="4" fill="#22c55e" opacity="0.6"
+     filter="url(#vcGlow)">
+    <!-- Short stem under shield -->
+    <path d="M 256 318 L 256 332" fill="none" stroke-linecap="round"/>
+
+    <!-- Root node -->
+    <circle cx="256" cy="332" r="7"/>
+
+    <!-- Left branch (shorter) -->
+    <path d="M 256 332 L 236 360" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 236 360 L 236 395" fill="none"
+          stroke-linecap="round"/>
+
+    <!-- Center branch (longest) -->
+    <path d="M 256 332 L 256 422" fill="none"
+          stroke-linecap="round"/>
+
+    <!-- Right branch (medium) -->
+    <path d="M 256 332 L 276 360" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 276 360 L 276 410" fill="none"
+          stroke-linecap="round"/>
+
+    <!-- Leaf nodes -->
+    <circle cx="236" cy="395" r="8"/>
+    <circle cx="256" cy="422" r="8"/>
+    <circle cx="276" cy="410" r="8"/>
+  </g>
+
+  <!-- Main neon gradient strokes on top -->
+  <g transform="translate(0,-66)"
+     stroke="url(#vcGradAll)" stroke-width="4.5" fill="#bbf7d0" opacity="1">
+    <!-- Short stem under shield -->
+    <path d="M 256 318 L 256 332" fill="none" stroke-linecap="round"/>
+
+    <!-- Root node -->
+    <circle cx="256" cy="332" r="7"/>
+
+    <!-- Left branch (shorter) -->
+    <path d="M 256 332 L 236 360" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 236 360 L 236 395" fill="none"
+          stroke-linecap="round"/>
+
+    <!-- Center branch (longest) -->
+    <path d="M 256 332 L 256 422" fill="none"
+          stroke-linecap="round"/>
+
+    <!-- Right branch (medium) -->
+    <path d="M 256 332 L 276 360" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 276 360 L 276 410" fill="none"
+          stroke-linecap="round"/>
+
+    <!-- Leaf nodes -->
+    <circle cx="236" cy="395" r="8"/>
+    <circle cx="256" cy="422" r="8"/>
+    <circle cx="276" cy="410" r="8"/>
+  </g>
+</svg>
