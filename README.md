@@ -1,7 +1,7 @@
 # Bouquin
 
 <div align="center">
-  <img src="bouquin/icons/bouquin.svg" alt="Bouquin logo" width="120" />
+  <img src="bouquin/icons/bouquin.svg" alt="Bouquin logo" width="240" />
 </div>
 
 ## Introduction
