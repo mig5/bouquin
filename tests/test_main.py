@@ -42,6 +42,9 @@ def test_main_creates_and_shows(monkeypatch):
         def setOrganizationName(self, *_):
             pass
 
+        def setWindowIcon(self, *_):
+            pass
+
         def exec(self):
             return 0
 

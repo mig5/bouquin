@@ -2,5 +2,5 @@
 Type=Application
 Name=Bouquin
 Exec=Bouquin.AppImage
-Icon=/home/user/git/bouquin/bouquin/icons/bouquin.svg
-Categories=Office;TextEditor;Utility
+Icon=bouquin
+Categories=Office

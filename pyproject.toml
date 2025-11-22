@@ -32,6 +32,7 @@ pyproject-appimage = "^4.2"
 script = "bouquin"
 output = "Bouquin.AppImage"
 icon = "bouquin/icons/bouquin-light.svg"
+rename-icon = "bouquin.png"
 desktop-entry = "bouquin.desktop"
 
 [tool.vulture]
