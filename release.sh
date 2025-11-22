@@ -9,6 +9,7 @@ poetry build
 poetry publish
 
 # Make AppImage
+sudo apt-get install libfuse-dev
 poetry run pyproject-appimage
 mv Bouquin.AppImage dist/
 

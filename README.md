@@ -72,7 +72,7 @@ report from within the app.
 
 ## How to install
 
-Make sure you have `libxcb-cursor0` installed (it may be called something else on non-Debian distributions).
+Make sure you have `libxcb-cursor0` installed (on Debian-based distributions) or `xcb-util-cursor` (RedHat/Fedora-based distributions).
 
 It's also recommended that you have Noto Sans fonts installed, but it's up to you. It just can impact the display of unicode symbols such as checkboxes.
 
