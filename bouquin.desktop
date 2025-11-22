@@ -2,4 +2,5 @@
 Type=Application
 Name=Bouquin
 Exec=Bouquin.AppImage
+Icon=bouquin/icons/bouquin.svg
 Categories=Office;TextEditor
