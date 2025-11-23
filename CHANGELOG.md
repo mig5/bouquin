@@ -1,3 +1,10 @@
+# 0.4.4.1
+
+ * Adjust some widget heights/settings text wrap
+ * Adjust shortcuts
+ * History unicode symbol
+ * Icon in version dialog
+
 # 0.4.4
 
  * Moving unchecked TODOs now includes those up to 7 days ago, not just yesterday

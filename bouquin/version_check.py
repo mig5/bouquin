@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QWidget,
     QProgressDialog,
 )
+from PySide6.QtGui import QPixmap, QImage, QPainter, QGuiApplication
+from PySide6.QtSvg import QSvgRenderer
 
 from .settings import APP_NAME
 from . import strings
@@ -49,6 +51,28 @@ class VersionChecker:
         self._parent = parent
 
     # ---------- Version helpers ---------- #
+
+    def _logo_pixmap(self, logical_size: int = 96) -> QPixmap:
+        """
+        Render the SVG logo to a high-DPI-aware QPixmap so it stays crisp.
+        """
+        svg_path = Path(__file__).resolve().parent / "icons" / "bouquin-light.svg"
+
+        # Logical size (what Qt layouts see)
+        dpr = QGuiApplication.primaryScreen().devicePixelRatio()
+        img_size = int(logical_size * dpr)
+
+        image = QImage(img_size, img_size, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+
+        renderer = QSvgRenderer(str(svg_path))
+        painter = QPainter(image)
+        renderer.render(painter)
+        painter.end()
+
+        pixmap = QPixmap.fromImage(image)
+        pixmap.setDevicePixelRatio(dpr)
+        return pixmap
 
     def current_version(self) -> str:
         """
@@ -87,8 +111,10 @@ class VersionChecker:
         version_formatted = f"{APP_NAME} {version}"
 
         box = QMessageBox(self._parent)
-        box.setIcon(QMessageBox.Information)
         box.setWindowTitle(strings._("version"))
+
+        box.setIconPixmap(self._logo_pixmap(96))
+
         box.setText(version_formatted)
 
         check_button = box.addButton(

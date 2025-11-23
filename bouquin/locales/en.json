@@ -96,7 +96,7 @@
     "open_in_new_tab": "Open in new tab",
     "autosave": "autosave",
     "unchecked_checkbox_items_moved_to_next_day": "Unchecked checkbox items moved to next day",
-    "move_unchecked_todos_to_today_on_startup": "Automatically move unchecked TODOs from the last 7 days to next weekday",
+    "move_unchecked_todos_to_today_on_startup": "Automatically move unchecked TODOs\nfrom the last 7 days to next weekday",
     "insert_images": "Insert images",
     "images": "Images",
     "reopen_failed": "Re-open failed",

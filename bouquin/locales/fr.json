@@ -88,7 +88,7 @@
     "unlock_failed": "Échec du déverrouillage",
     "could_not_unlock_database_at_new_path": "Impossible de déverrouiller la base de données au nouveau chemin.",
     "unencrypted_export": "Export non chiffré",
-    "unencrypted_export_warning": "L’export de la base de données ne sera pas chiffré !\nÊtes-vous sûr de vouloir continuer ?'nSi vous voulez une sauvegarde chiffrée, choisissez Sauvegarde plutôt qu’Export.",
+    "unencrypted_export_warning": "L’export de la base de données ne sera pas chiffré !\nÊtes-vous sûr de vouloir continuer ?\nSi vous voulez une sauvegarde chiffrée, choisissez Sauvegarde plutôt qu’Export.",
     "unrecognised_extension": "Extension non reconnue !",
     "backup_encrypted_notebook": "Sauvegarder le bouquin chiffré",
     "enter_a_name_for_this_version": "Saisir un nom pour cette version",

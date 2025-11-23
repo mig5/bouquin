@@ -98,7 +98,7 @@ class DateHeatmap(QWidget):
 
     def minimumSizeHint(self) -> QSize:
         sz = self.sizeHint()
-        return QSize(min(350, sz.width()), sz.height())
+        return QSize(min(380, sz.width()), sz.height())
 
     def paintEvent(self, event):
         super().paintEvent(event)
