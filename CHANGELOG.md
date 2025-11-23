@@ -1,3 +1,7 @@
+# 0.4.5
+
+ * Make it possible to delete revisions
+
 # 0.4.4.1
 
  * Adjust some widget heights/settings text wrap

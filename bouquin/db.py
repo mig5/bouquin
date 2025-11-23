@@ -369,6 +369,17 @@ class DBManager:
                 (version_id, date_iso),
             )
 
+    def delete_version(self, *, version_id: int) -> bool | None:
+        """
+        Delete a specific version by version_id.
+        """
+        cur = self.conn.cursor()
+        row = cur.execute(
+            "DELETE FROM versions WHERE id=?;",
+            (version_id,),
+        )
+        return True
+
     # ------------------------- Export logic here ------------------------#
     def get_all_entries(self) -> List[Entry]:
         """

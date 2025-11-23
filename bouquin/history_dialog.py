@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTextBrowser,
     QTabWidget,
+    QAbstractItemView,
 )
 
 from . import strings
@@ -82,6 +83,7 @@ class HistoryDialog(QDialog):
         # Top: list of versions
         top = QHBoxLayout()
         self.list = QListWidget()
+        self.list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list.setMinimumSize(500, 650)
         self.list.currentItemChanged.connect(self._on_select)
         top.addWidget(self.list, 1)
@@ -104,9 +106,12 @@ class HistoryDialog(QDialog):
         row.addStretch(1)
         self.btn_revert = QPushButton(strings._("history_dialog_revert_to_selected"))
         self.btn_revert.clicked.connect(self._revert)
+        self.btn_delete = QPushButton(strings._("history_dialog_delete"))
+        self.btn_delete.clicked.connect(self._delete)
         self.btn_close = QPushButton(strings._("close"))
         self.btn_close.clicked.connect(self.reject)
         row.addWidget(self.btn_revert)
+        row.addWidget(self.btn_delete)
         row.addWidget(self.btn_close)
         root.addLayout(row)
 
@@ -145,20 +150,24 @@ class HistoryDialog(QDialog):
 
     @Slot()
     def _on_select(self):
+        selected_items = self.list.selectedItems()
         item = self.list.currentItem()
-        if not item:
+        if not item or len(selected_items) > 1:
             self.preview.clear()
             self.diff.clear()
             self.btn_revert.setEnabled(False)
             return
+
         sel_id = item.data(Qt.UserRole)
         sel = self._db.get_version(version_id=sel_id)
         self.preview.setMarkdown(sel["content"])
         # Diff vs current (textual diff)
         cur = self._db.get_version(version_id=self._current_id)
         self.diff.setHtml(_colored_unified_diff_html(cur["content"], sel["content"]))
-        # Enable revert only if selecting a non-current version
+
+        # Enable revert and delete buttons only if selecting a non-current version
         self.btn_revert.setEnabled(sel_id != self._current_id)
+        self.btn_delete.setEnabled(sel_id != self._current_id)
 
     @Slot()
     def _revert(self):
@@ -175,3 +184,19 @@ class HistoryDialog(QDialog):
             )
             return
         self.accept()
+
+    @Slot()
+    def _delete(self):
+        selected_items = self.list.selectedItems()
+        for item in selected_items:
+            sel_id = item.data(Qt.UserRole)
+            if sel_id == self._current_id:
+                return
+            try:
+                self._db.delete_version(version_id=sel_id)
+            except Exception as e:
+                QMessageBox.critical(
+                    self, strings._("history_dialog_delete_failed"), str(e)
+                )
+                return
+        return self._load_versions()
