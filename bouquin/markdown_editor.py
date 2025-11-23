@@ -551,6 +551,7 @@ class MarkdownEditor(QTextEdit):
                 c.setPosition(new_pos)
                 self.setTextCursor(c)
                 return
+
         # Step out of a code block with Down at EOF
         if event.key() == Qt.Key.Key_Down:
             c = self.textCursor()
@@ -756,19 +757,6 @@ class MarkdownEditor(QTextEdit):
             # Inside a code block (but not on a fence): newline stays code-style
             if block_state == 1:
                 super().keyPressEvent(event)
-                return
-
-            # Auto-insert an extra blank line after headings (#, ##, ###)
-            # when pressing Enter at the end of the line.
-            if re.match(r"^#{1,3}\s+", stripped) and pos_in_block >= len(line_text):
-                cursor.beginEditBlock()
-                # First blank line: visual separator between heading and body
-                cursor.insertBlock()
-                # Second blank line: where body text will start (caret ends here)
-                cursor.insertBlock()
-                cursor.endEditBlock()
-
-                self.setTextCursor(cursor)
                 return
 
             # Check for list continuation

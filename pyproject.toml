@@ -7,7 +7,7 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 repository = "https://git.mig5.net/mig5/bouquin"
 packages = [{ include = "bouquin" }]
-include = ["bouquin/locales/*.json"]
+include = ["bouquin/locales/*.json", "bouquin/keys/mig5.asc", "bouquin/fonts/NotoSansSymbols2-Regular.ttf", "bouquin/fonts/OFL.txt"]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.14"

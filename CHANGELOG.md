@@ -1,3 +1,11 @@
+# 0.4.4
+
+ * Moving unchecked TODOs now includes those up to 7 days ago, not just yesterday
+ * Moving unchecked TODOs now skips placing them on weekends.
+ * Moving unchecked TODOs now automatically occurs after midnight if the app is open (not just on startup)
+ * Check for new version / download new AppImage via the Help -> Version screen.
+ * Remove extra newline after headings
+
 # 0.4.3
 
  * Ship Noto Sans Symbols2 font, which seems to work better for unicode symbols on Fedora

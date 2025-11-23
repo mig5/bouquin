@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 rm -rf dist
 
@@ -15,3 +15,5 @@ mv Bouquin.AppImage dist/
 
 # Sign packages
 for file in `ls -1 dist/`; do qubes-gpg-client --batch  --armor --detach-sign dist/$file > dist/$file.asc; done
+
+echo "Don't forget to update version string on remote server."

@@ -15,6 +15,8 @@ from PySide6.QtGui import QMouseEvent, QKeyEvent, QTextCursor, QCloseEvent
 
 from unittest.mock import Mock, patch
 
+import bouquin.version_check as version_check
+
 
 def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
     s = get_settings()
@@ -73,7 +75,7 @@ def test_load_yesterday_todos_moves_items(qtbot, app, tmp_db_cfg, fresh_db):
     qtbot.addWidget(w)
     w.show()
 
-    w._load_yesterday_todos()
+    w._load_unchecked_todos()
 
     assert "carry me" in w.editor.to_markdown()
     y_txt = fresh_db.get_entry(y)
@@ -922,23 +924,74 @@ def test_open_version(qtbot, tmp_db_cfg, app, monkeypatch):
     w = _make_main_window(tmp_db_cfg, app, monkeypatch)
     qtbot.addWidget(w)
 
-    called = {"title": None, "text": None}
+    called = {"title": None, "text": None, "check_called": False}
 
-    def fake_information(parent, title, text, *a, **k):
-        called["title"] = title
-        called["text"] = text
-        # Return value of QMessageBox.information is an int; 0 is fine.
-        return 0
+    # Fake QMessageBox that mimics the bits VersionChecker.show_version_dialog uses
+    class FakeMessageBox:
+        # provide the enum attributes the code references
+        Information = 0
+        ActionRole = 1
+        Close = 2
 
-    # Patch whichever one you actually use in _open_version
-    monkeypatch.setattr(QMessageBox, "information", fake_information)
+        def __init__(self, parent=None):
+            self._parent = parent
+            self._icon = None
+            self._title = ""
+            self._text = ""
+            self._buttons = []
+            self._clicked = None
 
+        def setIcon(self, icon):
+            self._icon = icon
+
+        def setWindowTitle(self, title):
+            self._title = title
+            called["title"] = title
+
+        def setText(self, text):
+            self._text = text
+            called["text"] = text
+
+        def addButton(self, *args, **kwargs):
+            # We don't care about the label/role, we just need a distinct object
+            btn = object()
+            self._buttons.append(btn)
+            return btn
+
+        def exec(self):
+            # Simulate user clicking the *Close* button, i.e. the second button
+            if self._buttons:
+                # show_version_dialog adds buttons in order:
+                #   0 -> "Check for updates"
+                #   1 -> Close
+                self._clicked = self._buttons[-1]
+
+        def clickedButton(self):
+            return self._clicked
+
+    # Patch the QMessageBox used *inside* version_check.py
+    monkeypatch.setattr(version_check, "QMessageBox", FakeMessageBox)
+
+    # Optional: track if check_for_updates would be called
+    def fake_check_for_updates(self):
+        called["check_called"] = True
+
+    monkeypatch.setattr(
+        version_check.VersionChecker, "check_for_updates", fake_check_for_updates
+    )
+
+    # Call the entrypoint
     w._open_version()
 
+    # Assertions: title and text got set correctly
     assert called["title"] is not None
     assert "version" in called["title"].lower()
+
     version = importlib.metadata.version("bouquin")
     assert version in called["text"]
+
+    # And we simulated closing, so "Check for updates" should not have fired
+    assert called["check_called"] is False
 
 
 # ---- Idle/lock/event filter helpers (1176, 1181-1187, 1193-1202, 1231-1233) ----

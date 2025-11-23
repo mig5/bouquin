@@ -19,7 +19,7 @@ To increase security, the SQLCipher key is requested when the app is opened, and
 to disk unless the user configures it to be in the settings.
 
 There is deliberately no network connectivity or syncing intended, other than the option to send a bug
-report from within the app.
+report from within the app, or optionally to check for new versions to upgrade to.
 
 ## Screenshots
 
@@ -64,10 +64,10 @@ report from within the app.
  * Backup the database to encrypted SQLCipher format (which can then be loaded back in to a Bouquin)
  * Dark and light theme support
  * Automatically generate checkboxes when typing 'TODO'
- * It is possible to automatically move unchecked checkboxes from yesterday to today, on startup
+ * It is possible to automatically move unchecked checkboxes from the last 7 days to the next weekday.
  * English, French and Italian locales provided
- * Ability to set reminder alarms in the app against the current line of text on today's date
- * Ability to log time per day and run timesheet reports
+ * Ability to set reminder alarms in the app against the current line of text (which will be flashed as the reminder)
+ * Ability to log time per day for different projects/activities and run timesheet reports
 
 
 ## How to install

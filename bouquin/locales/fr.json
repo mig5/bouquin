@@ -81,7 +81,7 @@
     "open_in_new_tab": "Ouvrir dans un nouvel onglet",
     "autosave": "enregistrement automatique",
     "unchecked_checkbox_items_moved_to_next_day": "Les cases non cochées ont été reportées au jour suivant",
-    "move_yesterdays_unchecked_todos_to_today_on_startup": "Au démarrage, déplacer les TODO non cochés d’hier vers aujourd’hui",
+    "move_unchecked_todos_to_today_on_startup": "Déplacer automatiquement les TODO non cochés au jour suivant",
     "insert_images": "Insérer des images",
     "images": "Images",
     "reopen_failed": "Échec de la réouverture",

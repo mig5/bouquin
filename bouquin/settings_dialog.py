@@ -160,7 +160,7 @@ class SettingsDialog(QDialog):
         features_layout = QVBoxLayout(features_group)
 
         self.move_todos = QCheckBox(
-            strings._("move_yesterdays_unchecked_todos_to_today_on_startup")
+            strings._("move_unchecked_todos_to_today_on_startup")
         )
         self.move_todos.setChecked(self.current_settings.move_todos)
         self.move_todos.setCursor(Qt.PointingHandCursor)

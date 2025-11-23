@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import importlib.metadata
 import os
 import sys
 import re
@@ -68,6 +67,7 @@ from .tags_widget import PageTagsWidget
 from .theme import ThemeManager
 from .time_log import TimeLogWidget
 from .toolbar import ToolBar
+from .version_check import VersionChecker
 
 
 class MainWindow(QMainWindow):
@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1000, 650)
 
         self.themes = themes  # Store the themes manager
+        self.version_checker = VersionChecker(self)
 
         self.cfg = load_db_config()
         if not os.path.exists(self.cfg.path):
@@ -310,7 +311,7 @@ class MainWindow(QMainWindow):
         self._reminder_timers: list[QTimer] = []
 
         # First load + mark dates in calendar with content
-        if not self._load_yesterday_todos():
+        if not self._load_unchecked_todos():
             self._load_selected_date()
         self._refresh_calendar_marks()
 
@@ -332,6 +333,12 @@ class MainWindow(QMainWindow):
 
         # Build any alarms for *today* from stored markdown
         self._rebuild_reminders_for_today()
+
+        # Rollover unchecked todos automatically when the calendar day changes
+        self._day_change_timer = QTimer(self)
+        self._day_change_timer.setSingleShot(True)
+        self._day_change_timer.timeout.connect(self._on_day_changed)
+        self._schedule_next_day_change()
 
     @property
     def editor(self) -> MarkdownEditor | None:
@@ -783,45 +790,111 @@ class MainWindow(QMainWindow):
         today = QDate.currentDate()
         self._create_new_tab(today)
 
-    def _load_yesterday_todos(self):
-        if not self.cfg.move_todos:
-            return
-        yesterday_str = QDate.currentDate().addDays(-1).toString("yyyy-MM-dd")
-        text = self.db.get_entry(yesterday_str)
-        unchecked_items = []
+    def _rollover_target_date(self, day: QDate) -> QDate:
+        """
+        Given a 'new day' (system date), return the date we should move
+        unfinished todos *to*.
 
-        # Split into lines and find unchecked checkbox items
-        lines = text.split("\n")
-        remaining_lines = []
+        If the new day is Saturday or Sunday, we skip ahead to the next Monday.
+        Otherwise we just return the same day.
+        """
+        # Qt: Monday=1 ... Sunday=7
+        dow = day.dayOfWeek()
+        if dow >= 6:  # Saturday (6) or Sunday (7)
+            return day.addDays(8 - dow)  # 6 -> +2, 7 -> +1 (next Monday)
+        return day
 
-        for line in lines:
-            # Check for unchecked markdown checkboxes: - [ ] or - [☐]
-            if re.match(r"^\s*-\s*\[\s*\]\s+", line) or re.match(
-                r"^\s*-\s*\[☐\]\s+", line
-            ):
-                # Extract the text after the checkbox
-                item_text = re.sub(r"^\s*-\s*\[[\s☐]\]\s+", "", line)
-                unchecked_items.append(f"- [ ] {item_text}")
-            else:
-                # Keep all other lines
-                remaining_lines.append(line)
+    def _schedule_next_day_change(self) -> None:
+        """
+        Schedule a one-shot timer to fire shortly after the next midnight.
+        """
+        now = QDateTime.currentDateTime()
+        tomorrow = now.date().addDays(1)
+        # A couple of minutes after midnight to be safe
+        next_run = QDateTime(tomorrow, QTime(0, 2))
+        msecs = max(60_000, now.msecsTo(next_run))  # at least 1 minute
+        self._day_change_timer.start(msecs)
 
-        # Save modified content back if we moved items
-        if unchecked_items:
-            modified_text = "\n".join(remaining_lines)
-            self.db.save_new_version(
-                yesterday_str,
-                modified_text,
-                strings._("unchecked_checkbox_items_moved_to_next_day"),
-            )
+    @Slot()
+    def _on_day_changed(self) -> None:
+        """
+        Called when we've crossed into a new calendar day (according to the timer).
+        Re-runs the rollover logic and refreshes the UI.
+        """
+        # Make the calendar show the *real* new day first
+        today = QDate.currentDate()
+        with QSignalBlocker(self.calendar):
+            self.calendar.setSelectedDate(today)
 
-            # Join unchecked items into markdown format
-            unchecked_str = "\n".join(unchecked_items) + "\n"
+        # Same logic as on startup
+        if not self._load_unchecked_todos():
+            self._load_selected_date()
 
-            # Load the unchecked items into the current editor
-            self._load_selected_date(False, unchecked_str)
-        else:
+        self._refresh_calendar_marks()
+        self._rebuild_reminders_for_today()
+        self._schedule_next_day_change()
+
+    def _load_unchecked_todos(self, days_back: int = 7) -> bool:
+        """
+        Move unchecked checkbox items from the last `days_back` days
+        into the rollover target date (today, or next Monday if today
+        is a weekend).
+
+        Returns True if any items were moved, False otherwise.
+        """
+        if not getattr(self.cfg, "move_todos", False):
             return False
+
+        if not getattr(self, "db", None):
+            return False
+
+        today = QDate.currentDate()
+        target_date = self._rollover_target_date(today)
+        target_iso = target_date.toString("yyyy-MM-dd")
+
+        all_unchecked: list[str] = []
+        any_moved = False
+
+        # Look back N days (yesterday = 1, up to `days_back`)
+        for delta in range(1, days_back + 1):
+            src_date = today.addDays(-delta)
+            src_iso = src_date.toString("yyyy-MM-dd")
+            text = self.db.get_entry(src_iso)
+            if not text:
+                continue
+
+            lines = text.split("\n")
+            remaining_lines: list[str] = []
+            moved_from_this_day = False
+
+            for line in lines:
+                # Unchecked markdown checkboxes: "- [ ] " or "- [☐] "
+                if re.match(r"^\s*-\s*\[\s*\]\s+", line) or re.match(
+                    r"^\s*-\s*\[☐\]\s+", line
+                ):
+                    item_text = re.sub(r"^\s*-\s*\[[\s☐]\]\s+", "", line)
+                    all_unchecked.append(f"- [ ] {item_text}")
+                    moved_from_this_day = True
+                    any_moved = True
+                else:
+                    remaining_lines.append(line)
+
+            if moved_from_this_day:
+                modified_text = "\n".join(remaining_lines)
+                # Save the cleaned-up source day
+                self.db.save_new_version(
+                    src_iso,
+                    modified_text,
+                    strings._("unchecked_checkbox_items_moved_to_next_day"),
+                )
+
+        if not any_moved:
+            return False
+
+        # Append everything we collected to the *target* date
+        unchecked_str = "\n".join(all_unchecked) + "\n"
+        self._load_selected_date(target_iso, unchecked_str)
+        return True
 
     def _on_date_changed(self):
         """
@@ -1562,9 +1635,7 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _open_version(self):
-        version = importlib.metadata.version("bouquin")
-        version_formatted = f"{APP_NAME} {version}"
-        QMessageBox.information(self, strings._("version"), version_formatted)
+        self.version_checker.show_version_dialog()
 
     # ----------------- Idle handlers ----------------- #
     def _apply_idle_minutes(self, minutes: int):

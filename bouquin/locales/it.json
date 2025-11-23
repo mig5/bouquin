@@ -81,7 +81,7 @@
     "open_in_new_tab": "Apri in una nuova scheda",
     "autosave": "salvataggio automatico",
     "unchecked_checkbox_items_moved_to_next_day": "Le caselle non spuntate sono state spostate al giorno successivo",
-    "move_yesterdays_unchecked_todos_to_today_on_startup": "Sposta i TODO non completati di ieri a oggi all'avvio",
+    "move_unchecked_todos_to_today_on_startup": "Sposta i TODO non completati a oggi all'avvio",
     "insert_images": "Inserisci immagini",
     "images": "Immagini",
     "reopen_failed": "Riapertura fallita",
