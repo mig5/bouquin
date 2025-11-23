@@ -944,6 +944,9 @@ def test_open_version(qtbot, tmp_db_cfg, app, monkeypatch):
         def setIcon(self, icon):
             self._icon = icon
 
+        def setIconPixmap(self, icon):
+            self._icon = icon
+
         def setWindowTitle(self, title):
             self._title = title
             called["title"] = title
