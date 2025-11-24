@@ -470,22 +470,7 @@ def test_try_connect_maps_errors(
         mwmod.QMessageBox, "critical", staticmethod(fake_critical), raising=True
     )
 
-    # Intercept sys.exit so the test process doesn't actually die
-    exited = {}
-
-    def fake_exit(code=0):
-        exited["code"] = code
-        # mimic real behaviour: raise SystemExit so callers see a fatal exit
-        raise SystemExit(code)
-
-    monkeypatch.setattr(mwmod.sys, "exit", fake_exit, raising=True)
-
-    # _try_connect should now raise SystemExit instead of returning
-    with pytest.raises(SystemExit):
-        w._try_connect()
-
-    # We attempted to exit with code 1
-    assert exited["code"] == 1
+    w._try_connect()
 
     # And we still showed the right error message
     assert "database" in shown["title"].lower()

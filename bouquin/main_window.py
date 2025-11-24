@@ -371,7 +371,7 @@ class MainWindow(QMainWindow):
             else:
                 error = str(e)
             QMessageBox.critical(self, strings._("db_database_error"), error)
-            sys.exit(1)
+            return False
 
     def _prompt_for_key_until_valid(self, first_time: bool) -> bool:
         """
@@ -1691,6 +1691,8 @@ class MainWindow(QMainWindow):
             tb.hide()
         self._lock_overlay.show()
         self._lock_overlay.raise_()
+        lock_msg = strings._("lock_overlay_locked")
+        self.setWindowTitle(f"{APP_NAME} ({lock_msg})")
 
     @Slot()
     def _on_unlock_clicked(self):
@@ -1717,6 +1719,7 @@ class MainWindow(QMainWindow):
                 tb.show()
             self._idle_timer.start()
             QTimer.singleShot(0, self._focus_editor_now)
+            self.setWindowTitle(APP_NAME)
 
     # ----------------- Close handlers ----------------- #
     def closeEvent(self, event):

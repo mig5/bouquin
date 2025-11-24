@@ -85,7 +85,7 @@
     "history_dialog_delete": "&Delete revision",
     "history_dialog_delete_failed": "Could not delete revision",
     "key_prompt_enter_key": "Enter key",
-    "lock_overlay_locked_due_to_inactivity": "Locked due to inactivity",
+    "lock_overlay_locked": "Locked",
     "lock_overlay_unlock": "Unlock",
     "main_window_lock_screen_accessibility": "&Lock screen",
     "main_window_ready": "Ready",

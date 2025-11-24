@@ -1,6 +1,8 @@
 # 0.4.6
 
  * More Italian translations, thank you @mdaleo404
+ * Set locked status on window title when locked
+ * Don't exit on incorrect key, let it be tried again
 
 # 0.4.5
 

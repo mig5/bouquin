@@ -21,7 +21,7 @@ class LockOverlay(QWidget):
         lay = QVBoxLayout(self)
         lay.addStretch(1)
 
-        msg = QLabel(strings._("lock_overlay_locked_due_to_inactivity"), self)
+        msg = QLabel(strings._("lock_overlay_locked"), self)
         msg.setObjectName("lockLabel")
         msg.setAlignment(Qt.AlignCenter)
 

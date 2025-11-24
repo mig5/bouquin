@@ -69,7 +69,7 @@
     "history_dialog_revert_to_selected": "Revenir à la sélection",
     "history_dialog_revert_failed": "Échec de la restauration",
     "key_prompt_enter_key": "Saisir la clé",
-    "lock_overlay_locked_due_to_inactivity": "Verrouillé pour cause d’inactivité",
+    "lock_overlay_locked": "Verrouillé",
     "lock_overlay_unlock": "Déverrouiller",
     "main_window_ready": "Prêt",
     "main_window_save_a_version": "Enregistrer une version",

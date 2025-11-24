@@ -69,7 +69,7 @@
     "history_dialog_revert_to_selected": "Ripristina alla versione selezionata",
     "history_dialog_revert_failed": "Ripristino fallito",
     "key_prompt_enter_key": "Inserisci la chiave",
-    "lock_overlay_locked_due_to_inactivity": "Bloccato per inattività",
+    "lock_overlay_locked": "Bloccato",
     "lock_overlay_unlock": "Sblocca",
     "main_window_ready": "Pronto",
     "main_window_save_a_version": "Salva versione",
