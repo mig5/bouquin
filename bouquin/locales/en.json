@@ -88,6 +88,7 @@
     "key_prompt_enter_key": "Enter key",
     "lock_overlay_locked_due_to_inactivity": "Locked due to inactivity",
     "lock_overlay_unlock": "Unlock",
+    "main_window_lock_screen_accessibility": "&Lock screen",
     "main_window_ready": "Ready",
     "main_window_save_a_version": "Save a version",
     "main_window_settings_accessible_flag": "Settin&gs",

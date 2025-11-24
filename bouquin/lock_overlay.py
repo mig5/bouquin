@@ -27,6 +27,7 @@ class LockOverlay(QWidget):
 
         self._btn = QPushButton(strings._("lock_overlay_unlock"), self)
         self._btn.setObjectName("unlockButton")
+        self._btn.setShortcut("Ctrl+Shift+U")
         self._btn.setFixedWidth(200)
         self._btn.setCursor(Qt.PointingHandCursor)
         self._btn.setAutoDefault(True)

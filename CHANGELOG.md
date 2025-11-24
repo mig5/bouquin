@@ -1,6 +1,8 @@
 # 0.4.5
 
  * Make it possible to delete revisions
+ * Make it possible to force-lock the screen even if idle timer hasn't tripped
+ * Add shortcuts for lock and unlock of screen
 
 # 0.4.4.1
 
