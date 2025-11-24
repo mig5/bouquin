@@ -144,7 +144,7 @@ class VersionChecker:
             QMessageBox.warning(
                 self._parent,
                 strings._("update"),
-                strings._("could_not_check_for_updates") + e,
+                strings._("could_not_check_for_updates") + str(e),
             )
             return
 
@@ -320,7 +320,7 @@ class VersionChecker:
             QMessageBox.critical(
                 self._parent,
                 strings._("update"),
-                strings._("failed_to_download_update") + e,
+                strings._("failed_to_download_update") + str(e),
             )
             return
 
@@ -334,7 +334,7 @@ class VersionChecker:
             QMessageBox.critical(
                 self._parent,
                 strings._("update"),
-                strings._("could_not_read_bundled_gpg_public_key") + e,
+                strings._("could_not_read_bundled_gpg_public_key") + str(e),
             )
             # On failure, delete the downloaded files for safety
             for p in (appimage_path, sig_path):

@@ -249,7 +249,7 @@ class StatisticsDialog(QDialog):
 
         self.setWindowTitle(strings._("statistics"))
         self.setMinimumWidth(600)
-        self.setMinimumHeight(350)
+        self.setMinimumHeight(400)
         root = QVBoxLayout(self)
 
         (
