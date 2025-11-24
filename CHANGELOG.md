@@ -1,3 +1,7 @@
+# 0.4.6
+
+ * More Italian translations, thank you @mdaleo404
+
 # 0.4.5
 
  * Make it possible to delete revisions
