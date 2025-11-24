@@ -249,6 +249,7 @@ class StatisticsDialog(QDialog):
 
         self.setWindowTitle(strings._("statistics"))
         self.setMinimumWidth(600)
+        self.setMinimumHeight(350)
         root = QVBoxLayout(self)
 
         (
@@ -324,16 +325,10 @@ class StatisticsDialog(QDialog):
             self._revisions_by_date = revisions_by_date
 
             scroll = QScrollArea()
-            scroll.setWidgetResizable(False)
+            scroll.setWidgetResizable(True)
             scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self._heatmap.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             scroll.setWidget(self._heatmap)
-
-            # ensure the scroll area is never shorter than the heatmap's preferred height
-            scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            scroll.setMinimumHeight(self._heatmap.minimumSizeHint().height())
-
             group_layout.addWidget(scroll)
 
             root.addWidget(group)
@@ -343,8 +338,6 @@ class StatisticsDialog(QDialog):
             self.metric_combo.currentIndexChanged.connect(self._on_metric_changed)
         else:
             root.addWidget(QLabel(strings._("stats_no_data")))
-
-        self.adjustSize()
 
     # ---------- internal helpers ----------
 
