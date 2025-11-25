@@ -155,6 +155,7 @@ class ReminderDialog(QDialog):
 
         date_iso = None
         if reminder_type == ReminderType.ONCE:
+            # Right now this just means "today at the chosen time".
             date_iso = QDate.currentDate().toString("yyyy-MM-dd")
 
         return Reminder(
@@ -163,6 +164,7 @@ class ReminderDialog(QDialog):
             time_str=time_str,
             reminder_type=reminder_type,
             weekday=weekday,
+            active=self._reminder.active if self._reminder else True,
             date_iso=date_iso,
         )
 
