@@ -172,7 +172,6 @@
     "send": "Send",
     "reminder": "Reminder",
     "set_reminder": "Set reminder prompt",
-    "set_reminder_prompt": "Enter a time",
     "reminder_no_text_fallback": "You scheduled a reminder to alert you now!",
     "invalid_time_title": "Invalid time",
     "invalid_time_message": "Please enter a time in the format HH:MM",

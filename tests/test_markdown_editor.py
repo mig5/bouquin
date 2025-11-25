@@ -1783,34 +1783,6 @@ def test_backspace_on_empty_checkbox_removes_marker(qtbot, editor):
     assert editor._CHECK_UNCHECKED_DISPLAY not in editor.toPlainText()
 
 
-def test_insert_alarm_marker_on_checkbox_line_does_not_merge_lines(editor, qtbot):
-    # Two checkbox lines
-    editor.from_markdown("- [ ] Test\n- [ ] Foobar")
-
-    # Move caret to second line ("Foobar")
-    cursor = editor.textCursor()
-    cursor.movePosition(QTextCursor.Start)
-    cursor.movePosition(QTextCursor.Down)
-    editor.setTextCursor(cursor)
-
-    # Add an alarm to the second line
-    editor.insert_alarm_marker("16:54")
-    qtbot.wait(0)
-
-    lines = lines_keep(editor)
-
-    # Still two separate lines
-    assert len(lines) == 2
-
-    # First line unchanged (no alarm)
-    assert "Test" in lines[0]
-    assert "⏰" not in lines[0]
-
-    # Second line has the alarm marker
-    assert "Foobar" in lines[1]
-    assert "⏰ 16:54" in lines[1]
-
-
 def test_render_images_with_corrupted_data(qtbot, app):
     """Test rendering images with corrupted data that creates null QImage"""
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -1828,21 +1800,6 @@ def test_render_images_with_corrupted_data(qtbot, app):
     # Should still work without crashing
     text = editor.to_markdown()
     assert len(text) >= 0
-
-
-def test_insert_alarm_marker(qtbot, app):
-    """Test inserting alarm markers"""
-    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    editor = MarkdownEditor(theme_manager=themes)
-    qtbot.addWidget(editor)
-    editor.show()
-
-    # Insert alarm marker
-    editor.insert_alarm_marker("14:30")
-    qtbot.wait(50)
-
-    content = editor.to_markdown()
-    assert "14:30" in content or "⏰" in content
 
 
 def test_editor_with_tables(qtbot, app):

@@ -44,7 +44,6 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QInputDialog,
     QLabel,
     QPushButton,
     QApplication,
@@ -1195,55 +1194,7 @@ class MainWindow(QMainWindow):
 
     # ----------- Alarms handler ------------#
     def _on_alarm_requested(self):
-        """Create a one-shot reminder based on the current line in the editor."""
-        editor = getattr(self, "editor", None)
-        if editor is None:
-            return
-
-        # Use the current line in the markdown editor as the reminder text
-        try:
-            editor.get_current_line_text().strip()
-        except AttributeError:
-            c = editor.textCursor()
-            c.block().text().strip()
-
-        # Ask user for a time today in HH:MM format
-        time_str, ok = QInputDialog.getText(
-            self,
-            strings._("set_reminder"),
-            strings._("set_reminder_prompt") + " (HH:MM)",
-        )
-        if not ok or not time_str.strip():
-            return
-
-        try:
-            hour, minute = map(int, time_str.strip().split(":", 1))
-        except ValueError:
-            QMessageBox.warning(
-                self,
-                strings._("invalid_time_title"),
-                strings._("invalid_time_message"),
-            )
-            return
-
-        t = QTime(hour, minute)
-        if not t.isValid():
-            QMessageBox.warning(
-                self,
-                strings._("invalid_time_title"),
-                strings._("invalid_time_message"),
-            )
-            return
-
-        # Normalise to HH:MM
-        time_str = f"{t.hour():02d}:{t.minute():02d}"
-
-        # Insert / update ⏰ in the editor text
-        if hasattr(editor, "insert_alarm_marker"):
-            editor.insert_alarm_marker(time_str)
-
-        # Rebuild timers, but only if this page is for "today"
-        self._rebuild_reminders_for_today()
+        self.upcoming_reminders._add_reminder()
 
     def _on_timer_requested(self):
         """Start a Pomodoro timer for the current line."""
