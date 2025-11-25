@@ -148,5 +148,16 @@
     "bug_report_explanation": "Descrivi il problema, cosa dovrebbe succedere e istruzioni per riprodurlo.\n Non raccogliamo nessun dato all'infuori del numero di versione di Bouquin.\n\nSe volessi essere contattato, per favore lascia un contatto.",
     "bug_report_placeholder": "Scrivi la tua segnalazione qui",
     "update": "Aggiornamento",
-    "you_are_running_the_latest_version": "La tua versione di Bouquin è la più recente:\n"
+    "you_are_running_the_latest_version": "La tua versione di Bouquin è la più recente:\n",
+    "cut": "Taglia",
+    "copy": "Copia",
+    "paste": "Incolla",
+    "monday": "Lunedì",
+    "tuesday": "Martedì",
+    "wednesday": "Mercoledì",
+    "thursday": "Giovedì",
+    "friday": "Venerdì",
+    "saturday": "Sabato",
+    "sunday": "Domenica",
+    "day": "Giorno"
 }

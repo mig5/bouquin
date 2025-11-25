@@ -36,7 +36,16 @@ def tmp_db_cfg(tmp_path):
     default_db = tmp_path / "notebook.db"
     key = "test-secret-key"
     return DBConfig(
-        path=default_db, key=key, idle_minutes=0, theme="light", move_todos=True
+        path=default_db,
+        key=key,
+        idle_minutes=0,
+        theme="light",
+        move_todos=True,
+        tags=True,
+        time_log=True,
+        reminders=True,
+        locale="en",
+        font_size=11,
     )
 
 

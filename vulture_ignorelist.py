@@ -18,6 +18,7 @@ MarkdownEditor.apply_italic
 MarkdownEditor.apply_strikethrough
 MarkdownEditor.apply_code
 MarkdownEditor.apply_heading
+MarkdownEditor.contextMenuEvent
 MarkdownEditor.toggle_bullets
 MarkdownEditor.toggle_numbers
 MarkdownEditor.toggle_checkboxes

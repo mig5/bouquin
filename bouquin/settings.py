@@ -43,6 +43,7 @@ def load_db_config() -> DBConfig:
     move_todos = s.value("ui/move_todos", False, type=bool)
     tags = s.value("ui/tags", True, type=bool)
     time_log = s.value("ui/time_log", True, type=bool)
+    reminders = s.value("ui/reminders", True, type=bool)
     locale = s.value("ui/locale", "en", type=str)
     font_size = s.value("ui/font_size", 11, type=int)
     return DBConfig(
@@ -53,6 +54,7 @@ def load_db_config() -> DBConfig:
         move_todos=move_todos,
         tags=tags,
         time_log=time_log,
+        reminders=reminders,
         locale=locale,
         font_size=font_size,
     )
@@ -67,5 +69,6 @@ def save_db_config(cfg: DBConfig) -> None:
     s.setValue("ui/move_todos", str(cfg.move_todos))
     s.setValue("ui/tags", str(cfg.tags))
     s.setValue("ui/time_log", str(cfg.time_log))
+    s.setValue("ui/reminders", str(cfg.reminders))
     s.setValue("ui/locale", str(cfg.locale))
     s.setValue("ui/font_size", str(cfg.font_size))

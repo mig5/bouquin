@@ -1,8 +1,14 @@
-# 0.4.6
+# 0.5
 
  * More Italian translations, thank you @mdaleo404
  * Set locked status on window title when locked
  * Don't exit on incorrect key, let it be tried again
+ * Make reminders be its own dataset rather than tied to current string.
+ * Add support for repeated reminders
+ * Make reminders be a feature that can be turned on and off
+ * Add syntax highlighting for code blocks (right-click to set it)
+ * Add a Pomodoro-style timer for measuring time spent on a task (stopping the timer offers to log it to Time Log)
+ * Add ability to create markdown tables. Right-click to edit the table in a friendlier table dialog
 
 # 0.4.5
 

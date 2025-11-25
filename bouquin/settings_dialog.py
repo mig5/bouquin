@@ -176,6 +176,11 @@ class SettingsDialog(QDialog):
         self.time_log.setCursor(Qt.PointingHandCursor)
         features_layout.addWidget(self.time_log)
 
+        self.reminders = QCheckBox(strings._("enable_reminders_feature"))
+        self.reminders.setChecked(self.current_settings.reminders)
+        self.reminders.setCursor(Qt.PointingHandCursor)
+        features_layout.addWidget(self.reminders)
+
         layout.addWidget(features_group)
         layout.addStretch()
         return page
@@ -302,6 +307,7 @@ class SettingsDialog(QDialog):
             move_todos=self.move_todos.isChecked(),
             tags=self.tags.isChecked(),
             time_log=self.time_log.isChecked(),
+            reminders=self.reminders.isChecked(),
             locale=self.locale_combobox.currentText(),
             font_size=self.font_size.value(),
         )

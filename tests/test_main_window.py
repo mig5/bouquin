@@ -25,6 +25,11 @@ def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):
     s.setValue("ui/idle_minutes", 0)
     s.setValue("ui/theme", "light")
     s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     w = MainWindow(themes=themes)

@@ -19,6 +19,8 @@ class ToolBar(QToolBar):
     historyRequested = Signal()
     insertImageRequested = Signal()
     alarmRequested = Signal()
+    timerRequested = Signal()
+    tableRequested = Signal()
     fontSizeLargerRequested = Signal()
     fontSizeSmallerRequested = Signal()
 
@@ -103,6 +105,16 @@ class ToolBar(QToolBar):
         self.actAlarm.setToolTip(strings._("toolbar_alarm"))
         self.actAlarm.triggered.connect(self.alarmRequested)
 
+        # Focus timer
+        self.actTimer = QAction("⌛", self)
+        self.actTimer.setToolTip(strings._("toolbar_pomodoro_timer"))
+        self.actTimer.triggered.connect(self.timerRequested)
+
+        # Table
+        self.actTable = QAction("⊞", self)
+        self.actTable.setToolTip(strings._("toolbar_insert_table"))
+        self.actTable.triggered.connect(self.tableRequested)
+
         # Images
         self.actInsertImg = QAction("📸", self)
         self.actInsertImg.setToolTip(strings._("insert_images"))
@@ -151,6 +163,8 @@ class ToolBar(QToolBar):
                 self.actNumbers,
                 self.actCheckboxes,
                 self.actAlarm,
+                self.actTimer,
+                self.actTable,
                 self.actInsertImg,
                 self.actHistory,
             ]
@@ -177,6 +191,8 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actNumbers, "1.")
         self._style_letter_button(self.actCheckboxes, "☐")
         self._style_letter_button(self.actAlarm, "⏰")
+        self._style_letter_button(self.actTimer, "⌛")
+        self._style_letter_button(self.actTable, "⊞")
 
         # History
         self._style_letter_button(self.actHistory, "⎌")

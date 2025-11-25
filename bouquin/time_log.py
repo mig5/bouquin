@@ -274,7 +274,7 @@ class TimeLogDialog(QDialog):
         # --- Close button
         close_row = QHBoxLayout()
         close_row.addStretch(1)
-        close_btn = QPushButton("&" + strings._("close"))
+        close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
@@ -572,7 +572,7 @@ class TimeCodeManagerDialog(QDialog):
         # Close
         close_row = QHBoxLayout()
         close_row.addStretch(1)
-        close_btn = QPushButton("&" + strings._("close"))
+        close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
@@ -916,7 +916,7 @@ class TimeReportDialog(QDialog):
         # Close
         close_row = QHBoxLayout()
         close_row.addStretch(1)
-        close_btn = QPushButton("&" + strings._("close"))
+        close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
         close_row.addWidget(close_btn)
         root.addLayout(close_row)

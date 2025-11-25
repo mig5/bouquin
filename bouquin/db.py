@@ -63,6 +63,7 @@ class DBConfig:
     move_todos: bool = False
     tags: bool = True
     time_log: bool = True
+    reminders: bool = True
     locale: str = "en"
     font_size: int = 11
 
@@ -195,6 +196,20 @@ class DBManager:
                 ON time_log(project_id);
             CREATE INDEX IF NOT EXISTS ix_time_log_activity
                 ON time_log(activity_id);
+
+            CREATE TABLE IF NOT EXISTS reminders (
+                id INTEGER PRIMARY KEY,
+                text TEXT NOT NULL,
+                time_str TEXT NOT NULL,                -- HH:MM
+                reminder_type TEXT NOT NULL,           -- once|daily|weekdays|weekly
+                weekday INTEGER,                       -- 0-6 for weekly (0=Mon)
+                date_iso TEXT,                         -- for once type
+                active INTEGER NOT NULL DEFAULT 1,     -- 0=inactive, 1=active
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_reminders_active
+                ON reminders(active);
             """
         )
         self.conn.commit()
@@ -1015,3 +1030,90 @@ class DBManager:
         if self.conn is not None:
             self.conn.close()
             self.conn = None
+
+    # ------------------------- Reminders logic here ------------------------#
+    def save_reminder(self, reminder) -> int:
+        """Save or update a reminder. Returns the reminder ID."""
+        cur = self.conn.cursor()
+        if reminder.id:
+            # Update existing
+            cur.execute(
+                """
+                UPDATE reminders
+                SET text = ?, time_str = ?, reminder_type = ?,
+                    weekday = ?, date_iso = ?, active = ?
+                WHERE id = ?
+                """,
+                (
+                    reminder.text,
+                    reminder.time_str,
+                    reminder.reminder_type.value,
+                    reminder.weekday,
+                    reminder.date_iso,
+                    1 if reminder.active else 0,
+                    reminder.id,
+                ),
+            )
+            self.conn.commit()
+            return reminder.id
+        else:
+            # Insert new
+            cur.execute(
+                """
+                INSERT INTO reminders (text, time_str, reminder_type, weekday, date_iso, active)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    reminder.text,
+                    reminder.time_str,
+                    reminder.reminder_type.value,
+                    reminder.weekday,
+                    reminder.date_iso,
+                    1 if reminder.active else 0,
+                ),
+            )
+            self.conn.commit()
+            return cur.lastrowid
+
+    def get_all_reminders(self):
+        """Get all reminders."""
+        from .reminders import Reminder, ReminderType
+
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT id, text, time_str, reminder_type, weekday, date_iso, active
+            FROM reminders
+            ORDER BY time_str
+            """
+        ).fetchall()
+
+        result = []
+        for r in rows:
+            result.append(
+                Reminder(
+                    id=r["id"],
+                    text=r["text"],
+                    time_str=r["time_str"],
+                    reminder_type=ReminderType(r["reminder_type"]),
+                    weekday=r["weekday"],
+                    date_iso=r["date_iso"],
+                    active=bool(r["active"]),
+                )
+            )
+        return result
+
+    def update_reminder_active(self, reminder_id: int, active: bool) -> None:
+        """Update the active status of a reminder."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE reminders SET active = ? WHERE id = ?",
+            (1 if active else 0, reminder_id),
+        )
+        self.conn.commit()
+
+    def delete_reminder(self, reminder_id: int) -> None:
+        """Delete a reminder."""
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
+        self.conn.commit()

@@ -19,9 +19,12 @@ from .theme import ThemeManager, Theme
 class MarkdownHighlighter(QSyntaxHighlighter):
     """Live syntax highlighter for markdown that applies formatting as you type."""
 
-    def __init__(self, document: QTextDocument, theme_manager: ThemeManager):
+    def __init__(
+        self, document: QTextDocument, theme_manager: ThemeManager, editor=None
+    ):
         super().__init__(document)
         self.theme_manager = theme_manager
+        self._editor = editor  # Reference to the MarkdownEditor
         self._setup_formats()
         # Recompute formats whenever the app theme changes
         self.theme_manager.themeChanged.connect(self._on_theme_changed)
@@ -149,6 +152,36 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         if in_code_block:
             # inside code: apply block bg and language rules
             self.setFormat(0, len(text), self.code_block_format)
+
+            # Try to apply language-specific highlighting
+            if self._editor and hasattr(self._editor, "_code_metadata"):
+                from .code_highlighter import CodeHighlighter
+
+                # Find the opening fence block
+                prev_block = self.currentBlock().previous()
+                fence_block_num = None
+                temp_inside = in_code_block
+
+                while prev_block.isValid():
+                    if prev_block.text().strip().startswith("```"):
+                        temp_inside = not temp_inside
+                        if not temp_inside:
+                            fence_block_num = prev_block.blockNumber()
+                            break
+                    prev_block = prev_block.previous()
+
+                if fence_block_num is not None:
+                    language = self._editor._code_metadata.get_language(fence_block_num)
+                    if language:
+                        patterns = CodeHighlighter.get_language_patterns(language)
+                        for pattern, syntax_type in patterns:
+                            for match in re.finditer(pattern, text):
+                                start, end = match.span()
+                                fmt = CodeHighlighter.get_format_for_type(
+                                    syntax_type, self.code_block_format
+                                )
+                                self.setFormat(start, end - start, fmt)
+
             self.setCurrentBlockState(1)
             return
 

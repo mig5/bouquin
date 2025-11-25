@@ -15,7 +15,11 @@ def _clear_db_settings():
         "ui/idle_minutes",
         "ui/theme",
         "ui/move_todos",
+        "ui/tags",
+        "ui/time_log",
+        "ui/reminders",
         "ui/locale",
+        "ui/font_size",
     ]:
         s.remove(k)
 
@@ -29,7 +33,11 @@ def test_load_and_save_db_config_roundtrip(app, tmp_path):
         idle_minutes=7,
         theme="dark",
         move_todos=True,
+        tags=True,
+        time_log=True,
+        reminders=True,
         locale="en",
+        font_size=11,
     )
     save_db_config(cfg)
 
@@ -39,7 +47,11 @@ def test_load_and_save_db_config_roundtrip(app, tmp_path):
     assert loaded.idle_minutes == cfg.idle_minutes
     assert loaded.theme == cfg.theme
     assert loaded.move_todos == cfg.move_todos
+    assert loaded.tags == cfg.tags
+    assert loaded.time_log == cfg.time_log
+    assert loaded.reminders == cfg.reminders
     assert loaded.locale == cfg.locale
+    assert loaded.font_size == cfg.font_size
 
 
 def test_load_db_config_migrates_legacy_db_path(app, tmp_path):

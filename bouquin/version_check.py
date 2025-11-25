@@ -408,5 +408,5 @@ class VersionChecker:
         QMessageBox.information(
             self._parent,
             strings._("update"),
-            strings._("downloaded_and_verified_new_appimage") + appimage_path,
+            strings._("downloaded_and_verified_new_appimage") + str(appimage_path),
         )

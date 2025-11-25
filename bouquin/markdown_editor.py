@@ -22,6 +22,7 @@ from PySide6.QtWidgets import QTextEdit
 
 from .theme import ThemeManager
 from .markdown_highlighter import MarkdownHighlighter
+from . import strings
 
 
 class MarkdownEditor(QTextEdit):
@@ -63,7 +64,12 @@ class MarkdownEditor(QTextEdit):
         self._BULLET_STORAGE = "-"
 
         # Install syntax highlighter
-        self.highlighter = MarkdownHighlighter(self.document(), theme_manager)
+        self.highlighter = MarkdownHighlighter(self.document(), theme_manager, self)
+
+        # Initialize code block metadata
+        from .code_highlighter import CodeBlockMetadata
+
+        self._code_metadata = CodeBlockMetadata()
 
         # Track current list type for smart enter handling
         self._last_enter_was_empty = False
@@ -91,7 +97,9 @@ class MarkdownEditor(QTextEdit):
         # Recreate the highlighter for the new document
         # (the old one gets deleted with the old document)
         if hasattr(self, "highlighter") and hasattr(self, "theme_manager"):
-            self.highlighter = MarkdownHighlighter(self.document(), self.theme_manager)
+            self.highlighter = MarkdownHighlighter(
+                self.document(), self.theme_manager, self
+            )
         self._apply_line_spacing()
         self._apply_code_block_spacing()
         QTimer.singleShot(0, self._update_code_block_row_backgrounds)
@@ -274,6 +282,12 @@ class MarkdownEditor(QTextEdit):
             text,
         )
 
+        # Append code block metadata if present
+        if hasattr(self, "_code_metadata"):
+            metadata_str = self._code_metadata.serialize()
+            if metadata_str:
+                text = text.rstrip() + "\n\n" + metadata_str
+
         return text
 
     def _extract_images_to_markdown(self) -> str:
@@ -312,6 +326,16 @@ class MarkdownEditor(QTextEdit):
 
     def from_markdown(self, markdown_text: str):
         """Load markdown text into the editor."""
+        # Extract and load code block metadata if present
+        from .code_highlighter import CodeBlockMetadata
+
+        if not hasattr(self, "_code_metadata"):
+            self._code_metadata = CodeBlockMetadata()
+
+        self._code_metadata.deserialize(markdown_text)
+        # Remove metadata comment from displayed text
+        markdown_text = re.sub(r"\s*<!-- code-langs: [^>]+ -->\s*$", "", markdown_text)
+
         # Convert markdown checkboxes to Unicode for display
         display_text = markdown_text.replace(
             f"- {self._CHECK_CHECKED_STORAGE} ", f"{self._CHECK_CHECKED_DISPLAY} "
@@ -431,10 +455,6 @@ class MarkdownEditor(QTextEdit):
         cursor = self.textCursor()
         cursor.select(QTextCursor.SelectionType.LineUnderCursor)
         return cursor.selectedText()
-
-    def get_current_line_text(self) -> str:
-        """Public wrapper used by MainWindow for reminders."""
-        return self._get_current_line()
 
     def _list_prefix_length_for_block(self, block) -> int:
         """Return the length (in chars) of the visual list prefix for the given
@@ -1218,3 +1238,114 @@ class MarkdownEditor(QTextEdit):
         cursor = self.textCursor()
         cursor.insertImage(img_format)
         cursor.insertText("\n")  # Add newline after image
+
+    # ========== Context Menu Support ==========
+
+    def contextMenuEvent(self, event):
+        """Override context menu to add custom actions."""
+        from PySide6.QtGui import QAction
+        from PySide6.QtWidgets import QMenu
+
+        menu = QMenu(self)
+        cursor = self.cursorForPosition(event.pos())
+
+        # Check if we're in a table
+        text = self.toPlainText()
+        cursor_pos = cursor.position()
+
+        from .table_editor import find_table_at_cursor
+
+        table_info = find_table_at_cursor(text, cursor_pos)
+
+        if table_info:
+            # Add table editing action
+            edit_table_action = QAction(strings._("edit_table"), self)
+            edit_table_action.triggered.connect(
+                lambda: self._edit_table_at_cursor(cursor_pos)
+            )
+            menu.addAction(edit_table_action)
+            menu.addSeparator()
+
+        # Check if we're in a code block
+        block = cursor.block()
+        if self._is_inside_code_block(block):
+            # Add language selection submenu
+            lang_menu = menu.addMenu(strings._("set_code_language"))
+
+            languages = [
+                "python",
+                "bash",
+                "php",
+                "javascript",
+                "html",
+                "css",
+                "sql",
+                "java",
+                "go",
+            ]
+            for lang in languages:
+                action = QAction(lang.capitalize(), self)
+                action.triggered.connect(
+                    lambda checked, l=lang: self._set_code_block_language(block, l)
+                )
+                lang_menu.addAction(action)
+
+            menu.addSeparator()
+
+        # Add standard context menu actions
+        if self.textCursor().hasSelection():
+            menu.addAction(strings._("cut"), self.cut)
+            menu.addAction(strings._("copy"), self.copy)
+
+        menu.addAction(strings._("paste"), self.paste)
+
+        menu.exec(event.globalPos())
+
+    def _edit_table_at_cursor(self, cursor_pos: int):
+        """Open table editor dialog for the table at cursor position."""
+        from .table_editor import find_table_at_cursor, TableEditorDialog
+        from PySide6.QtWidgets import QDialog
+
+        text = self.toPlainText()
+        table_info = find_table_at_cursor(text, cursor_pos)
+
+        if not table_info:
+            return
+
+        start_pos, end_pos, table_text = table_info
+
+        # Open table editor
+        dlg = TableEditorDialog(table_text, self)
+        if dlg.exec() == QDialog.Accepted:
+            # Replace the table with edited version
+            new_table = dlg.get_markdown_table()
+
+            cursor = QTextCursor(self.document())
+            cursor.setPosition(start_pos)
+            cursor.setPosition(end_pos, QTextCursor.KeepAnchor)
+            cursor.insertText(new_table)
+
+    def _set_code_block_language(self, block, language: str):
+        """Set the language for a code block and store metadata."""
+        if not hasattr(self, "_code_metadata"):
+            from .code_highlighter import CodeBlockMetadata
+
+            self._code_metadata = CodeBlockMetadata()
+
+        # Find the opening fence block for this code block
+        fence_block = block
+        while fence_block.isValid() and not fence_block.text().strip().startswith(
+            "```"
+        ):
+            fence_block = fence_block.previous()
+
+        if fence_block.isValid():
+            self._code_metadata.set_language(fence_block.blockNumber(), language)
+            # Trigger rehighlight
+            self.highlighter.rehighlight()
+
+    def get_current_line_text(self) -> str:
+        """Get the text of the current line."""
+        cursor = self.textCursor()
+        block = cursor.block()
+        return block.text()

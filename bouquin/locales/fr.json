@@ -121,5 +121,16 @@
     "change_color": "Changer la couleur",
     "delete_tag": "Supprimer l'étiquette",
     "delete_tag_confirm": "Êtes-vous sûr de vouloir supprimer l'étiquette '{name}' ? Cela la supprimera de toutes les pages.",
-    "tag_already_exists_with_that_name": "Une étiquette portant ce nom existe déjà"
+    "tag_already_exists_with_that_name": "Une étiquette portant ce nom existe déjà",
+    "cut" : "Couper",
+    "copy" : "Copier",
+    "paste" : "Coller",
+    "monday" : "Lundi",
+    "tuesday" : "Mardi",
+    "wednesday" : "Mercredi",
+    "thursday" : "Jeudi",
+    "friday" : "Vendredi",
+    "saturday" : "Samedi",
+    "sunday" : "Dimanche",
+    "day" : "Jour"
 }

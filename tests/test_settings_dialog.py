@@ -22,6 +22,7 @@ def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db):
     dlg.move_todos.setChecked(True)
     dlg.tags.setChecked(False)
     dlg.time_log.setChecked(False)
+    dlg.reminders.setChecked(False)
 
     # Auto-accept the modal QMessageBox that _compact_btn_clicked() shows
     def _auto_accept_msgbox():
@@ -39,6 +40,7 @@ def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db):
     assert cfg.move_todos is True
     assert cfg.tags is False
     assert cfg.time_log is False
+    assert cfg.reminders is False
     assert cfg.theme in ("light", "dark", "system")
 
 

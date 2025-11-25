@@ -57,6 +57,8 @@ from .history_dialog import HistoryDialog
 from .key_prompt import KeyPrompt
 from .lock_overlay import LockOverlay
 from .markdown_editor import MarkdownEditor
+from .pomodoro_timer import PomodoroManager
+from .reminders import UpcomingRemindersWidget
 from .save_dialog import SaveDialog
 from .search import Search
 from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
@@ -106,11 +108,17 @@ class MainWindow(QMainWindow):
         self.search.openDateRequested.connect(self._load_selected_date)
         self.search.resultDatesChanged.connect(self._on_search_dates_changed)
 
+        # Features
         self.time_log = TimeLogWidget(self.db)
 
         self.tags = PageTagsWidget(self.db)
         self.tags.tagActivated.connect(self._on_tag_activated)
         self.tags.tagAdded.connect(self._on_tag_added)
+
+        self.upcoming_reminders = UpcomingRemindersWidget(self.db)
+        self.upcoming_reminders.reminderTriggered.connect(self._show_flashing_reminder)
+
+        self.pomodoro_manager = PomodoroManager(self.db, self)
 
         # Lock the calendar to the left panel at the top to stop it stretching
         # when the main window is resized.
@@ -119,6 +127,7 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(8, 8, 8, 8)
         left_layout.addWidget(self.calendar)
         left_layout.addWidget(self.search)
+        left_layout.addWidget(self.upcoming_reminders)
         left_layout.addWidget(self.time_log)
         left_layout.addWidget(self.tags)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
@@ -324,6 +333,10 @@ class MainWindow(QMainWindow):
             self.tags.hide()
         if not self.cfg.time_log:
             self.time_log.hide()
+            self.toolBar.actTimer.setVisible(False)
+        if not self.cfg.reminders:
+            self.upcoming_reminders.hide()
+            self.toolBar.actAlarm.setVisible(False)
 
         # Restore window position from settings
         self._restore_window_position()
@@ -1087,6 +1100,8 @@ class MainWindow(QMainWindow):
         self._tb_numbers = lambda: self._call_editor("toggle_numbers")
         self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
         self._tb_alarm = self._on_alarm_requested
+        self._tb_timer = self._on_timer_requested
+        self._tb_table = self._on_table_requested
         self._tb_font_larger = self._on_font_larger_requested
         self._tb_font_smaller = self._on_font_smaller_requested
 
@@ -1099,6 +1114,8 @@ class MainWindow(QMainWindow):
         tb.numbersRequested.connect(self._tb_numbers)
         tb.checkboxesRequested.connect(self._tb_checkboxes)
         tb.alarmRequested.connect(self._tb_alarm)
+        tb.timerRequested.connect(self._tb_timer)
+        tb.tableRequested.connect(self._tb_table)
         tb.insertImageRequested.connect(self._on_insert_image)
         tb.historyRequested.connect(self._open_history)
         tb.fontSizeLargerRequested.connect(self._tb_font_larger)
@@ -1228,6 +1245,23 @@ class MainWindow(QMainWindow):
         # Rebuild timers, but only if this page is for "today"
         self._rebuild_reminders_for_today()
 
+    def _on_timer_requested(self):
+        """Start a Pomodoro timer for the current line."""
+        editor = getattr(self, "editor", None)
+        if editor is None:
+            return
+
+        # Get the current line text
+        line_text = editor.get_current_line_text().strip()
+        if not line_text:
+            line_text = strings._("pomodoro_time_log_default_text")
+
+        # Get current date
+        date_iso = self.editor.current_date.toString("yyyy-MM-dd")
+
+        # Start the timer
+        self.pomodoro_manager.start_timer_for_line(line_text, date_iso)
+
     def _show_flashing_reminder(self, text: str):
         """
         Show a small flashing dialog and request attention from the OS.
@@ -1344,6 +1378,36 @@ class MainWindow(QMainWindow):
             timer.start(msecs)
             self._reminder_timers.append(timer)
 
+    # ----------- Table handler ------------#
+    def _on_table_requested(self):
+        """Insert a basic markdown table template."""
+        editor = getattr(self, "editor", None)
+        if editor is None:
+            return
+
+        # Basic 3x3 table template
+        table_template = """| Column 1 | Column 2 | Column 3 |
+| --- | --- | --- |
+| Cell 1 | Cell 2 | Cell 3 |
+| Cell 4 | Cell 5 | Cell 6 |
+"""
+
+        cursor = editor.textCursor()
+        cursor.insertText(table_template)
+
+        # Move cursor to first cell for easy editing
+        # Find the start of "Column 1" text
+        cursor.movePosition(
+            QTextCursor.Left, QTextCursor.MoveAnchor, len(table_template)
+        )
+        cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, 2)  # After "| "
+        cursor.movePosition(
+            QTextCursor.Right, QTextCursor.KeepAnchor, 8
+        )  # Select "Column 1"
+        editor.setTextCursor(cursor)
+
+        editor.setFocus()
+
     # ----------- History handler ------------#
     def _open_history(self):
         if hasattr(self.editor, "current_date"):
@@ -1444,6 +1508,7 @@ class MainWindow(QMainWindow):
         self.cfg.move_todos = getattr(new_cfg, "move_todos", self.cfg.move_todos)
         self.cfg.tags = getattr(new_cfg, "tags", self.cfg.tags)
         self.cfg.time_log = getattr(new_cfg, "time_log", self.cfg.time_log)
+        self.cfg.reminders = getattr(new_cfg, "reminders", self.cfg.reminders)
         self.cfg.locale = getattr(new_cfg, "locale", self.cfg.locale)
         self.cfg.font_size = getattr(new_cfg, "font_size", self.cfg.font_size)
 
@@ -1471,8 +1536,16 @@ class MainWindow(QMainWindow):
         self.tags.hide() if not self.cfg.tags else self.tags.show()
         if not self.cfg.time_log:
             self.time_log.hide()
+            self.toolBar.actTimer.setVisible(False)
         else:
             self.time_log.show()
+            self.toolBar.actTimer.setVisible(True)
+        if not self.cfg.reminders:
+            self.upcoming_reminders.hide()
+            self.toolBar.actAlarm.setVisible(False)
+        else:
+            self.upcoming_reminders.show()
+            self.toolBar.actAlarm.setVisible(True)
 
     # ------------ Statistics handler --------------- #
 
