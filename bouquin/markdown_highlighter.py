@@ -118,7 +118,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # Markdown syntax (the markers themselves) - make invisible
         self.syntax_format = QTextCharFormat()
         # Use the editor background color so they blend in
-        bg = pal.color(QPalette.Base)        
+        bg = pal.color(QPalette.Base)
         hidden = QColor(bg)
         hidden.setAlpha(0)
         self.syntax_format.setForeground(hidden)
