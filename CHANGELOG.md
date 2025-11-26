@@ -2,6 +2,7 @@
 
  * Try to address Noto Sans font issue that works for both numbers and checkbox/bullets.
  * Update icon
+ * Update French translations
 
 # 0.5
 
