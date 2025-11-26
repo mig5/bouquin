@@ -100,6 +100,17 @@ class ToolBar(QToolBar):
         self.actCheckboxes.setToolTip(strings._("toolbar_toggle_checkboxes"))
         self.actCheckboxes.triggered.connect(self.checkboxesRequested)
 
+        # Images
+        self.actInsertImg = QAction("📸", self)
+        self.actInsertImg.setToolTip(strings._("insert_images"))
+        self.actInsertImg.setShortcut("Ctrl+Shift+I")
+        self.actInsertImg.triggered.connect(self.insertImageRequested)
+
+        # History button
+        self.actHistory = QAction("🔁", self)
+        self.actHistory.setToolTip(strings._("history"))
+        self.actHistory.triggered.connect(self.historyRequested)
+
         # Alarm / reminder
         self.actAlarm = QAction("⏰", self)
         self.actAlarm.setToolTip(strings._("toolbar_alarm"))
@@ -114,17 +125,6 @@ class ToolBar(QToolBar):
         self.actTable = QAction("⊞", self)
         self.actTable.setToolTip(strings._("toolbar_insert_table"))
         self.actTable.triggered.connect(self.tableRequested)
-
-        # Images
-        self.actInsertImg = QAction("📸", self)
-        self.actInsertImg.setToolTip(strings._("insert_images"))
-        self.actInsertImg.setShortcut("Ctrl+Shift+I")
-        self.actInsertImg.triggered.connect(self.insertImageRequested)
-
-        # History button
-        self.actHistory = QAction("⎌", self)
-        self.actHistory.setToolTip(strings._("history"))
-        self.actHistory.triggered.connect(self.historyRequested)
 
         # Set exclusive buttons in QActionGroups
         self.grpHeadings = QActionGroup(self)
@@ -162,10 +162,10 @@ class ToolBar(QToolBar):
                 self.actBullets,
                 self.actNumbers,
                 self.actCheckboxes,
-                self.actAlarm,
-                self.actTimer,
                 self.actTable,
                 self.actInsertImg,
+                self.actAlarm,
+                self.actTimer,
                 self.actHistory,
             ]
         )
@@ -195,7 +195,7 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actTable, "⊞")
 
         # History
-        self._style_letter_button(self.actHistory, "⎌")
+        self._style_letter_button(self.actHistory, "🔁")
 
     def _style_letter_button(
         self,

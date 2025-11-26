@@ -6,6 +6,7 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QFontDatabase,
+    QFontMetrics,
     QGuiApplication,
     QPalette,
     QSyntaxHighlighter,
@@ -30,6 +31,14 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.theme_manager.themeChanged.connect(self._on_theme_changed)
 
     def _on_theme_changed(self, *_):
+        self._setup_formats()
+        self.rehighlight()
+
+    def refresh_for_font_change(self) -> None:
+        """
+        Called when the editor's base font changes (zoom / settings).
+        It rebuilds any formats that depend on the editor font metrics.
+        """
         self._setup_formats()
         self.rehighlight()
 
@@ -110,8 +119,21 @@ class MarkdownHighlighter(QSyntaxHighlighter):
 
         # Use Symbols font for checkbox and bullet glyphs if present
         if self._editor is not None and hasattr(self._editor, "symbols_font_family"):
-            base_size = self._editor.qfont.pointSize()
-            symbols_font = QFont(self._editor.symbols_font_family, base_size)
+            base_font = QFont(self._editor.qfont)  # copy of editor font
+            symbols_font = QFont(self._editor.symbols_font_family)
+            symbols_font.setPointSizeF(base_font.pointSizeF())
+
+            base_metrics = QFontMetrics(base_font)
+            sym_metrics = QFontMetrics(symbols_font)
+
+            # If Symbols glyphs are noticeably shorter than the text,
+            # scale them up so the visual heights roughly match.
+            if sym_metrics.height() > 0:
+                ratio = base_metrics.height() / sym_metrics.height()
+                if ratio > 1.05:  # more than ~5% smaller
+                    ratio = min(ratio, 1.4)  # Oh, Tod, Tod. Don't overdo it.
+                    symbols_font.setPointSizeF(symbols_font.pointSizeF() * ratio)
+
             self.checkbox_format.setFont(symbols_font)
             self.bullet_format.setFont(symbols_font)
 

@@ -119,6 +119,22 @@ class MarkdownEditor(QTextEdit):
         self._apply_code_block_spacing()
         QTimer.singleShot(0, self._update_code_block_row_backgrounds)
 
+    def setFont(self, font: QFont) -> None:  # type: ignore[override]
+        """
+        Ensure that whenever the base editor font changes, our highlighter
+        re-computes checkbox / bullet formats.
+        """
+        # Keep qfont in sync
+        self.qfont = QFont(font)
+        super().setFont(self.qfont)
+
+        # If the highlighter is already attached, let it rebuild its formats
+        highlighter = getattr(self, "highlighter", None)
+        if highlighter is not None:
+            refresh = getattr(highlighter, "refresh_for_font_change", None)
+            if callable(refresh):
+                refresh()
+
     def showEvent(self, e):
         super().showEvent(e)
         # First time the widget is shown, Qt may rebuild layout once more.

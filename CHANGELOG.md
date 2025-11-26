@@ -1,6 +1,8 @@
 # 0.5.2
 
  * Update icon again to remove background
+ * Adjust History icon and reorder toolbar items
+ * Try to address checkbox/bullet size issues (again)
 
 # 0.5.1
 
