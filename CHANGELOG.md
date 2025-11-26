@@ -3,6 +3,7 @@
  * Try to address Noto Sans font issue that works for both numbers and checkbox/bullets.
  * Update icon
  * Update French translations
+ * Improve size of flashing reminder dialog
 
 # 0.5
 
