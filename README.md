@@ -6,7 +6,7 @@
 
 ## Introduction
 
-Bouquin ("Book-ahn") is a notebook and planner application written in Python, PyQt and SQLCipher.
+Bouquin ("Book-ahn") is a notebook and planner application written in Python, Qt and SQLCipher.
 
 It is designed to treat each day as its own 'page', complete with Markdown rendering, tagging,
 search, reminders and time logging for those of us who need to keep track of not just TODOs, but
