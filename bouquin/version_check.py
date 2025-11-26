@@ -56,7 +56,7 @@ class VersionChecker:
         """
         Render the SVG logo to a high-DPI-aware QPixmap so it stays crisp.
         """
-        svg_path = Path(__file__).resolve().parent / "icons" / "bouquin-light.svg"
+        svg_path = Path(__file__).resolve().parent / "icons" / "bouquin.svg"
 
         # Logical size (what Qt layouts see)
         dpr = QGuiApplication.primaryScreen().devicePixelRatio()

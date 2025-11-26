@@ -17,7 +17,7 @@ def main():
     app.setOrganizationName(APP_ORG)
     # Icon
     BASE_DIR = Path(__file__).resolve().parent
-    ICON_PATH = BASE_DIR / "icons" / "bouquin-light.svg"
+    ICON_PATH = BASE_DIR / "icons" / "bouquin.svg"
     icon = QIcon(str(ICON_PATH))
     app.setWindowIcon(icon)
 

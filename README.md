@@ -51,7 +51,7 @@ report from within the app, or optionally to check for new versions to upgrade t
 
  * Data is encrypted at rest
  * Encryption key is prompted for and never stored, unless user chooses to via Settings
- * All changes are version controlled, with ability to view/diff versions and revert
+ * All changes are version controlled, with ability to view/diff versions, revert or delete revisions
  * Automatic rendering of basic Markdown syntax
  * Tabs are supported - right-click on a date from the calendar to open it in a new tab.
  * Images are supported
@@ -66,8 +66,8 @@ report from within the app, or optionally to check for new versions to upgrade t
  * Automatically generate checkboxes when typing 'TODO'
  * It is possible to automatically move unchecked checkboxes from the last 7 days to the next weekday.
  * English, French and Italian locales provided
- * Ability to set reminder alarms in the app against the current line of text (which will be flashed as the reminder)
- * Ability to log time per day for different projects/activities and run timesheet reports
+ * Ability to set reminder alarms (which will be flashed as the reminder)
+ * Ability to log time per day for different projects/activities, pomodoro-style log timer and timesheet reports
 
 
 ## How to install

@@ -1,3 +1,8 @@
+# 0.5.1
+
+ * Try to address Noto Sans font issue that works for both numbers and checkbox/bullets.
+ * Update icon
+
 # 0.5
 
  * More Italian translations, thank you @mdaleo404
