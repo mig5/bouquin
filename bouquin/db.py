@@ -5,6 +5,7 @@ import datetime as _dt
 import hashlib
 import html
 import json
+import markdown
 import re
 
 from dataclasses import dataclass
@@ -440,14 +441,33 @@ class DBManager:
             '<html lang="en">',
             '<meta charset="utf-8">',
             f"<title>{html.escape(title)}</title>",
-            "<style>body{font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;max-width:900px;margin:auto;}",
-            "article{padding:16px 0;border-bottom:1px solid #ddd;} time{font-weight:600;color:#333;} section{margin-top:8px;}</style>",
+            "<style>"
+            "body{font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;"
+            "padding:24px;max-width:900px;margin:auto;}"
+            "article{padding:16px 0;border-bottom:1px solid #ddd;}"
+            "article header time{font-weight:600;color:#333;}"
+            "section{margin-top:8px;}"
+            "table{border-collapse:collapse;margin-top:8px;}"
+            "th,td{border:1px solid #ddd;padding:4px 8px;text-align:left;}"
+            "</style>",
             "<body>",
             f"<h1>{html.escape(title)}</h1>",
         ]
         for d, c in entries:
+            body_html = markdown.markdown(
+                c,
+                extensions=[
+                    "extra",
+                    "nl2br",
+                ],
+                output_format="html5",
+            )
+
             parts.append(
-                f"<article><header><time>{html.escape(d)}</time></header><section>{c}</section></article>"
+                f"<article>"
+                f"<header><time>{html.escape(d)}</time></header>"
+                f"<section>{body_html}</section>"
+                f"</article>"
             )
         parts.append("</body></html>")
 
