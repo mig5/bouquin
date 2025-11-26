@@ -1,3 +1,7 @@
+# 0.5.2
+
+ * Update icon again to remove background
+
 # 0.5.1
 
  * Try to address Noto Sans font issue that works for both numbers and checkbox/bullets.

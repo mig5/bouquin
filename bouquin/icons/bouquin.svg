@@ -4,21 +4,10 @@
   viewBox="0 0 512 512"
   xmlns="http://www.w3.org/2000/svg"
 >
-  <!-- Rounded square background tile -->
-  <rect
-    x="0"
-    y="0"
-    width="512"
-    height="512"
-    rx="112"
-    ry="112"
-    fill="#0F172A"
-  />
-
   <!-- Book cover -->
   <rect
     x="116"
-    y="92"
+    y="76"
     width="280"
     height="360"
     rx="48"
@@ -29,7 +18,7 @@
   <!-- Book spine -->
   <rect
     x="116"
-    y="92"
+    y="76"
     width="64"
     height="360"
     rx="40"
@@ -39,14 +28,14 @@
 
   <!-- Folded page corner (top-right triangle) -->
   <path
-    d="M396 92 L356 92 L396 132 Z"
+    d="M396 76 L356 76 L396 116 Z"
     fill="#FEF9C3"
   />
 
   <!-- Keyhole: circular top -->
   <circle
     cx="256"
-    cy="260"
+    cy="256"
     r="34"
     fill="#0F172A"
   />
