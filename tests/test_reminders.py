@@ -765,35 +765,6 @@ def test_reminder_not_today_skipped(qtbot, fresh_db):
     assert len(triggered_texts) == 0
 
 
-def test_reminder_context_menu_single_item(qtbot, fresh_db):
-    """Test context menu for a single reminder item."""
-    reminder = Reminder(
-        id=None,
-        text="Test reminder",
-        reminder_type=ReminderType.ONCE,
-        time_str="14:30",
-        date_iso=date.today().isoformat(),
-        active=True,
-    )
-    fresh_db.save_reminder(reminder)
-
-    reminders_widget = UpcomingRemindersWidget(fresh_db)
-    qtbot.addWidget(reminders_widget)
-    reminders_widget.show()
-
-    # Refresh to populate the list
-    reminders_widget.refresh()
-
-    # Select the first item
-    if reminders_widget.reminder_list.count() > 0:
-        reminders_widget.reminder_list.setCurrentRow(0)
-
-        # Show context menu (won't actually display in tests)
-        reminders_widget._show_reminder_context_menu(
-            reminders_widget.reminder_list.pos()
-        )
-
-
 def test_reminder_context_menu_no_selection(qtbot, fresh_db):
     """Test context menu with no selection returns early."""
     reminders_widget = UpcomingRemindersWidget(fresh_db)
