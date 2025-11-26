@@ -356,6 +356,9 @@ class MainWindow(QMainWindow):
         self._day_change_timer.timeout.connect(self._on_day_changed)
         self._schedule_next_day_change()
 
+        # Ensure toolbar is definitely visible
+        self.toolBar.setVisible(True)
+
     @property
     def editor(self) -> MarkdownEditor | None:
         """Get the currently active editor."""

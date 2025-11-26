@@ -117,10 +117,13 @@ class MarkdownHighlighter(QSyntaxHighlighter):
 
         # Markdown syntax (the markers themselves) - make invisible
         self.syntax_format = QTextCharFormat()
+        # Use the editor background color so they blend in
+        bg = pal.color(QPalette.Base)        
+        hidden = QColor(bg)
+        hidden.setAlpha(0)
+        self.syntax_format.setForeground(hidden)
         # Make the markers invisible by setting font size to 0.1 points
         self.syntax_format.setFontPointSize(0.1)
-        # Also make them very faint in case they still show
-        self.syntax_format.setForeground(QColor(250, 250, 250))
 
     def _overlay_range(
         self, start: int, length: int, overlay_fmt: QTextCharFormat
