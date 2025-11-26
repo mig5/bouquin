@@ -191,7 +191,7 @@ class UpcomingRemindersWidget(QFrame):
         self.toggle_btn.clicked.connect(self._on_toggle)
 
         self.add_btn = QToolButton()
-        self.add_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogNewFolder))
+        self.add_btn.setText("⏰")
         self.add_btn.setToolTip("Add Reminder")
         self.add_btn.setAutoRaise(True)
         self.add_btn.clicked.connect(self._add_reminder)
