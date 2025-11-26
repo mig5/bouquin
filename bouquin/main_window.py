@@ -1230,6 +1230,7 @@ class MainWindow(QMainWindow):
         dlg = QDialog(self)
         dlg.setWindowTitle(strings._("reminder"))
         dlg.setModal(True)
+        dlg.setMinimumWidth(400)
 
         layout = QVBoxLayout(dlg)
         label = QLabel(text)
