@@ -287,18 +287,20 @@ class CodeHighlighter:
             # HTML comments
             patterns.append((r"<!--.*?-->", "comment"))
 
-        # Strings (double quotes)
-        patterns.append((r'"[^"\\]*(\\.[^"\\]*)*"', "string"))
-
-        # Strings (single quotes)
-        patterns.append((r"'[^'\\]*(\\.[^'\\]*)*'", "string"))
-
         # Numbers
         patterns.append((r"\b\d+\.?\d*\b", "number"))
 
         # Keywords
         for keyword in keywords:
             patterns.append((r"\b" + keyword + r"\b", "keyword"))
+
+        # Do strings last so they override any of the above (e.g reserved keywords in strings)
+
+        # Strings (double quotes)
+        patterns.append((r'"[^"\\]*(\\.[^"\\]*)*"', "string"))
+
+        # Strings (single quotes)
+        patterns.append((r"'[^'\\]*(\\.[^'\\]*)*'", "string"))
 
         return patterns
 
