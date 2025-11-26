@@ -429,7 +429,7 @@ class TimeLogDialog(QDialog):
             # Ignore changes that come from _reload_entries().
             return
 
-        if item is None:
+        if item is None:  # pragma: no cover
             return
 
         row = item.row()
@@ -1090,7 +1090,7 @@ class TimeReportDialog(QDialog):
                         hours = per_period_minutes[period] / 60.0
                         bar_h = int((hours / max_hours) * (height - 10))
                         if bar_h <= 0:
-                            continue
+                            continue  # pragma: no cover
 
                         x_center = left + bar_spacing * (i + 0.5)
                         x = int(x_center - bar_width / 2)

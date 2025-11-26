@@ -510,3 +510,25 @@ def test_download_file_invalid_content_length(qtbot, app, tmp_path):
         checker._download_file("http://example.com/file", dest_path)
 
         assert dest_path.exists()
+
+
+def test_version_checker_creation(qtbot):
+    """Test creating a VersionChecker instance."""
+    widget = QWidget()
+    qtbot.addWidget(widget)
+
+    checker = VersionChecker(widget)
+    assert checker is not None
+
+
+def test_current_version(qtbot):
+    """Test getting the current version."""
+    widget = QWidget()
+    qtbot.addWidget(widget)
+
+    checker = VersionChecker(widget)
+    version = checker.current_version()
+
+    # Version should be a string
+    assert isinstance(version, str)
+    assert len(version) > 0

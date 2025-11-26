@@ -1,6 +1,7 @@
 import pytest
 import importlib.metadata
 
+from datetime import date, timedelta
 from pathlib import Path
 
 import bouquin.main_window as mwmod
@@ -2134,3 +2135,352 @@ def test_calendar_date_selection(qtbot, app, tmp_path):
 
     # The window should load that date
     assert test_date.toString("yyyy-MM-dd") in str(w._current_date_iso())
+
+
+def test_main_window_without_reminders(qtbot, app, tmp_db_cfg):
+    """Test main window when reminders feature is disabled."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", False)  # Disabled
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Verify reminders widget is hidden
+    assert window.upcoming_reminders.isHidden()
+    assert not window.toolBar.actAlarm.isVisible()
+
+
+def test_main_window_without_time_log(qtbot, app, tmp_db_cfg):
+    """Test main window when time_log feature is disabled."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", False)  # Disabled
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Verify time_log widget is hidden
+    assert window.time_log.isHidden()
+    assert not window.toolBar.actTimer.isVisible()
+
+
+def test_main_window_without_tags(qtbot, app, tmp_db_cfg):
+    """Test main window when tags feature is disabled."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", False)  # Disabled
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Verify tags widget is hidden
+    assert window.tags.isHidden()
+
+
+def test_close_current_tab(qtbot, app, tmp_db_cfg, fresh_db):
+    """Test closing the current tab via _close_current_tab."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Open multiple tabs
+    today = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+
+    window._open_date_in_tab(QDate.fromString(today, "yyyy-MM-dd"))
+    window._open_date_in_tab(QDate.fromString(tomorrow, "yyyy-MM-dd"))
+
+    initial_count = window.tab_widget.count()
+    assert initial_count >= 2
+
+    # Close current tab
+    window._close_current_tab()
+
+    # Verify tab was closed
+    assert window.tab_widget.count() == initial_count - 1
+
+
+def test_table_insertion(qtbot, app, tmp_db_cfg, fresh_db):
+    """Test inserting a table template."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Open a date
+    today = date.today().isoformat()
+    window._open_date_in_tab(QDate.fromString(today, "yyyy-MM-dd"))
+
+    # Ensure we have an editor
+    editor = window.editor
+    assert editor is not None
+
+    # Insert table
+    window._on_table_requested()
+
+    # Verify table was inserted
+    text = editor.toPlainText()
+    assert "Column 1" in text
+    assert "Column 2" in text
+    assert "Column 3" in text
+    assert "---" in text
+
+
+def test_parse_today_alarms(qtbot, app, tmp_db_cfg, fresh_db):
+    """Test parsing inline alarms from markdown (⏰ HH:MM format)."""
+    from PySide6.QtCore import QTime
+
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Open today's date
+    today_qdate = QDate.currentDate()
+    window._open_date_in_tab(today_qdate)
+
+    # Set content with a future alarm
+    future_time = QTime.currentTime().addSecs(3600)  # 1 hour from now
+    alarm_text = f"Do something ⏰ {future_time.hour():02d}:{future_time.minute():02d}"
+
+    # Set the editor's current_date attribute
+    window.editor.current_date = today_qdate
+    window.editor.setPlainText(alarm_text)
+
+    # Clear any existing timers
+    window._reminder_timers = []
+
+    # Trigger alarm parsing
+    window._rebuild_reminders_for_today()
+
+    # Verify timer was created (not DB reminder)
+    assert len(window._reminder_timers) > 0
+
+
+def test_parse_today_alarms_invalid_time(qtbot, app, tmp_db_cfg, fresh_db):
+    """Test that invalid time formats are skipped."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Open today's date
+    today_qdate = QDate.currentDate()
+    window._open_date_in_tab(today_qdate)
+
+    # Set content with invalid time
+    alarm_text = "Do something ⏰ 25:99"  # Invalid time
+
+    window.editor.current_date = today_qdate
+    window.editor.setPlainText(alarm_text)
+
+    # Clear any existing timers
+    window._reminder_timers = []
+
+    # Trigger alarm parsing - should not crash
+    window._rebuild_reminders_for_today()
+
+    # No timer should be created for invalid time
+    assert len(window._reminder_timers) == 0
+
+
+def test_parse_today_alarms_past_time(qtbot, app, tmp_db_cfg, fresh_db):
+    """Test that past alarms are skipped."""
+    from PySide6.QtCore import QTime
+
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Open today's date
+    today_qdate = QDate.currentDate()
+    window._open_date_in_tab(today_qdate)
+
+    # Set content with past time
+    past_time = QTime.currentTime().addSecs(-3600)  # 1 hour ago
+    alarm_text = f"Do something ⏰ {past_time.hour():02d}:{past_time.minute():02d}"
+
+    window.editor.current_date = today_qdate
+    window.editor.setPlainText(alarm_text)
+
+    # Clear any existing timers
+    window._reminder_timers = []
+
+    # Trigger alarm parsing
+    window._rebuild_reminders_for_today()
+
+    # Past alarms should not create timers
+    assert len(window._reminder_timers) == 0
+
+
+def test_parse_today_alarms_no_text(qtbot, app, tmp_db_cfg, fresh_db):
+    """Test alarm with no text before emoji uses fallback."""
+    from PySide6.QtCore import QTime
+
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Open today's date
+    today_qdate = QDate.currentDate()
+    window._open_date_in_tab(today_qdate)
+
+    # Set content with alarm but no text
+    future_time = QTime.currentTime().addSecs(3600)
+    alarm_text = f"⏰ {future_time.hour():02d}:{future_time.minute():02d}"
+
+    window.editor.current_date = today_qdate
+    window.editor.setPlainText(alarm_text)
+
+    # Clear any existing timers
+    window._reminder_timers = []
+
+    # Trigger alarm parsing
+    window._rebuild_reminders_for_today()
+
+    # Timer should be created even without text
+    assert len(window._reminder_timers) > 0
+
+
+def test_open_history_with_editor(qtbot, app, tmp_db_cfg, fresh_db):
+    """Test opening history when editor has content."""
+    from unittest.mock import patch
+
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Create some history
+    today = date.today().isoformat()
+    fresh_db.save_new_version(today, "v1", "note1")
+    fresh_db.save_new_version(today, "v2", "note2")
+
+    # Open today's date
+    window._open_date_in_tab(QDate.fromString(today, "yyyy-MM-dd"))
+
+    # Open history
+    with patch("bouquin.history_dialog.HistoryDialog.exec") as mock_exec:
+        mock_exec.return_value = False  # User cancels
+        window._open_history()
+
+        # HistoryDialog should have been created and shown
+        mock_exec.assert_called_once()

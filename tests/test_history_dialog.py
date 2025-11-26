@@ -167,3 +167,145 @@ def test_revert_exception_shows_message(qtbot, fresh_db, monkeypatch):
 
     # Should show the critical box, which our timer will accept; _revert returns.
     dlg._revert()
+
+
+def test_delete_version_from_history(qtbot, fresh_db):
+    """Test deleting a version through the history dialog."""
+    d = "2001-01-01"
+
+    # Create multiple versions
+    vid1, _ = fresh_db.save_new_version(d, "v1", "first")
+    vid2, _ = fresh_db.save_new_version(d, "v2", "second")
+    vid3, _ = fresh_db.save_new_version(d, "v3", "third")
+
+    w = QWidget()
+    dlg = HistoryDialog(fresh_db, d, parent=w)
+    qtbot.addWidget(dlg)
+    dlg.show()
+
+    # Verify we have 3 versions
+    assert dlg.list.count() == 3
+
+    # Select the first version (oldest, not current)
+    dlg.list.setCurrentRow(2)  # Last row is oldest version
+
+    # Call _delete
+    dlg._delete()
+
+    # Verify the version was deleted
+    assert dlg.list.count() == 2
+
+    # Verify from DB
+    versions = fresh_db.list_versions(d)
+    assert len(versions) == 2
+
+
+def test_delete_current_version_returns_early(qtbot, fresh_db):
+    """Test that deleting the current version returns early without deleting."""
+    d = "2001-01-02"
+
+    # Create versions
+    vid1, _ = fresh_db.save_new_version(d, "v1", "first")
+    vid2, _ = fresh_db.save_new_version(d, "v2", "second")
+
+    w = QWidget()
+    dlg = HistoryDialog(fresh_db, d, parent=w)
+    qtbot.addWidget(dlg)
+    dlg.show()
+
+    # Find and select the current version
+    for i in range(dlg.list.count()):
+        item = dlg.list.item(i)
+        if item.data(Qt.UserRole) == dlg._current_id:
+            dlg.list.setCurrentItem(item)
+            break
+
+    # Try to delete - should return early
+    dlg._delete()
+
+    # Verify nothing was deleted
+    versions = fresh_db.list_versions(d)
+    assert len(versions) == 2
+
+
+def test_delete_version_with_error(qtbot, fresh_db, monkeypatch):
+    """Test that delete version error shows a message box."""
+    d = "2001-01-03"
+
+    # Create versions
+    vid1, _ = fresh_db.save_new_version(d, "v1", "first")
+    vid2, _ = fresh_db.save_new_version(d, "v2", "second")
+
+    w = QWidget()
+    dlg = HistoryDialog(fresh_db, d, parent=w)
+    qtbot.addWidget(dlg)
+    dlg.show()
+
+    # Select a non-current version
+    for i in range(dlg.list.count()):
+        item = dlg.list.item(i)
+        if item.data(Qt.UserRole) != dlg._current_id:
+            dlg.list.setCurrentItem(item)
+            break
+
+    # Make delete_version raise an error
+    def boom(*args, **kwargs):
+        raise RuntimeError("Delete failed")
+
+    monkeypatch.setattr(dlg._db, "delete_version", boom)
+
+    # Set up auto-closer for message box
+    def make_closer(max_tries=50, interval_ms=10):
+        tries = {"n": 0}
+
+        def closer():
+            tries["n"] += 1
+            w = QApplication.activeModalWidget()
+            if isinstance(w, QMessageBox):
+                ok = w.button(QMessageBox.Ok)
+                if ok is not None:
+                    ok.click()
+                else:
+                    w.accept()
+            elif tries["n"] < max_tries:
+                QTimer.singleShot(interval_ms, closer)
+
+        return closer
+
+    QTimer.singleShot(0, make_closer())
+
+    # Call delete - should show error message
+    dlg._delete()
+
+
+def test_delete_multiple_versions(qtbot, fresh_db):
+    """Test deleting multiple versions at once."""
+    d = "2001-01-04"
+
+    # Create multiple versions
+    vid1, _ = fresh_db.save_new_version(d, "v1", "first")
+    vid2, _ = fresh_db.save_new_version(d, "v2", "second")
+    vid3, _ = fresh_db.save_new_version(d, "v3", "third")
+    vid4, _ = fresh_db.save_new_version(d, "v4", "fourth")
+
+    w = QWidget()
+    dlg = HistoryDialog(fresh_db, d, parent=w)
+    qtbot.addWidget(dlg)
+    dlg.show()
+
+    # Select multiple non-current items
+    selected_count = 0
+    for i in range(dlg.list.count()):
+        item = dlg.list.item(i)
+        if item.data(Qt.UserRole) != dlg._current_id:
+            item.setSelected(True)
+            selected_count += 1
+            if selected_count >= 2:  # Select 2 items
+                break
+
+    # Delete them
+    dlg._delete()
+
+    # Verify versions were deleted (should have current + 1 remaining)
+    versions = fresh_db.list_versions(d)
+    assert len(versions) == 2  # Current + 1 that wasn't deleted

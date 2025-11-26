@@ -7,7 +7,9 @@ from bouquin.reminders import (
     ManageRemindersDialog,
 )
 from PySide6.QtCore import QDate, QTime
-from PySide6.QtWidgets import QDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
+
+from datetime import date, timedelta
 
 
 def test_reminder_type_enum(app):
@@ -655,3 +657,174 @@ def test_reminder_with_inactive_status(qtbot, app, fresh_db):
     for i in range(widget.reminder_list.count()):
         item = widget.reminder_list.item(i)
         assert "Inactive" not in item.text() or "No upcoming" in item.text()
+
+
+def test_reminder_triggers_and_deactivates(qtbot, fresh_db):
+    """Test that ONCE reminders deactivate after firing."""
+    # Add a ONCE reminder for right now
+    now = QTime.currentTime()
+    hour = now.hour()
+    minute = now.minute()
+
+    reminder = Reminder(
+        id=None,
+        text="Test once reminder",
+        reminder_type=ReminderType.ONCE,
+        time_str=f"{hour:02d}:{minute:02d}",
+        date_iso=date.today().isoformat(),
+        active=True,
+    )
+    reminder_id = fresh_db.save_reminder(reminder)
+
+    reminders_widget = UpcomingRemindersWidget(fresh_db)
+    qtbot.addWidget(reminders_widget)
+
+    # Set up signal spy
+    triggered_texts = []
+    reminders_widget.reminderTriggered.connect(
+        lambda text: triggered_texts.append(text)
+    )
+
+    # Trigger the check
+    reminders_widget._check_reminders()
+
+    # Verify reminder was triggered
+    assert len(triggered_texts) > 0
+    assert "Test once reminder" in triggered_texts
+
+    # Verify reminder was deactivated
+    reminders = fresh_db.get_all_reminders()
+    deactivated = [r for r in reminders if r.id == reminder_id][0]
+    assert deactivated.active is False
+
+
+def test_reminder_not_active_skipped(qtbot, fresh_db):
+    """Test that inactive reminders are not triggered."""
+    now = QTime.currentTime()
+    hour = now.hour()
+    minute = now.minute()
+
+    reminder = Reminder(
+        id=None,
+        text="Inactive reminder",
+        reminder_type=ReminderType.ONCE,
+        time_str=f"{hour:02d}:{minute:02d}",
+        date_iso=date.today().isoformat(),
+        active=False,  # Not active
+    )
+    fresh_db.save_reminder(reminder)
+
+    reminders_widget = UpcomingRemindersWidget(fresh_db)
+    qtbot.addWidget(reminders_widget)
+
+    # Set up signal spy
+    triggered_texts = []
+    reminders_widget.reminderTriggered.connect(
+        lambda text: triggered_texts.append(text)
+    )
+
+    # Trigger the check
+    reminders_widget._check_reminders()
+
+    # Should not trigger inactive reminder
+    assert len(triggered_texts) == 0
+
+
+def test_reminder_not_today_skipped(qtbot, fresh_db):
+    """Test that reminders not scheduled for today are skipped."""
+    now = QTime.currentTime()
+    hour = now.hour()
+    minute = now.minute()
+
+    # Schedule for tomorrow
+    tomorrow = date.today() + timedelta(days=1)
+
+    reminder = Reminder(
+        id=None,
+        text="Tomorrow's reminder",
+        reminder_type=ReminderType.ONCE,
+        time_str=f"{hour:02d}:{minute:02d}",
+        date_iso=tomorrow.isoformat(),
+        active=True,
+    )
+    fresh_db.save_reminder(reminder)
+
+    reminders_widget = UpcomingRemindersWidget(fresh_db)
+    qtbot.addWidget(reminders_widget)
+
+    # Set up signal spy
+    triggered_texts = []
+    reminders_widget.reminderTriggered.connect(
+        lambda text: triggered_texts.append(text)
+    )
+
+    # Trigger the check
+    reminders_widget._check_reminders()
+
+    # Should not trigger tomorrow's reminder
+    assert len(triggered_texts) == 0
+
+
+def test_reminder_context_menu_single_item(qtbot, fresh_db):
+    """Test context menu for a single reminder item."""
+    reminder = Reminder(
+        id=None,
+        text="Test reminder",
+        reminder_type=ReminderType.ONCE,
+        time_str="14:30",
+        date_iso=date.today().isoformat(),
+        active=True,
+    )
+    fresh_db.save_reminder(reminder)
+
+    reminders_widget = UpcomingRemindersWidget(fresh_db)
+    qtbot.addWidget(reminders_widget)
+    reminders_widget.show()
+
+    # Refresh to populate the list
+    reminders_widget.refresh()
+
+    # Select the first item
+    if reminders_widget.reminder_list.count() > 0:
+        reminders_widget.reminder_list.setCurrentRow(0)
+
+        # Show context menu (won't actually display in tests)
+        reminders_widget._show_reminder_context_menu(
+            reminders_widget.reminder_list.pos()
+        )
+
+
+def test_reminder_context_menu_no_selection(qtbot, fresh_db):
+    """Test context menu with no selection returns early."""
+    reminders_widget = UpcomingRemindersWidget(fresh_db)
+    qtbot.addWidget(reminders_widget)
+
+    # Clear selection
+    reminders_widget.reminder_list.clearSelection()
+
+    # Show context menu - should return early
+    reminders_widget._show_reminder_context_menu(reminders_widget.reminder_list.pos())
+
+
+def test_edit_reminder_dialog(qtbot, fresh_db):
+    """Test editing a reminder through the dialog."""
+    reminder = Reminder(
+        id=None,
+        text="Original text",
+        reminder_type=ReminderType.DAILY,
+        time_str="14:30",
+        date_iso=None,
+        active=True,
+    )
+    fresh_db.save_reminder(reminder)
+
+    widget = QWidget()
+
+    # Create edit dialog
+    reminder_obj = fresh_db.get_all_reminders()[0]
+    dlg = ReminderDialog(fresh_db, widget, reminder=reminder_obj)
+    qtbot.addWidget(dlg)
+
+    # Verify fields are populated
+    assert dlg.text_edit.text() == "Original text"
+    assert dlg.time_edit.time().toString("HH:mm") == "14:30"

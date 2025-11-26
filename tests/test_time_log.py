@@ -477,15 +477,6 @@ def test_time_report_empty(fresh_db):
 # ============================================================================
 
 
-def test_time_log_widget_creation(qtbot, fresh_db):
-    """TimeLogWidget can be created."""
-    widget = TimeLogWidget(fresh_db)
-    qtbot.addWidget(widget)
-    assert widget is not None
-    assert not widget.toggle_btn.isChecked()
-    assert not widget.body.isVisible()
-
-
 def test_time_log_widget_toggle(qtbot, fresh_db):
     """Toggle expands/collapses the widget."""
     widget = TimeLogWidget(fresh_db)
@@ -2556,3 +2547,52 @@ def test_time_report_dialog_very_large_hours(qtbot, fresh_db):
 
     # Check total label
     assert "166" in dialog.total_label.text() or "167" in dialog.total_label.text()
+
+
+def test_time_log_widget_creation(qtbot, fresh_db):
+    """TimeLogWidget can be created."""
+    widget = TimeLogWidget(fresh_db)
+    qtbot.addWidget(widget)
+    assert widget is not None
+    assert not widget.toggle_btn.isChecked()
+    assert not widget.body.isVisible()
+
+
+def test_time_log_set_current_date(qtbot, fresh_db):
+    """Test setting the current date on the time log widget."""
+    widget = TimeLogWidget(fresh_db)
+    qtbot.addWidget(widget)
+
+    today = date.today().isoformat()
+    widget.set_current_date(today)
+
+    # Verify the current date was set
+    assert widget._current_date == today
+
+
+def test_time_log_with_entry(qtbot, fresh_db):
+    """Test time log widget with a time entry."""
+    # Add a project
+    proj_id = fresh_db.add_project("Test Project")
+    # Add activity
+    act_id = fresh_db.add_activity("Test Activity")
+
+    # Add a time log entry
+    today = date.today().isoformat()
+    fresh_db.add_time_log(
+        date_iso=today,
+        project_id=proj_id,
+        activity_id=act_id,
+        minutes=150,
+        note="Test note",
+    )
+
+    widget = TimeLogWidget(fresh_db)
+    qtbot.addWidget(widget)
+    widget.show()
+
+    # Set the date to today
+    widget.set_current_date(today)
+
+    # Widget should have been created successfully
+    assert widget is not None

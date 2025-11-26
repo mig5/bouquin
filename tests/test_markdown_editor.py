@@ -1,7 +1,7 @@
 import base64
 import pytest
 
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, QMimeData, QUrl
 from PySide6.QtGui import (
     QImage,
     QColor,
@@ -2216,3 +2216,243 @@ def test_markdown_highlighter_theme_change(qtbot, app):
     # Highlighter should update
     # We can't directly test the visual change, but verify it doesn't crash
     assert highlighter is not None
+
+
+def test_auto_pair_skip_closing_bracket(editor, qtbot):
+    """Test skipping over closing brackets when auto-pairing."""
+    # Insert opening bracket
+    editor.insertPlainText("(")
+
+    # Type closing bracket - should skip over the auto-inserted one
+    event = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_ParenRight, Qt.NoModifier, ")")
+    editor.keyPressEvent(event)
+
+    # Should have only one pair of brackets
+    text = editor.toPlainText()
+    assert text.count("(") == 1
+    assert text.count(")") == 1
+
+
+def test_apply_heading(editor, qtbot):
+    """Test applying heading to text."""
+    # Insert some text
+    editor.insertPlainText("Heading Text")
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.StartOfLine)
+    editor.setTextCursor(cursor)
+
+    # Apply heading - size >= 24 creates level 1 heading
+    editor.apply_heading(24)
+
+    text = editor.toPlainText()
+    assert text.startswith("#")
+
+
+def test_handle_return_in_code_block(editor, qtbot):
+    """Test pressing return inside a code block."""
+    # Create a code block
+    editor.insertPlainText("```python\nprint('hello')")
+
+    # Place cursor at end
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    # Press return - should maintain indentation
+    event = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Return, Qt.NoModifier, "\n")
+    editor.keyPressEvent(event)
+
+    # Should have added a new line
+    text = editor.toPlainText()
+    assert text.count("\n") >= 2
+
+
+def test_handle_return_in_list_empty_item(editor, qtbot):
+    """Test pressing return in an empty list item."""
+    # Create list with empty item
+    editor.insertPlainText("- item\n- ")
+
+    # Place cursor at end of empty item
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    # Press return - should end the list
+    event = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Return, Qt.NoModifier, "\n")
+    editor.keyPressEvent(event)
+
+    text = editor.toPlainText()
+    # Should have processed the empty list marker
+    lines = text.split("\n")
+    assert len(lines) >= 2
+
+
+def test_handle_backspace_in_empty_list_item(editor, qtbot):
+    """Test pressing backspace in an empty list item."""
+    # Create list with cursor after marker
+    editor.insertPlainText("- ")
+
+    # Place cursor at end
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    # Press backspace - should remove list marker
+    event = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Backspace, Qt.NoModifier, "")
+    editor.keyPressEvent(event)
+
+    text = editor.toPlainText()
+    # List marker handling
+    assert len(text) <= 2
+
+
+def test_tab_key_handling(editor, qtbot):
+    """Test tab key handling in editor."""
+    # Create a list item
+    editor.insertPlainText("- item")
+
+    # Place cursor in the item
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    # Press tab
+    event = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Tab, Qt.NoModifier, "\t")
+    editor.keyPressEvent(event)
+
+    # Should have processed the tab
+    text = editor.toPlainText()
+    assert len(text) >= 6  # At least "- item" plus tab
+
+
+def test_drag_enter_with_urls(editor, qtbot):
+    """Test drag and drop with URLs."""
+    from PySide6.QtGui import QDragEnterEvent
+
+    # Create mime data with URLs
+    mime_data = QMimeData()
+    mime_data.setUrls([QUrl("file:///tmp/test.txt")])
+
+    # Create drag enter event
+    event = QDragEnterEvent(
+        editor.rect().center(), Qt.CopyAction, mime_data, Qt.LeftButton, Qt.NoModifier
+    )
+
+    # Handle drag enter
+    editor.dragEnterEvent(event)
+
+    # Should accept the event
+    assert event.isAccepted()
+
+
+def test_drag_enter_with_text(editor, qtbot):
+    """Test drag and drop with plain text."""
+    from PySide6.QtGui import QDragEnterEvent
+
+    # Create mime data with text
+    mime_data = QMimeData()
+    mime_data.setText("dragged text")
+
+    # Create drag enter event
+    event = QDragEnterEvent(
+        editor.rect().center(), Qt.CopyAction, mime_data, Qt.LeftButton, Qt.NoModifier
+    )
+
+    # Handle drag enter
+    editor.dragEnterEvent(event)
+
+    # Should accept text drag
+    assert event.isAccepted()
+
+
+def test_highlighter_dark_mode_code_blocks(app, qtbot, tmp_path):
+    """Test code block highlighting in dark mode."""
+    # Get theme manager and set dark mode
+    theme_manager = ThemeManager(app, ThemeConfig(theme=Theme.DARK))
+
+    # Create editor with dark theme
+    editor = MarkdownEditor(theme_manager)
+    qtbot.addWidget(editor)
+
+    # Insert code block
+    editor.setPlainText("```python\nprint('hello')\n```")
+
+    # Force rehighlight
+    editor.highlighter.rehighlight()
+
+    # Verify no crash - actual color verification is difficult in tests
+
+
+def test_highlighter_code_block_with_language(editor, qtbot):
+    """Test syntax highlighting inside fenced code blocks with language."""
+    # Insert code block with language
+    editor.setPlainText('```python\ndef hello():\n    print("world")\n```')
+
+    # Force rehighlight
+    editor.highlighter.rehighlight()
+
+    # Verify syntax highlighting was applied (lines 186-193)
+    # We can't easily verify the exact formatting, but we ensure no crash
+
+
+def test_highlighter_bold_italic_overlap_detection(editor, qtbot):
+    """Test that bold/italic formatting detects overlaps correctly."""
+    # Insert text with overlapping bold and triple-asterisk
+    editor.setPlainText("***bold and italic***")
+
+    # Force rehighlight
+    editor.highlighter.rehighlight()
+
+    # The overlap detection (lines 252, 264) should prevent issues
+
+
+def test_highlighter_italic_edge_cases(editor, qtbot):
+    """Test italic formatting edge cases."""
+    # Test edge case: avoiding stealing markers that are part of double
+    # This tests lines 267-270
+    editor.setPlainText("**not italic* text**")
+
+    # Force rehighlight
+    editor.highlighter.rehighlight()
+
+    # Test another edge case
+    editor.setPlainText("*italic but next to double**")
+    editor.highlighter.rehighlight()
+
+
+def test_highlighter_multiple_markdown_elements(editor, qtbot):
+    """Test highlighting document with multiple markdown elements."""
+    # Complex document with various elements
+    text = """# Heading 1
+## Heading 2
+
+**bold text** and *italic text*
+
+```python
+def test():
+    return True
+```
+
+- list item
+- [ ] task item
+
+[link](http://example.com)
+"""
+
+    editor.setPlainText(text)
+    editor.highlighter.rehighlight()
+
+    # Verify no crashes with complex formatting
+
+
+def test_highlighter_inline_code_vs_fence(editor, qtbot):
+    """Test that inline code and fenced blocks are distinguished."""
+    text = """Inline `code` here
+
+```
+fenced block
+```
+"""
+
+    editor.setPlainText(text)
+    editor.highlighter.rehighlight()

@@ -3,10 +3,9 @@ from datetime import datetime, timedelta, date
 
 from bouquin import strings
 
-from PySide6.QtCore import Qt, QPoint
-from PySide6.QtWidgets import QLabel
+from PySide6.QtCore import Qt, QPoint, QDate
+from PySide6.QtWidgets import QLabel, QWidget
 from PySide6.QtTest import QTest
-from PySide6.QtCore import QDate
 
 from bouquin.statistics_dialog import DateHeatmap, StatisticsDialog
 
@@ -515,3 +514,123 @@ def test_statistics_dialog_metric_changes(qtbot, tmp_db_cfg, fresh_db):
     for i in range(dialog.metric_combo.count()):
         dialog.metric_combo.setCurrentIndex(i)
         qtbot.wait(50)
+
+
+def test_heatmap_date_beyond_end(qtbot, fresh_db):
+    """Test clicking on a date beyond the end date in heatmap."""
+    # Create entries spanning a range
+    today = date.today()
+    start = today - timedelta(days=30)
+
+    data = {}
+    for i in range(20):
+        d = start + timedelta(days=i)
+        fresh_db.save_new_version(d.isoformat(), f"Entry {i}", f"note {i}")
+        data[d] = 1
+
+    w = QWidget()
+    qtbot.addWidget(w)
+
+    heatmap = DateHeatmap()
+    qtbot.addWidget(heatmap)
+    heatmap.show()
+
+    # Set data
+    heatmap.set_data(data)
+
+    # Try to click beyond the end date - should return early
+    # Calculate a position that would be beyond the end
+    if heatmap._start and heatmap._end:
+        cell_span = heatmap._cell + heatmap._gap
+        weeks = ((heatmap._end - heatmap._start).days + 6) // 7
+
+        # Click beyond the last week
+        x = heatmap._margin_left + (weeks + 1) * cell_span + 5
+        y = heatmap._margin_top + 3 * cell_span + 5
+
+        QTest.mouseClick(heatmap, Qt.LeftButton, Qt.NoModifier, QPoint(int(x), int(y)))
+
+
+def test_heatmap_click_outside_grid(qtbot, fresh_db):
+    """Test clicking outside the heatmap grid area."""
+    today = date.today()
+    start = today - timedelta(days=7)
+
+    data = {}
+    for i in range(7):
+        d = start + timedelta(days=i)
+        fresh_db.save_new_version(d.isoformat(), f"Entry {i}", f"note {i}")
+        data[d] = 1
+
+    w = QWidget()
+    qtbot.addWidget(w)
+
+    heatmap = DateHeatmap()
+    qtbot.addWidget(heatmap)
+    heatmap.show()
+    heatmap.set_data(data)
+
+    # Click in the margin (outside grid)
+    x = heatmap._margin_left - 10  # Before the grid
+    y = heatmap._margin_top - 10  # Above the grid
+
+    QTest.mouseClick(heatmap, Qt.LeftButton, Qt.NoModifier, QPoint(int(x), int(y)))
+
+    # Should not crash, just return early
+
+
+def test_heatmap_click_invalid_row(qtbot, fresh_db):
+    """Test clicking on an invalid row (>= 7)."""
+    today = date.today()
+    start = today - timedelta(days=7)
+
+    data = {}
+    for i in range(7):
+        d = start + timedelta(days=i)
+        fresh_db.save_new_version(d.isoformat(), f"Entry {i}", f"note {i}")
+        data[d] = 1
+
+    w = QWidget()
+    qtbot.addWidget(w)
+
+    heatmap = DateHeatmap()
+    qtbot.addWidget(heatmap)
+    heatmap.show()
+    heatmap.set_data(data)
+
+    # Click below row 6 (day of week > Sunday)
+    cell_span = heatmap._cell + heatmap._gap
+    x = heatmap._margin_left + 5
+    y = heatmap._margin_top + 7 * cell_span + 5  # Row 7, which is invalid
+
+    QTest.mouseClick(heatmap, Qt.LeftButton, Qt.NoModifier, QPoint(int(x), int(y)))
+
+    # Should return early, not crash
+
+
+def test_heatmap_month_label_continuation(qtbot, fresh_db):
+    """Test that month labels don't repeat when continuing in same month."""
+    # Create a date range that spans multiple weeks within the same month
+    today = date.today()
+    # Use a date that's guaranteed to be mid-month
+    start = date(today.year, today.month, 1)
+
+    data = {}
+    for i in range(21):
+        d = start + timedelta(days=i)
+        fresh_db.save_new_version(d.isoformat(), f"Entry {i}", f"note {i}")
+        data[d] = 1
+
+    w = QWidget()
+    qtbot.addWidget(w)
+
+    heatmap = DateHeatmap()
+    qtbot.addWidget(heatmap)
+    heatmap.show()
+    heatmap.set_data(data)
+
+    # Force a repaint to execute paintEvent
+    heatmap.repaint()
+
+    # The month continuation logic (line 175) should prevent duplicate labels
+    # We can't easily test the visual output, but we ensure no crash

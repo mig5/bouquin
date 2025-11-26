@@ -536,3 +536,69 @@ def test_db_gather_stats_exception_in_dates_with_content(fresh_db, monkeypatch):
 
     # Should default to 0 when exception occurs
     assert pages_with_content == 0
+
+
+def test_delete_version(fresh_db):
+    """Test deleting a specific version by version_id."""
+    d = date.today().isoformat()
+
+    # Create multiple versions
+    vid1, _ = fresh_db.save_new_version(d, "version 1", "note1")
+    vid2, _ = fresh_db.save_new_version(d, "version 2", "note2")
+    vid3, _ = fresh_db.save_new_version(d, "version 3", "note3")
+
+    # Verify all versions exist
+    versions = fresh_db.list_versions(d)
+    assert len(versions) == 3
+
+    # Delete the second version
+    fresh_db.delete_version(version_id=vid2)
+
+    # Verify it's deleted
+    versions_after = fresh_db.list_versions(d)
+    assert len(versions_after) == 2
+
+    # Make sure the deleted version is not in the list
+    version_ids = [v["id"] for v in versions_after]
+    assert vid2 not in version_ids
+    assert vid1 in version_ids
+    assert vid3 in version_ids
+
+
+def test_update_reminder_active(fresh_db):
+    """Test updating the active status of a reminder."""
+    from bouquin.reminders import Reminder, ReminderType
+
+    # Create a reminder object
+    reminder = Reminder(
+        id=None,
+        text="Test reminder",
+        reminder_type=ReminderType.ONCE,
+        time_str="14:30",
+        date_iso=date.today().isoformat(),
+        active=True,
+    )
+
+    # Save it
+    reminder_id = fresh_db.save_reminder(reminder)
+
+    # Verify it's active
+    reminders = fresh_db.get_all_reminders()
+    active_reminder = [r for r in reminders if r.id == reminder_id][0]
+    assert active_reminder.active is True
+
+    # Deactivate it
+    fresh_db.update_reminder_active(reminder_id, False)
+
+    # Verify it's inactive
+    reminders = fresh_db.get_all_reminders()
+    inactive_reminder = [r for r in reminders if r.id == reminder_id][0]
+    assert inactive_reminder.active is False
+
+    # Reactivate it
+    fresh_db.update_reminder_active(reminder_id, True)
+
+    # Verify it's active again
+    reminders = fresh_db.get_all_reminders()
+    reactivated_reminder = [r for r in reminders if r.id == reminder_id][0]
+    assert reactivated_reminder.active is True

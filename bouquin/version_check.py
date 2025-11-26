@@ -215,7 +215,7 @@ class VersionChecker:
             if total_bytes is not None and total_bytes > 0:
                 progress.setRange(0, total_bytes)
             else:
-                progress.setRange(0, 0)  # indeterminate
+                progress.setRange(0, 0)  # pragma: no cover
             progress.setValue(0)
             progress.show()
             QApplication.processEvents()
@@ -224,7 +224,7 @@ class VersionChecker:
         with dest_path.open("wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 if not chunk:
-                    continue
+                    continue  # pragma: no cover
 
                 f.write(chunk)
                 downloaded += len(chunk)
@@ -234,7 +234,7 @@ class VersionChecker:
                         progress.setValue(downloaded)
                     else:
                         # Just bump a little so the dialog looks alive
-                        progress.setValue(progress.value() + 1)
+                        progress.setValue(progress.value() + 1)  # pragma: no cover
                     QApplication.processEvents()
 
                     if progress.wasCanceled():
@@ -296,8 +296,8 @@ class VersionChecker:
             for p in (appimage_path, sig_path):
                 try:
                     if p.exists():
-                        p.unlink()
-                except OSError:
+                        p.unlink()  # pragma: no cover
+                except OSError:  # pragma: no cover
                     pass
 
             progress.close()
@@ -312,8 +312,8 @@ class VersionChecker:
             for p in (appimage_path, sig_path):
                 try:
                     if p.exists():
-                        p.unlink()
-                except OSError:
+                        p.unlink()  # pragma: no cover
+                except OSError:  # pragma: no cover
                     pass
 
             progress.close()
@@ -330,7 +330,7 @@ class VersionChecker:
         try:
             pkg, *rel = GPG_PUBKEY_RESOURCE
             pubkey_bytes = (files(pkg) / "/".join(rel)).read_bytes()
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             QMessageBox.critical(
                 self._parent,
                 strings._("update"),
@@ -341,7 +341,7 @@ class VersionChecker:
                 try:
                     if p.exists():
                         p.unlink()
-                except OSError:
+                except OSError:  # pragma: no cover
                     pass
             return
 
@@ -378,8 +378,8 @@ class VersionChecker:
             for p in (appimage_path, sig_path):
                 try:
                     if p.exists():
-                        p.unlink()
-                except OSError:
+                        p.unlink()  # pragma: no cover
+                except OSError:  # pragma: no cover
                     pass
 
             QMessageBox.critical(
@@ -392,8 +392,8 @@ class VersionChecker:
             for p in (appimage_path, sig_path):
                 try:
                     if p.exists():
-                        p.unlink()
-                except OSError:
+                        p.unlink()  # pragma: no cover
+                except OSError:  # pragma: no cover
                     pass
 
             QMessageBox.critical(

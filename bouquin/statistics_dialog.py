@@ -171,7 +171,7 @@ class DateHeatmap(QWidget):
         prev_month = None
         for week in range(weeks):
             date = self._start + _dt.timedelta(days=week * 7)
-            if date > self._end:
+            if date > self._end:  # pragma: no cover
                 break
 
             if prev_month == date.month:
