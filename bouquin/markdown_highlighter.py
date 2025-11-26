@@ -108,6 +108,13 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # Bullets
         self.bullet_format = QTextCharFormat()
 
+        # Use Symbols font for checkbox and bullet glyphs if present
+        if self._editor is not None and hasattr(self._editor, "symbols_font_family"):
+            base_size = self._editor.qfont.pointSize()
+            symbols_font = QFont(self._editor.symbols_font_family, base_size)
+            self.checkbox_format.setFont(symbols_font)
+            self.bullet_format.setFont(symbols_font)
+
         # Markdown syntax (the markers themselves) - make invisible
         self.syntax_format = QTextCharFormat()
         # Make the markers invisible by setting font size to 0.1 points

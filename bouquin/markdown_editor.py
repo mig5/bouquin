@@ -42,14 +42,29 @@ class MarkdownEditor(QTextEdit):
         # We accept plain text, not rich text (markdown is plain text)
         self.setAcceptRichText(False)
 
-        # Normal text
+        # Load in our preferred fonts
         base_dir = Path(__file__).resolve().parent
-        font_path = base_dir / "fonts" / "NotoSansSymbols2-Regular.ttf"
-        font_id = QFontDatabase.addApplicationFont(str(font_path))
-        families = QFontDatabase.applicationFontFamilies(font_id)
-        font_family = families[0]
-        self.qfont = QFont(font_family, 11)
-        self.setFont(self.qfont)
+
+        # Load regular text font (primary)
+        regular_font_path = base_dir / "fonts" / "NotoSans-Regular.ttf"
+        regular_font_id = QFontDatabase.addApplicationFont(str(regular_font_path))
+        if regular_font_id == -1:
+            print("Failed to load NotoSans-Regular.ttf")
+
+        # Load Symbols font (fallback)
+        symbols_font_path = base_dir / "fonts" / "NotoSansSymbols2-Regular.ttf"
+        symbols_font_id = QFontDatabase.addApplicationFont(str(symbols_font_path))
+        symbols_families = QFontDatabase.applicationFontFamilies(symbols_font_id)
+        self.symbols_font_family = symbols_families[0]
+        if symbols_font_id == -1:
+            print("Failed to load NotoSansSymbols2-Regular.ttf")
+
+        # Use the regular Noto Sans family as the editor font
+        regular_families = QFontDatabase.applicationFontFamilies(regular_font_id)
+        if regular_families:
+            self.text_font_family = regular_families[0]
+            self.qfont = QFont(self.text_font_family, 11)
+            self.setFont(self.qfont)
 
         self._apply_line_spacing()  # 1.25× initial spacing
 
