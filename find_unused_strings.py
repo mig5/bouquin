@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import ast
 import json
 from pathlib import Path
@@ -9,10 +10,8 @@ from typing import Dict, Set
 BASE_DIR = Path(__file__).resolve().parent / "bouquin"
 LOCALES_DIR = BASE_DIR / "locales"
 
-DEFAULT_LOCALE = "en"
 
-
-def load_json_keys(locale: str = DEFAULT_LOCALE) -> Set[str]:
+def load_json_keys(locale: str) -> Set[str]:
     """Load all keys from the given locale JSON file."""
     path = LOCALES_DIR / f"{locale}.json"
     with path.open(encoding="utf-8") as f:
@@ -224,7 +223,18 @@ def collect_used_keys() -> Set[str]:
 
 
 def main() -> None:
-    json_keys = load_json_keys()
+    parser = argparse.ArgumentParser(
+        description="Find missing or unused strings for a given locale"
+    )
+    parser.add_argument(
+        "--locale",
+        type=str,
+        default="en",
+        help="Locale key e.g en, fr, it",
+    )
+    args = parser.parse_args()
+
+    json_keys = load_json_keys(args.locale)
     used_keys = collect_used_keys()
 
     unused_keys = sorted(json_keys - used_keys)
