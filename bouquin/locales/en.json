@@ -50,7 +50,6 @@
     "backup_failed": "Backup failed",
     "quit": "Quit",
     "cancel": "Cancel",
-    "ok": "OK",
     "save": "Save",
     "help": "Help",
     "saved": "Saved",
@@ -266,8 +265,6 @@
     "cut": "Cut",
     "copy": "Copy",
     "paste": "Paste",
-    "edit_table": "Edit table",
-    "toolbar_insert_table": "Insert table",
     "start": "Start",
     "pause": "Pause",
     "resume": "Resume",
@@ -292,10 +289,5 @@
     "friday": "Friday",
     "saturday": "Saturday",
     "sunday": "Sunday",
-    "day": "Day",
-    "add_row": "Add row",
-    "add_column": "Add column",
-    "delete_row": "Delete row",
-    "delete_column": "Delete column",
-    "column": "Column"
+    "day": "Day"
 }

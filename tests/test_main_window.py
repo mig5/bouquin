@@ -2244,44 +2244,6 @@ def test_close_current_tab(qtbot, app, tmp_db_cfg, fresh_db):
     assert window.tab_widget.count() == initial_count - 1
 
 
-def test_table_insertion(qtbot, app, tmp_db_cfg, fresh_db):
-    """Test inserting a table template."""
-    s = get_settings()
-    s.setValue("db/default_db", str(tmp_db_cfg.path))
-    s.setValue("db/key", tmp_db_cfg.key)
-    s.setValue("ui/idle_minutes", 0)
-    s.setValue("ui/theme", "light")
-    s.setValue("ui/move_todos", True)
-    s.setValue("ui/tags", True)
-    s.setValue("ui/time_log", True)
-    s.setValue("ui/reminders", True)
-    s.setValue("ui/locale", "en")
-    s.setValue("ui/font_size", 11)
-
-    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    window = MainWindow(themes=themes)
-    qtbot.addWidget(window)
-    window.show()
-
-    # Open a date
-    today = date.today().isoformat()
-    window._open_date_in_tab(QDate.fromString(today, "yyyy-MM-dd"))
-
-    # Ensure we have an editor
-    editor = window.editor
-    assert editor is not None
-
-    # Insert table
-    window._on_table_requested()
-
-    # Verify table was inserted
-    text = editor.toPlainText()
-    assert "Column 1" in text
-    assert "Column 2" in text
-    assert "Column 3" in text
-    assert "---" in text
-
-
 def test_parse_today_alarms(qtbot, app, tmp_db_cfg, fresh_db):
     """Test parsing inline alarms from markdown (⏰ HH:MM format)."""
     from PySide6.QtCore import QTime

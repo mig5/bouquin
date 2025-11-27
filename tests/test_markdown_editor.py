@@ -1802,26 +1802,6 @@ def test_render_images_with_corrupted_data(qtbot, app):
     assert len(text) >= 0
 
 
-def test_editor_with_tables(qtbot, app):
-    """Test editor with markdown tables"""
-    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    editor = MarkdownEditor(theme_manager=themes)
-    qtbot.addWidget(editor)
-    editor.show()
-
-    table_markdown = """
-| Header 1 | Header 2 |
-|----------|----------|
-| Cell 1   | Cell 2   |
-| Cell 3   | Cell 4   |
-"""
-    editor.from_markdown(table_markdown)
-    qtbot.wait(50)
-
-    result = editor.to_markdown()
-    assert "Header 1" in result or "|" in result
-
-
 def test_editor_with_code_blocks(qtbot, app):
     """Test editor with code blocks"""
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))

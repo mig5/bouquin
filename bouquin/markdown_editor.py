@@ -1250,23 +1250,6 @@ class MarkdownEditor(QTextEdit):
         menu = QMenu(self)
         cursor = self.cursorForPosition(event.pos())
 
-        # Check if we're in a table
-        text = self.toPlainText()
-        cursor_pos = cursor.position()
-
-        from .table_editor import find_table_at_cursor
-
-        table_info = find_table_at_cursor(text, cursor_pos)
-
-        if table_info:
-            # Add table editing action
-            edit_table_action = QAction(strings._("edit_table"), self)
-            edit_table_action.triggered.connect(
-                lambda: self._edit_table_at_cursor(cursor_pos)
-            )
-            menu.addAction(edit_table_action)
-            menu.addSeparator()
-
         # Check if we're in a code block
         block = cursor.block()
         if self._is_inside_code_block(block):
@@ -1301,30 +1284,6 @@ class MarkdownEditor(QTextEdit):
         menu.addAction(strings._("paste"), self.paste)
 
         menu.exec(event.globalPos())
-
-    def _edit_table_at_cursor(self, cursor_pos: int):
-        """Open table editor dialog for the table at cursor position."""
-        from .table_editor import find_table_at_cursor, TableEditorDialog
-        from PySide6.QtWidgets import QDialog
-
-        text = self.toPlainText()
-        table_info = find_table_at_cursor(text, cursor_pos)
-
-        if not table_info:
-            return
-
-        start_pos, end_pos, table_text = table_info
-
-        # Open table editor
-        dlg = TableEditorDialog(table_text, self)
-        if dlg.exec() == QDialog.Accepted:
-            # Replace the table with edited version
-            new_table = dlg.get_markdown_table()
-
-            cursor = QTextCursor(self.document())
-            cursor.setPosition(start_pos)
-            cursor.setPosition(end_pos, QTextCursor.KeepAnchor)
-            cursor.insertText(new_table)
 
     def _set_code_block_language(self, block, language: str):
         """Set the language for a code block and store metadata."""

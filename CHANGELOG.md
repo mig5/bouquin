@@ -4,6 +4,7 @@
  * Adjust History icon and reorder toolbar items
  * Try to address checkbox/bullet size issues (again)
  * Fix HTML export of markdown (with newlines, tables and other styling preserved)
+ * Remove table tool
 
 # 0.5.1
 

@@ -20,7 +20,6 @@ class ToolBar(QToolBar):
     insertImageRequested = Signal()
     alarmRequested = Signal()
     timerRequested = Signal()
-    tableRequested = Signal()
     fontSizeLargerRequested = Signal()
     fontSizeSmallerRequested = Signal()
 
@@ -121,11 +120,6 @@ class ToolBar(QToolBar):
         self.actTimer.setToolTip(strings._("toolbar_pomodoro_timer"))
         self.actTimer.triggered.connect(self.timerRequested)
 
-        # Table
-        self.actTable = QAction("⊞", self)
-        self.actTable.setToolTip(strings._("toolbar_insert_table"))
-        self.actTable.triggered.connect(self.tableRequested)
-
         # Set exclusive buttons in QActionGroups
         self.grpHeadings = QActionGroup(self)
         self.grpHeadings.setExclusive(True)
@@ -162,7 +156,6 @@ class ToolBar(QToolBar):
                 self.actBullets,
                 self.actNumbers,
                 self.actCheckboxes,
-                self.actTable,
                 self.actInsertImg,
                 self.actAlarm,
                 self.actTimer,
@@ -192,7 +185,6 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actCheckboxes, "☐")
         self._style_letter_button(self.actAlarm, "⏰")
         self._style_letter_button(self.actTimer, "⌛")
-        self._style_letter_button(self.actTable, "⊞")
 
         # History
         self._style_letter_button(self.actHistory, "🔁")

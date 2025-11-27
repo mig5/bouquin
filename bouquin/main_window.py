@@ -1103,7 +1103,6 @@ class MainWindow(QMainWindow):
         self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
         self._tb_alarm = self._on_alarm_requested
         self._tb_timer = self._on_timer_requested
-        self._tb_table = self._on_table_requested
         self._tb_font_larger = self._on_font_larger_requested
         self._tb_font_smaller = self._on_font_smaller_requested
 
@@ -1117,7 +1116,6 @@ class MainWindow(QMainWindow):
         tb.checkboxesRequested.connect(self._tb_checkboxes)
         tb.alarmRequested.connect(self._tb_alarm)
         tb.timerRequested.connect(self._tb_timer)
-        tb.tableRequested.connect(self._tb_table)
         tb.insertImageRequested.connect(self._on_insert_image)
         tb.historyRequested.connect(self._open_history)
         tb.fontSizeLargerRequested.connect(self._tb_font_larger)
@@ -1332,36 +1330,6 @@ class MainWindow(QMainWindow):
             )
             timer.start(msecs)
             self._reminder_timers.append(timer)
-
-    # ----------- Table handler ------------#
-    def _on_table_requested(self):
-        """Insert a basic markdown table template."""
-        editor = getattr(self, "editor", None)
-        if editor is None:
-            return
-
-        # Basic 3x3 table template
-        table_template = """| Column 1 | Column 2 | Column 3 |
-| --- | --- | --- |
-| Cell 1 | Cell 2 | Cell 3 |
-| Cell 4 | Cell 5 | Cell 6 |
-"""
-
-        cursor = editor.textCursor()
-        cursor.insertText(table_template)
-
-        # Move cursor to first cell for easy editing
-        # Find the start of "Column 1" text
-        cursor.movePosition(
-            QTextCursor.Left, QTextCursor.MoveAnchor, len(table_template)
-        )
-        cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, 2)  # After "| "
-        cursor.movePosition(
-            QTextCursor.Right, QTextCursor.KeepAnchor, 8
-        )  # Select "Column 1"
-        editor.setTextCursor(cursor)
-
-        editor.setFocus()
 
     # ----------- History handler ------------#
     def _open_history(self):
