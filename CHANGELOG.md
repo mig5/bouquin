@@ -1,3 +1,9 @@
+# 0.5.3
+
+ * Prevent triple-click select from selecting the list item (e.g checkbox, bullet)
+ * Use DejaVu Sans font for regular text instead of heavier Noto - might help with the freeze issues.
+ * Change History icon (again)
+
 # 0.5.2
 
  * Update icon again to remove background
