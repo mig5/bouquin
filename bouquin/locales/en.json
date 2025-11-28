@@ -290,5 +290,6 @@
     "saturday": "Saturday",
     "sunday": "Sunday",
     "day": "Day",
-    "edit_code_block": "Edit code block"
+    "edit_code_block": "Edit code block",
+    "delete_code_block": "Delete code block"
 }

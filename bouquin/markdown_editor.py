@@ -372,10 +372,15 @@ class MarkdownEditor(QTextEdit):
 
         code_text = self._get_code_block_text(open_block, close_block)
 
-        dlg = CodeBlockEditorDialog(code_text, lang, parent=self)
+        dlg = CodeBlockEditorDialog(code_text, lang, parent=self, allow_delete=True)
         result = dlg.exec()
         if result != QDialog.DialogCode.Accepted:
             # Dialog was shown but user cancelled; event is "handled".
+            return True
+
+        # If the user requested deletion, remove the whole block
+        if hasattr(dlg, "was_deleted") and dlg.was_deleted():
+            self._delete_code_block(open_block)
             return True
 
         new_code = dlg.code()
@@ -393,6 +398,58 @@ class MarkdownEditor(QTextEdit):
             self._code_metadata.set_language(open_block.blockNumber(), new_lang)
             if hasattr(self, "highlighter"):
                 self.highlighter.rehighlight()
+
+        return True
+
+    def _delete_code_block(self, block: QTextBlock) -> bool:
+        """Delete the fenced code block containing `block`.
+
+        Returns True if a block was deleted, False otherwise.
+        """
+        bounds = self._find_code_block_bounds(block)
+        if not bounds:
+            return False
+
+        open_block, close_block = bounds
+        doc = self.document()
+        if doc is None:
+            return False
+
+        # Remove from the opening fence down to just before the block after
+        # the closing fence (so we also remove the trailing blank line).
+        start_pos = open_block.position()
+        after_block = close_block.next()
+        if after_block.isValid():
+            end_pos = after_block.position()
+        else:
+            end_pos = close_block.position() + len(close_block.text())
+
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+        cursor.setPosition(start_pos)
+        cursor.setPosition(end_pos, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.endEditBlock()
+
+        # Clear language metadata for this block, if supported
+        if hasattr(self, "_code_metadata"):
+            clear = getattr(self._code_metadata, "clear_language", None)
+            if clear is not None:
+                clear(open_block.blockNumber())
+
+        # Refresh visuals (spacing + backgrounds + syntax)
+        if hasattr(self, "_apply_code_block_spacing"):
+            self._apply_code_block_spacing()
+        if hasattr(self, "_update_code_block_row_backgrounds"):
+            self._update_code_block_row_backgrounds()
+        if hasattr(self, "highlighter"):
+            self.highlighter.rehighlight()
+
+        # Move caret to where the block used to be
+        cursor = self.textCursor()
+        cursor.setPosition(start_pos)
+        self.setTextCursor(cursor)
+        self.setFocus()
 
         return True
 
@@ -1618,6 +1675,10 @@ class MarkdownEditor(QTextEdit):
             edit_action = QAction(strings._("edit_code_block"), self)
             edit_action.triggered.connect(lambda: self._edit_code_block(block))
             menu.addAction(edit_action)
+
+            delete_action = QAction(strings._("delete_code_block"), self)
+            delete_action.triggered.connect(lambda: self._delete_code_block(block))
+            menu.addAction(delete_action)
 
             menu.addSeparator()
 

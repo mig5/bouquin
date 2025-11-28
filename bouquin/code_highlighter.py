@@ -365,3 +365,7 @@ class CodeBlockMetadata:
                         self._block_languages[int(block_num)] = lang
                     except ValueError:
                         pass
+
+    def clear_language(self, block_number: int):
+        """Remove any stored language for a given block, if present."""
+        self._block_languages.pop(block_number, None)
