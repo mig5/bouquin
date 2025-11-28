@@ -9,6 +9,7 @@ from PySide6.QtGui import (
     QFontDatabase,
     QFontMetrics,
     QImage,
+    QMouseEvent,
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
@@ -87,6 +88,9 @@ class MarkdownEditor(QTextEdit):
 
         # Track if we're currently updating text programmatically
         self._updating = False
+
+        # Help avoid double-click selecting of checkbox
+        self._suppress_next_checkbox_double_click = False
 
         # Guard to avoid recursive selection tweaks
         self._adjusting_selection = False
@@ -919,6 +923,9 @@ class MarkdownEditor(QTextEdit):
 
     def mousePressEvent(self, event):
         """Toggle a checkbox only when the click lands on its icon."""
+        # default: don't suppress any upcoming double-click
+        self._suppress_next_checkbox_double_click = False
+
         if event.button() == Qt.LeftButton:
             pt = event.pos()
 
@@ -984,6 +991,9 @@ class MarkdownEditor(QTextEdit):
                         )
                         edit.insertText(f"{new_icon} ")
                         edit.endEditBlock()
+
+                        # if a double-click comes next, ignore it
+                        self._suppress_next_checkbox_double_click = True
                         return  # handled
 
                     # advance past this token
@@ -993,6 +1003,17 @@ class MarkdownEditor(QTextEdit):
 
         # Default handling for anything else
         super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        # If the previous press toggled a checkbox, swallow this double-click
+        # so the base class does NOT turn it into a selection.
+        if getattr(self, "_suppress_next_checkbox_double_click", False):
+            self._suppress_next_checkbox_double_click = False
+            event.accept()
+            return
+
+        # Otherwise, let normal double-click behaviour happen
+        super().mouseDoubleClickEvent(event)
 
     # ------------------------ Toolbar action handlers ------------------------
 

@@ -4,6 +4,7 @@
  * Use DejaVu Sans font for regular text instead of heavier Noto - might help with the freeze issues.
  * Change History icon (again)
  * Make it easier to check on or off the checkbox by adding some buffer (instead of having to precisely click inside it)
+ * Prevent double-click of checkbox leading to selecting/highlighting it
 
 # 0.5.2
 
