@@ -5,6 +5,7 @@
  * Change History icon (again)
  * Make it easier to check on or off the checkbox by adding some buffer (instead of having to precisely click inside it)
  * Prevent double-click of checkbox leading to selecting/highlighting it
+ * Slightly fade the text of a checkbox line if the checkbox is checked.
 
 # 0.5.2
 

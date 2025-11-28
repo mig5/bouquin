@@ -78,17 +78,18 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.theme_manager.current() == Theme.DARK
             or self.theme_manager._is_system_dark
         ):
-            # In dark mode, use a darker panel-like background
-            bg = pal.color(QPalette.AlternateBase)
-            fg = pal.color(QPalette.Text)
+            # In dark mode, use a darker panel-like background for codeblocks
+            code_bg = pal.color(QPalette.AlternateBase)
+            code_fg = pal.color(QPalette.Text)
         else:
-            # Light mode: keep the existing light gray
-            bg = QColor(245, 245, 245)
-            fg = QColor(  # pragma: no cover
+            # Light mode: keep the existing light gray for code blocks
+            code_bg = QColor(245, 245, 245)
+            code_fg = QColor(  # pragma: no cover
                 0, 0, 0
             )  # avoiding using QPalette.Text as it can be white on macOS
-        self.code_block_format.setBackground(bg)
-        self.code_block_format.setForeground(fg)
+
+        self.code_block_format.setBackground(code_bg)
+        self.code_block_format.setForeground(code_fg)
 
         # Headings
         self.h1_format = QTextCharFormat()
@@ -109,6 +110,23 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.link_format.setForeground(link_color)
         self.link_format.setFontUnderline(True)
         self.link_format.setAnchor(True)
+
+        # ---- Completed-task text (for checked checkboxes) ----
+        # Use the app palette so this works in both light and dark themes.
+        text_fg = pal.color(QPalette.Text)
+        text_bg = pal.color(QPalette.Base)
+
+        # Blend the text colour towards the background to "fade" it.
+        # t closer to 1.0 = closer to background / more faded.
+        t = 0.55
+        faded = QColor(
+            int(text_fg.red() * (1.0 - t) + text_bg.red() * t),
+            int(text_fg.green() * (1.0 - t) + text_bg.green() * t),
+            int(text_fg.blue() * (1.0 - t) + text_bg.blue() * t),
+        )
+
+        self.completed_task_format = QTextCharFormat()
+        self.completed_task_format.setForeground(faded)
 
         # Checkboxes
         self.checkbox_format = QTextCharFormat()
@@ -140,8 +158,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # Markdown syntax (the markers themselves) - make invisible
         self.syntax_format = QTextCharFormat()
         # Use the editor background color so they blend in
-        bg = pal.color(QPalette.Base)
-        hidden = QColor(bg)
+        hidden = QColor(text_bg)
         hidden.setAlpha(0)
         self.syntax_format.setForeground(hidden)
         # Make the markers invisible by setting font size to 0.1 points
@@ -342,3 +359,13 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # (If you add Unicode bullets later…)
         for m in re.finditer(r"•", text):
             self._overlay_range(m.start(), 1, self.bullet_format)
+
+        # Completed checkbox lines: fade the text after the checkbox.
+        m = re.match(r"^(\s*☑\s+)(.+)$", text)
+        if m and hasattr(self, "completed_task_format"):
+            prefix = m.group(1)
+            content = m.group(2)
+            start = len(prefix)
+            length = len(content)
+            if length > 0:
+                self._overlay_range(start, length, self.completed_task_format)
