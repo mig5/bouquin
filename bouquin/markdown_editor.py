@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import re
 from pathlib import Path
+from typing import Optional, Tuple
 
 from PySide6.QtGui import (
     QFont,
@@ -20,10 +21,11 @@ from PySide6.QtGui import (
     QDesktopServices,
 )
 from PySide6.QtCore import Qt, QRect, QTimer, QUrl
-from PySide6.QtWidgets import QTextEdit
+from PySide6.QtWidgets import QDialog, QTextEdit
 
 from .theme import ThemeManager
 from .markdown_highlighter import MarkdownHighlighter
+from .code_block_editor_dialog import CodeBlockEditorDialog
 from . import strings
 
 
@@ -246,6 +248,153 @@ class MarkdownEditor(QTextEdit):
             if s.format.property(QTextFormat.UserProperty) != "codeblock_bg"
         ]
         self.setExtraSelections(others + sels)
+
+    def _find_code_block_bounds(
+        self, block: QTextBlock
+    ) -> Optional[Tuple[QTextBlock, QTextBlock]]:
+        """
+        Given a block that is either inside a fenced code block or on a fence,
+        return (opening_fence_block, closing_fence_block).
+        Returns None if we can't find a proper pair.
+        """
+        if not block.isValid():
+            return None
+
+        def is_fence(b: QTextBlock) -> bool:
+            return b.isValid() and b.text().strip().startswith("```")
+
+        # If we're on a fence line, decide if it's opening or closing
+        if is_fence(block):
+            # If we're "inside" just before this fence, this one closes.
+            if self._is_inside_code_block(block.previous()):
+                close_block = block
+                open_block = block.previous()
+                while open_block.isValid() and not is_fence(open_block):
+                    open_block = open_block.previous()
+                if not is_fence(open_block):
+                    return None
+                return open_block, close_block
+            else:
+                # Treat as opening fence; search downward for the closing one.
+                open_block = block
+                close_block = open_block.next()
+                while close_block.isValid() and not is_fence(close_block):
+                    close_block = close_block.next()
+                if not is_fence(close_block):
+                    return None
+                return open_block, close_block
+
+        # Normal interior line: search up for opening fence, down for closing.
+        open_block = block.previous()
+        while open_block.isValid() and not is_fence(open_block):
+            open_block = open_block.previous()
+        if not is_fence(open_block):
+            return None
+
+        close_block = open_block.next()
+        while close_block.isValid() and not is_fence(close_block):
+            close_block = close_block.next()
+        if not is_fence(close_block):
+            return None
+
+        return open_block, close_block
+
+    def _get_code_block_text(
+        self, open_block: QTextBlock, close_block: QTextBlock
+    ) -> str:
+        """Return the inner text (between fences) as a normal '\\n'-joined string."""
+        lines = []
+        b = open_block.next()
+        while b.isValid() and b != close_block:
+            lines.append(b.text())
+            b = b.next()
+        return "\n".join(lines)
+
+    def _replace_code_block_text(
+        self, open_block: QTextBlock, close_block: QTextBlock, new_text: str
+    ) -> None:
+        """
+        Replace everything between the two fences with `new_text`.
+        Fences themselves are left untouched.
+        """
+        doc = self.document()
+        if doc is None:
+            return
+
+        cursor = QTextCursor(doc)
+
+        # Start just after the opening fence's newline
+        start_pos = open_block.position() + len(open_block.text())
+        # End at the start of the closing fence
+        end_pos = close_block.position()
+
+        cursor.setPosition(start_pos)
+        cursor.setPosition(end_pos, QTextCursor.MoveMode.KeepAnchor)
+
+        cursor.beginEditBlock()
+        # Normalise trailing newline(s)
+        new_text = new_text.rstrip("\n")
+        if new_text:
+            cursor.removeSelectedText()
+            cursor.insertText("\n" + new_text + "\n")
+        else:
+            # Empty block – keep one blank line inside the fences
+            cursor.removeSelectedText()
+            cursor.insertText("\n\n")
+        cursor.endEditBlock()
+
+        # Re-apply spacing and backgrounds
+        if hasattr(self, "_apply_code_block_spacing"):
+            self._apply_code_block_spacing()
+        if hasattr(self, "_update_code_block_row_backgrounds"):
+            self._update_code_block_row_backgrounds()
+
+        # Trigger rehighlight
+        if hasattr(self, "highlighter"):
+            self.highlighter.rehighlight()
+
+    def _edit_code_block(self, block: QTextBlock) -> bool:
+        """Open a popup editor for the code block containing `block`.
+
+        Returns True if a dialog was shown (regardless of OK/Cancel),
+        False if no well-formed fenced block was found.
+        """
+        bounds = self._find_code_block_bounds(block)
+        if not bounds:
+            return False
+
+        open_block, close_block = bounds
+
+        # Current language from metadata (if any)
+        lang = None
+        if hasattr(self, "_code_metadata"):
+            lang = self._code_metadata.get_language(open_block.blockNumber())
+
+        code_text = self._get_code_block_text(open_block, close_block)
+
+        dlg = CodeBlockEditorDialog(code_text, lang, parent=self)
+        result = dlg.exec()
+        if result != QDialog.DialogCode.Accepted:
+            # Dialog was shown but user cancelled; event is "handled".
+            return True
+
+        new_code = dlg.code()
+        new_lang = dlg.language()
+
+        # Update document text but keep fences
+        self._replace_code_block_text(open_block, close_block, new_code)
+
+        # Update metadata language if changed
+        if new_lang is not None:
+            if not hasattr(self, "_code_metadata"):
+                from .code_highlighter import CodeBlockMetadata
+
+                self._code_metadata = CodeBlockMetadata()
+            self._code_metadata.set_language(open_block.blockNumber(), new_lang)
+            if hasattr(self, "highlighter"):
+                self.highlighter.rehighlight()
+
+        return True
 
     def _apply_line_spacing(self, height: float = 125.0):
         """Apply proportional line spacing to the whole document."""
@@ -637,45 +786,77 @@ class MarkdownEditor(QTextEdit):
 
     def keyPressEvent(self, event):
         """Handle special key events for markdown editing."""
+        c = self.textCursor()
+        block = c.block()
 
-        # --- Auto-close code fences when typing the 3rd backtick at line start ---
-        if event.text() == "`":
-            c = self.textCursor()
-            block = c.block()
+        in_code = self._is_inside_code_block(block)
+        is_fence_line = block.text().strip().startswith("```")
+
+        # --- NEW: 3rd backtick shortcut → open code block dialog ---
+        # Only when we're *not* already in a code block or on a fence line.
+        if event.text() == "`" and not (in_code or is_fence_line):
             line = block.text()
             pos_in_block = c.position() - block.position()
-
-            # text before caret on this line
             before = line[:pos_in_block]
 
-            # If we've typed exactly two backticks at line start (or after whitespace),
-            # treat this backtick as the "third" and expand to a full fenced block.
+            # "before" currently contains whatever's before the *third* backtick.
+            # We trigger only when the line is (whitespace + "``") before the caret.
             if before.endswith("``") and before.strip() == "``":
-                start = (
-                    block.position() + pos_in_block - 2
-                )  # start of the two backticks
-
-                edit = QTextCursor(self.document())
-                edit.beginEditBlock()
-                edit.setPosition(start)
-                edit.setPosition(start + 2, QTextCursor.KeepAnchor)
-                edit.insertText("```\n\n```\n")
-                edit.endEditBlock()
-
-                # new opening fence block starts at 'start'
                 doc = self.document()
-                fence_block = (
-                    doc.findBlock(start).next().next()
-                )  # third line = closing fence
-                self._ensure_escape_line_after_closing_fence(fence_block)
+                if doc is not None:
+                    # Remove the two backticks that were already typed
+                    start = block.position() + pos_in_block - 2
+                    edit = QTextCursor(doc)
+                    edit.beginEditBlock()
+                    edit.setPosition(start)
+                    edit.setPosition(start + 2, QTextCursor.KeepAnchor)
+                    edit.removeSelectedText()
+                    edit.endEditBlock()
 
-                # place caret on the blank line between the fences
-                new_pos = start + 4  # after "```\n"
-                c.setPosition(new_pos)
-                self.setTextCursor(c)
+                    # Move caret to where the code block should start
+                    c.setPosition(start)
+                    self.setTextCursor(c)
+
+                # Now behave exactly like the </> toolbar button
+                self.apply_code()
+                return
+        # ------------------------------------------------------------
+
+        # If we're anywhere in a fenced code block (including the fences),
+        # treat the text as read-only and route edits through the dialog.
+        if in_code or is_fence_line:
+            key = event.key()
+
+            # Navigation keys that are safe to pass through.
+            nav_keys_no_down = (
+                Qt.Key.Key_Left,
+                Qt.Key.Key_Right,
+                Qt.Key.Key_Up,
+                Qt.Key.Key_Home,
+                Qt.Key.Key_End,
+                Qt.Key.Key_PageUp,
+                Qt.Key.Key_PageDown,
+            )
+
+            # Let these through:
+            #   - pure navigation (except Down, which we handle specially later)
+            #   - Enter/Return and Down, which are handled by dedicated logic below
+            if key in nav_keys_no_down:
+                super().keyPressEvent(event)
                 return
 
-        # Step out of a code block with Down at EOF
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Down):
+                # Let the existing Enter/Down code see these.
+                pass
+            else:
+                # Any other key (Backspace, Delete, characters, Tab, etc.)
+                # opens the code-block editor instead of editing inline.
+                if not self._edit_code_block(block):
+                    # Fallback if bounds couldn't be found for some reason.
+                    super().keyPressEvent(event)
+                return
+
+        # --- Step out of a code block with Down at EOF ---
         if event.key() == Qt.Key.Key_Down:
             c = self.textCursor()
             b = c.block()
@@ -686,7 +867,8 @@ class MarkdownEditor(QTextEdit):
                 nb = bb.next()
                 return nb.isValid() and nb.text().strip().startswith("```")
 
-            # Case A: caret is on the line BEFORE the closing fence, at EOL → jump after the fence
+            # Case A: caret is on the line BEFORE the closing fence, at EOL
+            # → jump after the fence
             if (
                 self._is_inside_code_block(b)
                 and pos_in_block >= len(line)
@@ -707,7 +889,8 @@ class MarkdownEditor(QTextEdit):
                     self._update_code_block_row_backgrounds()
                 return
 
-            # Case B: caret is ON the closing fence, and it's EOF → create a line and move to it
+            # Case B: caret is ON the closing fence, and it's EOF
+            # → create a line and move to it
             if (
                 b.text().strip().startswith("```")
                 and self._is_inside_code_block(b)
@@ -877,9 +1060,11 @@ class MarkdownEditor(QTextEdit):
 
                 return
 
-            # Inside a code block (but not on a fence): newline stays code-style
+            # Inside a code block (but not on a fence): open the popup editor
             if block_state == 1:
-                super().keyPressEvent(event)
+                if not self._edit_code_block(current_block):
+                    # Fallback if something is malformed
+                    super().keyPressEvent(event)
                 return
 
             # Check for list continuation
@@ -1044,6 +1229,16 @@ class MarkdownEditor(QTextEdit):
             event.accept()
             return
 
+        cursor = self.cursorForPosition(event.pos())
+        block = cursor.block()
+
+        # If we’re on or inside a code block, open the editor instead
+        if self._is_inside_code_block(block) or block.text().strip().startswith("```"):
+            # Only swallow the double-click if we actually opened a dialog.
+            if not self._edit_code_block(block):
+                super().mouseDoubleClickEvent(event)
+            return
+
         # Otherwise, let normal double-click behaviour happen
         super().mouseDoubleClickEvent(event)
 
@@ -1118,95 +1313,106 @@ class MarkdownEditor(QTextEdit):
         self.setFocus()
 
     def apply_code(self):
-        """Insert a fenced code block, or navigate fences without creating inline backticks."""
-        c = self.textCursor()
+        """
+        Toolbar handler for the </> button.
+
+        - If the caret is on / inside an existing fenced block, open the editor for it.
+        - Otherwise open the editor prefilled with any selected text, then insert a new
+          fenced block containing whatever the user typed.
+        """
+        cursor = self.textCursor()
         doc = self.document()
-
-        if c.hasSelection():
-            # Wrap selection and ensure exactly one newline after the closing fence
-            selected = c.selectedText().replace("\u2029", "\n")
-            start_block = c.block()
-            c.insertText(f"```\n{selected.rstrip()}\n```\n")
-
-            # closing fence is the block just before the current one
-            fence_block = start_block.next()
-            while fence_block.isValid() and not fence_block.text().strip().startswith(
-                "```"
-            ):
-                fence_block = fence_block.next()
-            if fence_block.isValid():
-                self._ensure_escape_line_after_closing_fence(fence_block)
-
-            if hasattr(self, "_update_code_block_row_backgrounds"):
-                self._update_code_block_row_backgrounds()
-            # tighten spacing for the new code block
-            self._apply_code_block_spacing()
-
-            self.setFocus()
+        if doc is None:
             return
 
-        block = c.block()
-        line = block.text()
-        pos_in_block = c.position() - block.position()
-        stripped = line.strip()
+        block = cursor.block()
 
-        # If we're on a fence line, be helpful but never insert inline fences
-        if stripped.startswith("```"):
-            # Is this fence opening or closing? (look at blocks above)
-            inside_before = self._is_inside_code_block(block.previous())
-            if inside_before:
-                # This fence closes the block → ensure a line after, then move there
-                self._ensure_escape_line_after_closing_fence(block)
-                endpos = block.position() + len(line)
-                c.setPosition(endpos + 1)
-                self.setTextCursor(c)
-
-                if hasattr(self, "_update_code_block_row_backgrounds"):
-                    self._update_code_block_row_backgrounds()
-                self.setFocus()
-                return
-            else:
-                # Opening fence → move caret to the next line (inside the block)
-                nb = block.next()
-                if not nb.isValid():
-                    e = QTextCursor(doc)
-                    e.setPosition(block.position() + len(line))
-                    e.insertText("\n")
-                    nb = block.next()
-                c.setPosition(nb.position())
-                self.setTextCursor(c)
-                self.setFocus()
-                return
-
-        # If we're inside a block (but not on a fence), don't mutate text
-        if self._is_inside_code_block(block):
-            self.setFocus()
+        # --- Case 1: already in a code block -> just edit that block ---
+        if self._is_inside_code_block(block) or block.text().strip().startswith("```"):
+            self._edit_code_block(block)
             return
 
-        # Outside any block → create a clean template on its own lines (never inline)
-        start_pos = c.position()
-        before = line[:pos_in_block]
+        # --- Case 2: creating a new block (optional selection) ---
+        if cursor.hasSelection():
+            start_pos = cursor.selectionStart()
+            end_pos = cursor.selectionEnd()
+            # QTextEdit joins lines with U+2029 in selectedText()
+            initial_code = cursor.selectedText().replace("\u2029", "\n")
+        else:
+            start_pos = cursor.position()
+            end_pos = start_pos
+            initial_code = ""
+
+        # Let the user type/edit the code in the popup first
+        dlg = CodeBlockEditorDialog(initial_code, language=None, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        code_text = dlg.code()
+        language = dlg.language()
+
+        # Don't insert an entirely empty block
+        if not code_text.strip():
+            return
+
+        code_text = code_text.rstrip("\n")
 
         edit = QTextCursor(doc)
         edit.beginEditBlock()
 
-        # If there is text before the caret on the line, start the block on a new line
-        lead_break = "\n" if before else ""
-        # Insert the block; trailing newline guarantees you can Down-arrow out later
-        insert = f"{lead_break}```\n\n```\n"
+        # Remove selection (if any) so we can insert the new fenced block
         edit.setPosition(start_pos)
-        edit.insertText(insert)
+        edit.setPosition(end_pos, QTextCursor.MoveMode.KeepAnchor)
+        edit.removeSelectedText()
+
+        # Work out whether we're mid-line and need to break before the fence
+        block = doc.findBlock(start_pos)
+        line = block.text()
+        pos_in_block = start_pos - block.position()
+        before = line[:pos_in_block]
+
+        # If there's text before the caret on this line, put the fence on a new line
+        lead_break = "\n" if before else ""
+        insert_str = f"{lead_break}```\n{code_text}\n```\n"
+
+        edit.setPosition(start_pos)
+        edit.insertText(insert_str)
         edit.endEditBlock()
 
-        # Put caret on the blank line inside the block
-        c.setPosition(start_pos + len(lead_break) + 4)  # after "```\n"
-        self.setTextCursor(c)
+        # Find the opening fence block we just inserted
+        open_block = doc.findBlock(start_pos + len(lead_break))
 
-        if hasattr(self, "_update_code_block_row_backgrounds"):
-            self._update_code_block_row_backgrounds()
+        # Find the closing fence block
+        close_block = open_block.next()
+        while close_block.isValid() and not close_block.text().strip().startswith(
+            "```"
+        ):
+            close_block = close_block.next()
 
-        # tighten spacing for the new code block
+        if close_block.isValid():
+            # Make sure there's always at least one line *after* the block
+            self._ensure_escape_line_after_closing_fence(close_block)
+
+        # Store language metadata if the user chose one
+        if language is not None:
+            if not hasattr(self, "_code_metadata"):
+                from .code_highlighter import CodeBlockMetadata
+
+                self._code_metadata = CodeBlockMetadata()
+            self._code_metadata.set_language(open_block.blockNumber(), language)
+
+        # Refresh visuals
         self._apply_code_block_spacing()
+        self._update_code_block_row_backgrounds()
+        if hasattr(self, "highlighter"):
+            self.highlighter.rehighlight()
+
+        # Put caret just after the code block so the user can keep writing normal text
+        after_block = close_block.next() if close_block.isValid() else None
+        if after_block and after_block.isValid():
+            cursor = self.textCursor()
+            cursor.setPosition(after_block.position())
+            self.setTextCursor(cursor)
 
         self.setFocus()
 
@@ -1393,15 +1599,12 @@ class MarkdownEditor(QTextEdit):
             lang_menu = menu.addMenu(strings._("set_code_language"))
 
             languages = [
-                "python",
                 "bash",
-                "php",
-                "javascript",
-                "html",
                 "css",
-                "sql",
-                "java",
-                "go",
+                "html",
+                "javascript",
+                "php",
+                "python",
             ]
             for lang in languages:
                 action = QAction(lang.capitalize(), self)
@@ -1409,6 +1612,12 @@ class MarkdownEditor(QTextEdit):
                     lambda checked, l=lang: self._set_code_block_language(block, l)
                 )
                 lang_menu.addAction(action)
+
+            menu.addSeparator()
+
+            edit_action = QAction(strings._("edit_code_block"), self)
+            edit_action.triggered.connect(lambda: self._edit_code_block(block))
+            menu.addAction(edit_action)
 
             menu.addSeparator()
 

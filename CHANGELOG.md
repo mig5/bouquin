@@ -8,6 +8,7 @@
  * Slightly fade the text of a checkbox line if the checkbox is checked.
  * Fix weekend date colours being incorrect on theme change while app is running
  * Avoid capturing checkbox/bullet etc in the task text that would get offered as the 'note' when Pomodoro timer stops
+ * Code Blocks are now their own QDialog to try and reduce risk of getting trapped in / bleeding in/out of text in code blocks.
 
 # 0.5.2
 

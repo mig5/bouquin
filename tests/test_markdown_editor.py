@@ -164,81 +164,22 @@ def test_enter_on_empty_list_marks_empty(qtbot, editor):
     assert editor.toPlainText().startswith("\u2022 \n")
 
 
-def test_triple_backtick_autoexpands(editor, qtbot):
+def test_triple_backtick_triggers_code_dialog_but_no_block_on_empty_code(editor, qtbot):
+    # Start empty
     editor.from_markdown("")
     press_backtick(qtbot, editor, 2)
-    press_backtick(qtbot, editor, 1)  # triggers expansion
+    press_backtick(qtbot, editor, 1)  # triggers the 3rd-backtick shortcut
     qtbot.wait(0)
 
     t = text(editor)
-    assert t.count("```") == 2
-    assert t.startswith("```\n\n```")
-    assert t.endswith("\n")
-    # caret is on the blank line inside the block
-    assert editor.textCursor().blockNumber() == 1
-    assert lines_keep(editor)[1] == ""
 
+    # The two typed backticks should have been removed
+    assert "`" not in t
 
-def test_toolbar_inserts_block_on_own_lines(editor, qtbot):
-    editor.from_markdown("hello")
-    editor.moveCursor(QTextCursor.End)
-    editor.apply_code()  # </> action inserts fenced code block
-    qtbot.wait(0)
-
-    t = text(editor)
-    assert "hello```" not in t  # never inline
-    assert t.startswith("hello\n```")
-    assert t.endswith("```\n")
-    # caret inside block (blank line)
-    assert editor.textCursor().blockNumber() == 2
-    assert lines_keep(editor)[2] == ""
-
-
-def test_toolbar_inside_block_does_not_insert_inline_fences(editor, qtbot):
-    editor.from_markdown("")
-    editor.apply_code()  # create a block (caret now on blank line inside)
-    qtbot.wait(0)
-
-    pos_before = editor.textCursor().position()
-    t_before = text(editor)
-
-    editor.apply_code()  # pressing </> inside should be a no-op
-    qtbot.wait(0)
-
-    assert text(editor) == t_before
-    assert editor.textCursor().position() == pos_before
-
-
-def test_toolbar_on_opening_fence_jumps_inside(editor, qtbot):
-    editor.from_markdown("")
-    editor.apply_code()
-    qtbot.wait(0)
-
-    # Go to opening fence (line 0)
-    editor.moveCursor(QTextCursor.Start)
-    editor.apply_code()  # should jump inside the block
-    qtbot.wait(0)
-
-    assert editor.textCursor().blockNumber() == 1
-    assert lines_keep(editor)[1] == ""
-
-
-def test_toolbar_on_closing_fence_jumps_out(editor, qtbot):
-    editor.from_markdown("")
-    editor.apply_code()
-    qtbot.wait(0)
-
-    # Go to closing fence line (template: 0 fence, 1 blank, 2 fence, 3 blank-after)
-    editor.moveCursor(QTextCursor.End)  # blank-after
-    editor.moveCursor(QTextCursor.Up)  # closing fence
-    editor.moveCursor(QTextCursor.StartOfLine)
-
-    editor.apply_code()  # jump to the line after the fence
-    qtbot.wait(0)
-
-    # Now on the blank line after the block
-    assert editor.textCursor().block().text() == ""
-    assert editor.textCursor().block().previous().text().strip() == "```"
+    # With the new dialog-based implementation, and our test stub that accepts
+    # the dialog with empty code, no fenced code block is inserted.
+    assert "```" not in t
+    assert t == ""
 
 
 def test_down_escapes_from_last_code_line(editor, qtbot):
@@ -520,25 +461,6 @@ def test_apply_italic_and_strike(editor):
     editor.apply_strikethrough()
     assert editor.toPlainText().endswith("z~~~~")
     assert editor.textCursor().position() == len(editor.toPlainText()) - 2
-
-
-def test_apply_code_inline_block_navigation(editor):
-    # Selection case -> fenced block around selection
-    editor.setPlainText("code")
-    c = editor.textCursor()
-    c.select(QTextCursor.SelectionType.Document)
-    editor.setTextCursor(c)
-    editor.apply_code()
-    assert "```\ncode\n```\n" in editor.toPlainText()
-
-    # No selection, at EOF with no following block -> creates block and extra newline path
-    editor.setPlainText("before")
-    editor.moveCursor(QTextCursor.MoveOperation.End)
-    editor.apply_code()
-    t = editor.toPlainText()
-    assert t.endswith("before\n```\n\n```\n")
-    # Caret should be inside the code block blank line
-    assert editor.textCursor().position() == len("before\n") + 4
 
 
 def test_insert_image_from_path_invalid_returns(editor_hello, tmp_path):

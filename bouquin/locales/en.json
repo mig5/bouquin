@@ -289,5 +289,6 @@
     "friday": "Friday",
     "saturday": "Saturday",
     "sunday": "Sunday",
-    "day": "Day"
+    "day": "Day",
+    "edit_code_block": "Edit code block"
 }

@@ -58,3 +58,38 @@ def fresh_db(tmp_db_cfg):
     assert ok, "DB connect() should succeed"
     yield db
     db.close()
+
+
+@pytest.fixture(autouse=True)
+def _stub_code_block_editor_dialog(monkeypatch):
+    """
+    In tests, replace the interactive CodeBlockEditorDialog with a tiny stub
+    that never shows a real QDialog and never blocks on exec().
+    """
+    import bouquin.markdown_editor as markdown_editor
+    from PySide6.QtWidgets import QDialog
+
+    class _TestCodeBlockEditorDialog:
+        def __init__(self, code: str, language: str | None, parent=None):
+            # Simulate what the real dialog would “start with”
+            self._code = code
+            self._language = language
+
+        def exec(self) -> int:
+            # Pretend the user clicked OK immediately.
+            # (If you prefer “Cancel by default”, return Rejected instead.)
+            return QDialog.DialogCode.Accepted
+
+        def code(self) -> str:
+            # In tests we just return the initial code unchanged.
+            return self._code
+
+        def language(self) -> str | None:
+            # Ditto for language.
+            return self._language
+
+    # MarkdownEditor imported CodeBlockEditorDialog into its own module,
+    # so patch that name – everything in MarkdownEditor will use this stub.
+    monkeypatch.setattr(
+        markdown_editor, "CodeBlockEditorDialog", _TestCodeBlockEditorDialog
+    )

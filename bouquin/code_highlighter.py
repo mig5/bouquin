@@ -348,7 +348,7 @@ class CodeBlockMetadata:
             return ""
 
         items = [f"{k}:{v}" for k, v in sorted(self._block_languages.items())]
-        return "<!-- code-langs: " + ",".join(items) + " -->"
+        return "<!-- code-langs: " + ",".join(items) + " -->\n"
 
     def deserialize(self, text: str):
         """Deserialize metadata from text."""
