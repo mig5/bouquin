@@ -46,18 +46,14 @@ class MarkdownEditor(QTextEdit):
         base_dir = Path(__file__).resolve().parent
 
         # Load regular text font (primary)
-        regular_font_path = base_dir / "fonts" / "NotoSans-Regular.ttf"
+        regular_font_path = base_dir / "fonts" / "DejaVuSans.ttf"
         regular_font_id = QFontDatabase.addApplicationFont(str(regular_font_path))
-        if regular_font_id == -1:
-            print("Failed to load NotoSans-Regular.ttf")
 
         # Load Symbols font (fallback)
         symbols_font_path = base_dir / "fonts" / "NotoSansSymbols2-Regular.ttf"
         symbols_font_id = QFontDatabase.addApplicationFont(str(symbols_font_path))
         symbols_families = QFontDatabase.applicationFontFamilies(symbols_font_id)
         self.symbols_font_family = symbols_families[0]
-        if symbols_font_id == -1:
-            print("Failed to load NotoSansSymbols2-Regular.ttf")
 
         # Use the regular Noto Sans family as the editor font
         regular_families = QFontDatabase.applicationFontFamilies(regular_font_id)
@@ -91,6 +87,13 @@ class MarkdownEditor(QTextEdit):
 
         # Track if we're currently updating text programmatically
         self._updating = False
+
+        # Guard to avoid recursive selection tweaks
+        self._adjusting_selection = False
+
+        # After selections change, trim list prefixes from full-line selections
+        # (e.g. after triple-clicking a list item to select the line).
+        self.selectionChanged.connect(self._maybe_trim_list_prefix_from_line_selection)
 
         # Connect to text changes for smart formatting
         self.textChanged.connect(self._on_text_changed)
@@ -485,6 +488,69 @@ class MarkdownEditor(QTextEdit):
             return leading_spaces + leading_spaces + (len(m.group(1)) - leading_spaces)
 
         return 0
+
+    def _maybe_trim_list_prefix_from_line_selection(self) -> None:
+        """
+        If the current selection looks like a full-line selection on a list item
+        (for example, from a triple-click), trim the selection so that it starts
+        just *after* the visual list prefix (checkbox / bullet / number), and
+        ends at the end of the text on that line (not on the next line's newline).
+        """
+        # Avoid re-entry when we move the cursor ourselves.
+        if getattr(self, "_adjusting_selection", False):
+            return
+
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            return
+
+        start = cursor.selectionStart()
+        end = cursor.selectionEnd()
+        if start == end:
+            return
+
+        doc = self.document()
+        # 'end' is exclusive; use end - 1 so we land in the last selected block.
+        start_block = doc.findBlock(start)
+        end_block = doc.findBlock(end - 1)
+        if not start_block.isValid() or start_block != end_block:
+            # Only adjust single-line selections.
+            return
+
+        # How much list prefix (indent + checkbox/bullet/number) this block has
+        prefix_len = self._list_prefix_length_for_block(start_block)
+        if prefix_len <= 0:
+            return
+
+        block_start = start_block.position()
+        prefix_end = block_start + prefix_len
+
+        # If the selection already starts after the prefix, nothing to do.
+        if start >= prefix_end:
+            return
+
+        line_text = start_block.text()
+        line_end = block_start + len(line_text)  # end of visible text on this line
+
+        # Only treat it as a "full line" selection if it reaches the end of the
+        # visible text. Triple-click usually selects to at least here (often +1 for
+        # the newline).
+        if end < line_end:
+            return
+
+        # Clamp the selection so that it ends at the end of this line's text,
+        # *not* at the newline / start of the next block. This keeps the caret
+        # blinking on the selected line instead of the next line.
+        visual_end = line_end
+
+        self._adjusting_selection = True
+        try:
+            new_cursor = self.textCursor()
+            new_cursor.setPosition(prefix_end)
+            new_cursor.setPosition(visual_end, QTextCursor.KeepAnchor)
+            self.setTextCursor(new_cursor)
+        finally:
+            self._adjusting_selection = False
 
     def _detect_list_type(self, line: str) -> tuple[str | None, str]:
         """
