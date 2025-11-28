@@ -960,7 +960,15 @@ class MarkdownEditor(QTextEdit):
                     doc_pos = block.position() + i
                     r = char_rect_at(doc_pos, icon)
 
-                    if r.contains(pt):
+                    # ---------- Relax the hit area here ----------
+                    # Expand the clickable area horizontally so you don't have to
+                    # land exactly on the glyph. This makes the "checkbox zone"
+                    # roughly 3× the glyph width, centered on it.
+                    pad = r.width()  # one glyph width on each side
+                    hit_rect = r.adjusted(-pad, 0, pad, 0)
+                    # ---------------------------------------------
+
+                    if hit_rect.contains(pt):
                         # Build the replacement: swap ☐ <-> ☑ (keep trailing space)
                         new_icon = (
                             self._CHECK_CHECKED_DISPLAY
