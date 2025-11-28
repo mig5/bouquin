@@ -1026,10 +1026,12 @@ class MainWindow(QMainWindow):
         self.editor.viewport().update()
 
     def _apply_calendar_text_colors(self):
-        pal = self.palette()
+        pal = QApplication.instance().palette()
         txt = pal.windowText().color()
+
         fmt = QTextCharFormat()
         fmt.setForeground(txt)
+
         # Use normal text color for weekends
         self.calendar.setWeekdayTextFormat(Qt.Saturday, fmt)
         self.calendar.setWeekdayTextFormat(Qt.Sunday, fmt)
