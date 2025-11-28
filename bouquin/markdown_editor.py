@@ -10,6 +10,7 @@ from PySide6.QtGui import (
     QFontMetrics,
     QImage,
     QMouseEvent,
+    QTextBlock,
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
@@ -298,6 +299,30 @@ class MarkdownEditor(QTextEdit):
 
             block = block.next()
 
+        cursor.endEditBlock()
+
+    def _ensure_escape_line_after_closing_fence(self, fence_block: QTextBlock) -> None:
+        """
+        Ensure there is at least one block *after* the given closing fence line.
+
+        If the fence is the last block in the document, we append a newline,
+        so the caret can always move outside the code block.
+        """
+        doc = self.document()
+        if doc is None or not fence_block.isValid():
+            return
+
+        after = fence_block.next()
+        if after.isValid():
+            # There's already a block after the fence; nothing to do.
+            return
+
+        # No block after fence → create a blank line
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+        endpos = fence_block.position() + len(fence_block.text())
+        cursor.setPosition(endpos)
+        cursor.insertText("\n")
         cursor.endEditBlock()
 
     def to_markdown(self) -> str:
@@ -636,6 +661,13 @@ class MarkdownEditor(QTextEdit):
                 edit.setPosition(start + 2, QTextCursor.KeepAnchor)
                 edit.insertText("```\n\n```\n")
                 edit.endEditBlock()
+
+                # new opening fence block starts at 'start'
+                doc = self.document()
+                fence_block = (
+                    doc.findBlock(start).next().next()
+                )  # third line = closing fence
+                self._ensure_escape_line_after_closing_fence(fence_block)
 
                 # place caret on the blank line between the fences
                 new_pos = start + 4  # after "```\n"
@@ -1093,7 +1125,18 @@ class MarkdownEditor(QTextEdit):
         if c.hasSelection():
             # Wrap selection and ensure exactly one newline after the closing fence
             selected = c.selectedText().replace("\u2029", "\n")
+            start_block = c.block()
             c.insertText(f"```\n{selected.rstrip()}\n```\n")
+
+            # closing fence is the block just before the current one
+            fence_block = start_block.next()
+            while fence_block.isValid() and not fence_block.text().strip().startswith(
+                "```"
+            ):
+                fence_block = fence_block.next()
+            if fence_block.isValid():
+                self._ensure_escape_line_after_closing_fence(fence_block)
+
             if hasattr(self, "_update_code_block_row_backgrounds"):
                 self._update_code_block_row_backgrounds()
             # tighten spacing for the new code block
@@ -1113,13 +1156,11 @@ class MarkdownEditor(QTextEdit):
             inside_before = self._is_inside_code_block(block.previous())
             if inside_before:
                 # This fence closes the block → ensure a line after, then move there
+                self._ensure_escape_line_after_closing_fence(block)
                 endpos = block.position() + len(line)
-                edit = QTextCursor(doc)
-                edit.setPosition(endpos)
-                if not block.next().isValid():
-                    edit.insertText("\n")
                 c.setPosition(endpos + 1)
                 self.setTextCursor(c)
+
                 if hasattr(self, "_update_code_block_row_backgrounds"):
                     self._update_code_block_row_backgrounds()
                 self.setFocus()
@@ -1404,3 +1445,23 @@ class MarkdownEditor(QTextEdit):
         cursor = self.textCursor()
         block = cursor.block()
         return block.text()
+
+    def get_current_line_task_text(self) -> str:
+        """
+        Like get_current_line_text(), but with list / checkbox / number
+        prefixes stripped off for use in Pomodoro notes, etc.
+        """
+        line = self.get_current_line_text()
+
+        text = re.sub(
+            r"^\s*(?:"
+            r"-\s\[(?: |x|X)\]\s+"  # markdown checkbox
+            r"|[☐☑]\s+"  # Unicode checkbox
+            r"|•\s+"  # Unicode bullet
+            r"|[-*+]\s+"  # markdown bullets
+            r"|\d+\.\s+"  # numbered 1. 2. etc
+            r")",
+            "",
+            line,
+        )
+        return text.strip()

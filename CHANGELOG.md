@@ -7,6 +7,7 @@
  * Prevent double-click of checkbox leading to selecting/highlighting it
  * Slightly fade the text of a checkbox line if the checkbox is checked.
  * Fix weekend date colours being incorrect on theme change while app is running
+ * Avoid capturing checkbox/bullet etc in the task text that would get offered as the 'note' when Pomodoro timer stops
 
 # 0.5.2
 

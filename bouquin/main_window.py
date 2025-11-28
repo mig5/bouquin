@@ -1206,7 +1206,8 @@ class MainWindow(QMainWindow):
             return
 
         # Get the current line text
-        line_text = editor.get_current_line_text().strip()
+        line_text = editor.get_current_line_task_text()
+
         if not line_text:
             line_text = strings._("pomodoro_time_log_default_text")
 
