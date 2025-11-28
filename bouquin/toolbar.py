@@ -106,7 +106,7 @@ class ToolBar(QToolBar):
         self.actInsertImg.triggered.connect(self.insertImageRequested)
 
         # History button
-        self.actHistory = QAction("🔁", self)
+        self.actHistory = QAction("↺", self)
         self.actHistory.setToolTip(strings._("history"))
         self.actHistory.triggered.connect(self.historyRequested)
 
@@ -187,7 +187,7 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actTimer, "⌛")
 
         # History
-        self._style_letter_button(self.actHistory, "🔁")
+        self._style_letter_button(self.actHistory, "↺")
 
     def _style_letter_button(
         self,
