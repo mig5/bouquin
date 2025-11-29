@@ -64,13 +64,13 @@ class ReminderDialog(QDialog):
         self.setMinimumWidth(400)
 
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        self.form = QFormLayout()
 
         # Reminder text
         self.text_edit = QLineEdit()
         if reminder:
             self.text_edit.setText(reminder.text)
-        form.addRow("&" + strings._("reminder") + ":", self.text_edit)
+        self.form.addRow("&" + strings._("reminder") + ":", self.text_edit)
 
         # Time
         self.time_edit = QTimeEdit()
@@ -80,7 +80,7 @@ class ReminderDialog(QDialog):
             self.time_edit.setTime(QTime(int(parts[0]), int(parts[1])))
         else:
             self.time_edit.setTime(QTime.currentTime())
-        form.addRow("&" + strings._("time") + ":", self.time_edit)
+        self.form.addRow("&" + strings._("time") + ":", self.time_edit)
 
         # Recurrence type
         self.type_combo = QComboBox()
@@ -96,7 +96,7 @@ class ReminderDialog(QDialog):
                     break
 
         self.type_combo.currentIndexChanged.connect(self._on_type_changed)
-        form.addRow("&" + strings._("repeat") + ":", self.type_combo)
+        self.form.addRow("&" + strings._("repeat") + ":", self.type_combo)
 
         # Weekday selector (for weekly reminders)
         self.weekday_combo = QComboBox()
@@ -117,9 +117,11 @@ class ReminderDialog(QDialog):
         else:
             self.weekday_combo.setCurrentIndex(QDate.currentDate().dayOfWeek() - 1)
 
-        form.addRow("&" + strings._("day") + ":", self.weekday_combo)
+        self.form.addRow("&" + strings._("day") + ":", self.weekday_combo)
+        day_label = self.form.labelForField(self.weekday_combo)
+        day_label.setVisible(False)
 
-        layout.addLayout(form)
+        layout.addLayout(self.form)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -142,6 +144,8 @@ class ReminderDialog(QDialog):
         """Show/hide weekday selector based on reminder type."""
         reminder_type = self.type_combo.currentData()
         self.weekday_combo.setVisible(reminder_type == ReminderType.WEEKLY)
+        day_label = self.form.labelForField(self.weekday_combo)
+        day_label.setVisible(reminder_type == ReminderType.WEEKLY)
 
     def get_reminder(self) -> Reminder:
         """Get the configured reminder."""
