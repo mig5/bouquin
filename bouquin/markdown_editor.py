@@ -445,6 +445,8 @@ class MarkdownEditor(QTextEdit):
             return False
 
         open_block, close_block = bounds
+        fence_block_num = open_block.blockNumber()
+
         doc = self.document()
         if doc is None:
             return False
@@ -468,8 +470,8 @@ class MarkdownEditor(QTextEdit):
         # Clear language metadata for this block, if supported
         if hasattr(self, "_code_metadata"):
             clear = getattr(self._code_metadata, "clear_language", None)
-            if clear is not None:
-                clear(open_block.blockNumber())
+            if clear is not None and fence_block_num != -1:
+                clear(fence_block_num)
 
         # Refresh visuals (spacing + backgrounds + syntax)
         if hasattr(self, "_apply_code_block_spacing"):
