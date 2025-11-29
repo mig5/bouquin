@@ -70,7 +70,9 @@ def _stub_code_block_editor_dialog(monkeypatch):
     from PySide6.QtWidgets import QDialog
 
     class _TestCodeBlockEditorDialog:
-        def __init__(self, code: str, language: str | None, parent=None):
+        def __init__(
+            self, code: str, language: str | None, parent=None, allow_delete=False
+        ):
             # Simulate what the real dialog would “start with”
             self._code = code
             self._language = language

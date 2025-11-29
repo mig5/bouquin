@@ -207,47 +207,81 @@ class MarkdownEditor(QTextEdit):
             b = b.previous()
         return inside
 
-    def _update_code_block_row_backgrounds(self):
-        """Paint a full-width background for each line that is in a fenced code block."""
+    def _update_code_block_row_backgrounds(self) -> None:
+        """Paint a full-width background behind each fenced ``` code block."""
+
         doc = self.document()
         if doc is None:
             return
 
-        sels = []
         bg_brush = self.highlighter.code_block_format.background()
+
+        selections: list[QTextEdit.ExtraSelection] = []
 
         inside = False
         block = doc.begin()
+        block_start_pos: int | None = None
+
         while block.isValid():
             text = block.text()
             stripped = text.strip()
             is_fence = stripped.startswith("```")
 
-            paint_this_line = is_fence or inside
-            if paint_this_line:
-                sel = QTextEdit.ExtraSelection()
-                fmt = QTextCharFormat()
-                fmt.setBackground(bg_brush)
-                fmt.setProperty(QTextFormat.FullWidthSelection, True)
-                fmt.setProperty(QTextFormat.UserProperty, "codeblock_bg")
-                sel.format = fmt
-
-                cur = QTextCursor(doc)
-                cur.setPosition(block.position())
-                sel.cursor = cur
-                sels.append(sel)
-
             if is_fence:
-                inside = not inside
+                if not inside:
+                    # Opening fence: remember where this block starts
+                    inside = True
+                    block_start_pos = block.position()
+                else:
+                    # Closing fence: create ONE selection from opening fence
+                    # to the end of this closing fence block.
+                    inside = False
+                    if block_start_pos is not None:
+                        sel = QTextEdit.ExtraSelection()
+                        fmt = QTextCharFormat()
+                        fmt.setBackground(bg_brush)
+                        fmt.setProperty(QTextFormat.FullWidthSelection, True)
+                        fmt.setProperty(QTextFormat.UserProperty, "codeblock_bg")
+                        sel.format = fmt
+
+                        cursor = QTextCursor(doc)
+                        cursor.setPosition(block_start_pos)
+                        # extend to the end of the closing fence block
+                        cursor.setPosition(
+                            block.position() + block.length() - 1,
+                            QTextCursor.MoveMode.KeepAnchor,
+                        )
+                        sel.cursor = cursor
+
+                        selections.append(sel)
+                        block_start_pos = None
 
             block = block.next()
 
+        # If the document ends while we're still inside a code block,
+        # extend the selection to the end of the document.
+        if inside and block_start_pos is not None:
+            sel = QTextEdit.ExtraSelection()
+            fmt = QTextCharFormat()
+            fmt.setBackground(bg_brush)
+            fmt.setProperty(QTextFormat.FullWidthSelection, True)
+            fmt.setProperty(QTextFormat.UserProperty, "codeblock_bg")
+            sel.format = fmt
+
+            cursor = QTextCursor(doc)
+            cursor.setPosition(block_start_pos)
+            cursor.movePosition(QTextCursor.End, QTextCursor.MoveMode.KeepAnchor)
+            sel.cursor = cursor
+
+            selections.append(sel)
+
+        # Keep any other extraSelections (current-line highlight etc.)
         others = [
             s
             for s in self.extraSelections()
             if s.format.property(QTextFormat.UserProperty) != "codeblock_bg"
         ]
-        self.setExtraSelections(others + sels)
+        self.setExtraSelections(others + selections)
 
     def _find_code_block_bounds(
         self, block: QTextBlock
@@ -473,8 +507,8 @@ class MarkdownEditor(QTextEdit):
 
     def _apply_code_block_spacing(self):
         """
-        Make all fenced code-block lines (including ``` fences) single-spaced.
-        Call this AFTER _apply_line_spacing().
+        Make all fenced code-block lines (including ``` fences) single-spaced
+        and give them a solid background.
         """
         doc = self.document()
         if doc is None:
@@ -482,6 +516,8 @@ class MarkdownEditor(QTextEdit):
 
         cursor = QTextCursor(doc)
         cursor.beginEditBlock()
+
+        bg_brush = self.highlighter.code_block_format.background()
 
         inside = False
         block = doc.begin()
@@ -491,14 +527,22 @@ class MarkdownEditor(QTextEdit):
             is_fence = stripped.startswith("```")
             is_code_line = is_fence or inside
 
+            fmt = block.blockFormat()
+
             if is_code_line:
-                fmt = block.blockFormat()
+                # Single spacing for code lines
                 fmt.setLineHeight(
                     0.0,
                     QTextBlockFormat.LineHeightTypes.SingleHeight.value,
                 )
-                cursor.setPosition(block.position())
-                cursor.setBlockFormat(fmt)
+                # Solid background for the whole line (no seams)
+                fmt.setBackground(bg_brush)
+            else:
+                # Not in a code block → clear any stale background
+                fmt.clearProperty(QTextFormat.BackgroundBrush)
+
+            cursor.setPosition(block.position())
+            cursor.setBlockFormat(fmt)
 
             if is_fence:
                 inside = not inside
