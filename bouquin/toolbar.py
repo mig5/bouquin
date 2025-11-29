@@ -95,7 +95,7 @@ class ToolBar(QToolBar):
         self.actNumbers.setToolTip(strings._("toolbar_numbered_list"))
         self.actNumbers.setCheckable(True)
         self.actNumbers.triggered.connect(self.numbersRequested)
-        self.actCheckboxes = QAction("☐", self)
+        self.actCheckboxes = QAction("☑", self)
         self.actCheckboxes.setToolTip(strings._("toolbar_toggle_checkboxes"))
         self.actCheckboxes.triggered.connect(self.checkboxesRequested)
 
@@ -182,7 +182,7 @@ class ToolBar(QToolBar):
         # Lists
         self._style_letter_button(self.actBullets, "•")
         self._style_letter_button(self.actNumbers, "1.")
-        self._style_letter_button(self.actCheckboxes, "☐")
+        self._style_letter_button(self.actCheckboxes, "☑")
         self._style_letter_button(self.actAlarm, "⏰")
         self._style_letter_button(self.actTimer, "⌛")
 
