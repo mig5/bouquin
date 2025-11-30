@@ -1076,6 +1076,8 @@ class TimeReportDialog(QDialog):
         )
         if not filename:
             return
+        if not filename.endswith(".csv"):
+            filename = f"{filename}.csv"
 
         try:
             with open(filename, "w", newline="", encoding="utf-8") as f:
@@ -1124,6 +1126,8 @@ class TimeReportDialog(QDialog):
         )
         if not filename:
             return
+        if not filename.endswith(".pdf"):
+            filename = f"{filename}.pdf"
 
         # ---------- Build chart image (hours per period) ----------
         per_period_minutes: dict[str, int] = defaultdict(int)
