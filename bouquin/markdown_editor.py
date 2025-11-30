@@ -118,9 +118,12 @@ class MarkdownEditor(QTextEdit):
         )
 
     def setDocument(self, doc):
-        super().setDocument(doc)
         # Recreate the highlighter for the new document
         # (the old one gets deleted with the old document)
+        if doc is None:
+            return
+
+        super().setDocument(doc)
         if hasattr(self, "highlighter") and hasattr(self, "theme_manager"):
             self.highlighter = MarkdownHighlighter(
                 self.document(), self.theme_manager, self
@@ -212,6 +215,9 @@ class MarkdownEditor(QTextEdit):
 
         doc = self.document()
         if doc is None:
+            return
+
+        if not hasattr(self, "highlighter") or self.highlighter is None:
             return
 
         bg_brush = self.highlighter.code_block_format.background()
