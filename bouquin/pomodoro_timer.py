@@ -137,7 +137,7 @@ class PomodoroManager:
             hours = 0.25
 
         # Open time log dialog
-        dlg = TimeLogDialog(self._db, date_iso, self._parent)
+        dlg = TimeLogDialog(self._db, date_iso, self._parent, True)
 
         # Pre-fill the hours
         dlg.hours_spin.setValue(hours)
