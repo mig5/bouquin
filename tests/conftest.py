@@ -95,3 +95,28 @@ def _stub_code_block_editor_dialog(monkeypatch):
     monkeypatch.setattr(
         markdown_editor, "CodeBlockEditorDialog", _TestCodeBlockEditorDialog
     )
+
+
+# --- Freeze Qt time helper (for alarm parsing tests) ---
+@pytest.fixture
+def freeze_qt_time(monkeypatch):
+    """Freeze QDateTime.currentDateTime/QTime.currentTime to midday today.
+
+    This avoids flakiness when tests run close to midnight, so that
+    QTime.currentTime().addSecs(3600) is still the same calendar day.
+    """
+    import bouquin.main_window as _mwmod
+    from PySide6.QtCore import QDate, QTime, QDateTime
+
+    today = QDate.currentDate()
+    fixed_time = QTime(12, 0)
+    fixed_dt = QDateTime(today, fixed_time)
+
+    # Patch the *imported* Qt symbols that main_window uses
+    monkeypatch.setattr(
+        _mwmod.QDateTime, "currentDateTime", staticmethod(lambda: QDateTime(fixed_dt))
+    )
+    monkeypatch.setattr(
+        _mwmod.QTime, "currentTime", staticmethod(lambda: QTime(fixed_time))
+    )
+    yield

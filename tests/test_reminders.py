@@ -1,3 +1,5 @@
+import pytest
+
 from unittest.mock import patch
 from bouquin.reminders import (
     Reminder,
@@ -6,10 +8,36 @@ from bouquin.reminders import (
     UpcomingRemindersWidget,
     ManageRemindersDialog,
 )
-from PySide6.QtCore import QDate, QTime
+from PySide6.QtCore import QDateTime, QDate, QTime
 from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
 from datetime import date, timedelta
+
+
+@pytest.fixture
+def freeze_reminders_time(monkeypatch):
+    # Freeze 'now' used inside bouquin.reminders to 12:00 today
+    import bouquin.reminders as rem
+
+    today = QDate.currentDate()
+    fixed_time = QTime(12, 0)
+    fixed_dt = QDateTime(today, fixed_time)
+    monkeypatch.setattr(
+        rem.QDateTime, "currentDateTime", staticmethod(lambda: QDateTime(fixed_dt))
+    )
+    yield
+
+
+def _add_daily_reminder(db, text="Standup", time_str="23:59"):
+    r = Reminder(
+        id=None,
+        text=text,
+        time_str=time_str,
+        reminder_type=ReminderType.DAILY,
+        active=True,
+    )
+    r.id = db.save_reminder(r)
+    return r
 
 
 def test_reminder_type_enum(app):
@@ -799,3 +827,104 @@ def test_edit_reminder_dialog(qtbot, fresh_db):
     # Verify fields are populated
     assert dlg.text_edit.text() == "Original text"
     assert dlg.time_edit.time().toString("HH:mm") == "14:30"
+
+
+def test_upcoming_reminders_context_menu_shows(
+    qtbot, app, fresh_db, freeze_reminders_time, monkeypatch
+):
+    from PySide6 import QtWidgets, QtGui
+    from PySide6.QtCore import QPoint
+    from bouquin.reminders import Reminder, ReminderType, UpcomingRemindersWidget
+
+    # Add a future reminder for today
+    r = Reminder(
+        id=None,
+        text="Ping",
+        time_str="23:59",
+        reminder_type=ReminderType.DAILY,
+        active=True,
+    )
+    r.id = fresh_db.save_reminder(r)
+
+    w = UpcomingRemindersWidget(fresh_db)
+    qtbot.addWidget(w)
+    w.refresh()
+
+    # Select first upcoming item so context menu code path runs
+    assert w.reminder_list.count() > 0
+    w.reminder_list.setCurrentItem(w.reminder_list.item(0))
+
+    called = {"exec": False, "actions": []}
+
+    class DummyAction:
+        def __init__(self, text, parent=None):
+            self._text = text
+
+            class _Sig:
+                def connect(self, fn):
+                    pass
+
+            self.triggered = _Sig()
+
+    class DummyMenu:
+        def __init__(self, parent=None):
+            pass
+
+        def addAction(self, action):
+            called["actions"].append(getattr(action, "_text", str(action)))
+
+        def exec(self, *_, **__):
+            called["exec"] = True
+
+    # Patch the modules that the inline imports will read from
+    monkeypatch.setattr(QtWidgets, "QMenu", DummyMenu, raising=True)
+    monkeypatch.setattr(QtGui, "QAction", DummyAction, raising=True)
+
+    # Invoke directly (normally via right-click)
+    w._show_reminder_context_menu(QPoint(5, 5))
+
+    assert called["exec"] is True
+    assert len(called["actions"]) >= 2  # at least Edit/Deactivate/Delete
+
+
+def test_upcoming_reminders_delete_selected_dedupes(
+    qtbot, app, fresh_db, freeze_reminders_time, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+    from PySide6.QtCore import QItemSelectionModel
+    from bouquin.reminders import Reminder, ReminderType, UpcomingRemindersWidget
+
+    r = Reminder(
+        id=None,
+        text="Duplicate target",
+        time_str="23:59",
+        reminder_type=ReminderType.DAILY,
+        active=True,
+    )
+    r.id = fresh_db.save_reminder(r)
+
+    w = UpcomingRemindersWidget(fresh_db)
+    qtbot.addWidget(w)
+    w.refresh()
+
+    assert w.reminder_list.count() >= 2  # daily -> multiple upcoming occurrences
+
+    # First selects & clears; second adds to selection
+    w.reminder_list.setCurrentRow(0, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    w.reminder_list.setCurrentRow(1, QItemSelectionModel.SelectionFlag.Select)
+
+    deleted_ids = []
+
+    def fake_delete(rem_id):
+        deleted_ids.append(rem_id)
+
+    # Auto-confirm deletion
+    monkeypatch.setattr(
+        QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes)
+    )
+    monkeypatch.setattr(fresh_db, "delete_reminder", fake_delete)
+
+    w._delete_selected_reminders()
+
+    # Should de-duplicate to a single DB delete call
+    assert deleted_ids == [r.id]
