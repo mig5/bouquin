@@ -1,3 +1,7 @@
+# 0.5.5
+
+ * Add + button to time log widget in side bar to have a simplified log entry dialog (without summary or report option)
+
 # 0.5.4
 
  * Ensure pressing enter a second time on a new line with a checkbox, erases the checkbox (if it had no text added to it)

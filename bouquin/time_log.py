@@ -66,6 +66,12 @@ class TimeLogWidget(QFrame):
         self.toggle_btn.setArrowType(Qt.RightArrow)
         self.toggle_btn.clicked.connect(self._on_toggle)
 
+        self.log_btn = QToolButton()
+        self.log_btn.setText("➕")
+        self.log_btn.setToolTip(strings._("add_time_entry"))
+        self.log_btn.setAutoRaise(True)
+        self.log_btn.clicked.connect(self._open_dialog_log_only)
+
         self.open_btn = QToolButton()
         self.open_btn.setIcon(
             self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
@@ -78,6 +84,7 @@ class TimeLogWidget(QFrame):
         header.setContentsMargins(0, 0, 0, 0)
         header.addWidget(self.toggle_btn)
         header.addStretch(1)
+        header.addWidget(self.log_btn)
         header.addWidget(self.open_btn)
 
         # Body: simple summary label for the day
@@ -164,6 +171,19 @@ class TimeLogWidget(QFrame):
         if not self.toggle_btn.isChecked():
             self.summary_label.setText(strings._("time_log_collapsed_hint"))
 
+    def _open_dialog_log_only(self) -> None:
+        if not self._current_date:
+            return
+
+        dlg = TimeLogDialog(self._db, self._current_date, self, True)
+        dlg.exec()
+
+        # Always refresh summary + header totals
+        self._reload_summary()
+
+        if not self.toggle_btn.isChecked():
+            self.summary_label.setText(strings._("time_log_collapsed_hint"))
+
 
 class TimeLogDialog(QDialog):
     """
@@ -176,7 +196,13 @@ class TimeLogDialog(QDialog):
       4) manage entries for this date
     """
 
-    def __init__(self, db: DBManager, date_iso: str, parent=None):
+    def __init__(
+        self,
+        db: DBManager,
+        date_iso: str,
+        parent=None,
+        log_entry_only: bool | None = False,
+    ):
         super().__init__(parent)
         self._db = db
         self._date_iso = date_iso
@@ -225,6 +251,7 @@ class TimeLogDialog(QDialog):
         self.hours_spin.setRange(0.0, 24.0)
         self.hours_spin.setDecimals(2)
         self.hours_spin.setSingleStep(0.25)
+        self.hours_spin.setValue(0.25)
         form.addRow(strings._("hours"), self.hours_spin)
 
         root.addLayout(form)
@@ -283,6 +310,12 @@ class TimeLogDialog(QDialog):
         self._reload_projects()
         self._reload_activities()
         self._reload_entries()
+
+        if log_entry_only:
+            self.delete_btn.hide()
+            self.report_btn.hide()
+            self.table.hide()
+            self.resize(self.sizeHint().width(), self.sizeHint().height())
 
     # ----- Data loading ------------------------------------------------
 
