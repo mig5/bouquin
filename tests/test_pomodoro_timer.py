@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 from bouquin.pomodoro_timer import PomodoroTimer, PomodoroManager
+from bouquin.theme import ThemeManager, ThemeConfig, Theme
 
 
 def test_pomodoro_timer_init(qtbot, app, fresh_db):
@@ -277,6 +278,7 @@ def test_pomodoro_manager_timer_stopped_signal_connection(
     from PySide6.QtWidgets import QWidget
 
     parent = QWidget()
+    parent.themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
     qtbot.addWidget(parent)
     manager = PomodoroManager(fresh_db, parent)
 

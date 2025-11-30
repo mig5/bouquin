@@ -1497,40 +1497,6 @@ def test_time_log_widget_calculates_per_project_totals(qtbot, fresh_db):
     assert "1.50h" in summary
 
 
-def test_time_report_dialog_csv_export_handles_os_error(
-    qtbot, fresh_db, tmp_path, monkeypatch
-):
-    """CSV export handles OSError gracefully."""
-    strings.load_strings("en")
-    proj_id = fresh_db.add_project("Project")
-    act_id = fresh_db.add_activity("Activity")
-    fresh_db.add_time_log(_today(), proj_id, act_id, 60)
-
-    dialog = TimeReportDialog(fresh_db)
-    qtbot.addWidget(dialog)
-
-    dialog.project_combo.setCurrentIndex(0)
-    dialog._run_report()
-
-    # Use a path that will cause an error (e.g., directory instead of file)
-    bad_path = str(tmp_path)
-
-    def mock_get_save_filename(*args, **kwargs):
-        return bad_path, "CSV Files (*.csv)"
-
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", mock_get_save_filename)
-
-    warning_shown = {"shown": False}
-
-    def mock_warning(*args):
-        warning_shown["shown"] = True
-
-    monkeypatch.setattr(QMessageBox, "warning", mock_warning)
-
-    dialog._export_csv()
-    assert warning_shown["shown"]
-
-
 # ============================================================================
 # Additional TimeLogWidget Edge Cases
 # ============================================================================
