@@ -1,3 +1,7 @@
+# 0.5.4
+
+ * Ensure pressing enter a second time on a new line with a checkbox, erases the checkbox (if it had no text added to it)
+
 # 0.5.3
 
  * Prevent triple-click select from selecting the list item (e.g checkbox, bullet)

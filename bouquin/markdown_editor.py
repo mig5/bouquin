@@ -1194,7 +1194,7 @@ class MarkdownEditor(QTextEdit):
                     return
                 else:
                     # Not empty - continue the list
-                    self._last_enter_was_empty = False
+                    self._last_enter_was_empty = True
 
                 # Insert newline and continue the list
                 super().keyPressEvent(event)
