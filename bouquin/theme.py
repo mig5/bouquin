@@ -1,9 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-from PySide6.QtGui import QPalette, QColor, QGuiApplication
+from PySide6.QtGui import QPalette, QColor, QGuiApplication, QTextCharFormat
 from PySide6.QtWidgets import QApplication, QCalendarWidget, QWidget
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, Qt
 from weakref import WeakSet
 
 
@@ -173,6 +173,14 @@ class ThemeManager(QObject):
             # Back to app defaults in light/system-light
             cal.setPalette(app_pal)
             cal.setStyleSheet("")
+
+        # --- Normalise weekend colours on *all* themed calendars -------------
+        # Qt's default is red for weekends; we want them to match normal text.
+        weekday_color = app_pal.windowText().color()
+        weekend_fmt = QTextCharFormat()
+        weekend_fmt.setForeground(weekday_color)
+        cal.setWeekdayTextFormat(Qt.Saturday, weekend_fmt)
+        cal.setWeekdayTextFormat(Qt.Sunday, weekend_fmt)
 
         cal.update()
 

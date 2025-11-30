@@ -108,7 +108,7 @@ class MainWindow(QMainWindow):
         self.search.resultDatesChanged.connect(self._on_search_dates_changed)
 
         # Features
-        self.time_log = TimeLogWidget(self.db)
+        self.time_log = TimeLogWidget(self.db, themes=self.themes)
 
         self.tags = PageTagsWidget(self.db)
         self.tags.tagActivated.connect(self._on_tag_activated)
@@ -342,7 +342,6 @@ class MainWindow(QMainWindow):
 
         # re-apply all runtime color tweaks when theme changes
         self.themes.themeChanged.connect(lambda _t: self._retheme_overrides())
-        self._apply_calendar_text_colors()
 
         # apply once on startup so links / calendar colors are set immediately
         self._retheme_overrides()
@@ -1020,21 +1019,9 @@ class MainWindow(QMainWindow):
         save_db_config(cfg)
 
     def _retheme_overrides(self):
-        self._apply_calendar_text_colors()
         self._apply_search_highlights(getattr(self, "_search_highlighted_dates", set()))
         self.calendar.update()
         self.editor.viewport().update()
-
-    def _apply_calendar_text_colors(self):
-        pal = QApplication.instance().palette()
-        txt = pal.windowText().color()
-
-        fmt = QTextCharFormat()
-        fmt.setForeground(txt)
-
-        # Use normal text color for weekends
-        self.calendar.setWeekdayTextFormat(Qt.Saturday, fmt)
-        self.calendar.setWeekdayTextFormat(Qt.Sunday, fmt)
 
     # --------------- Search sidebar/results helpers ---------------- #
 

@@ -236,6 +236,8 @@
     "time_log": "Time log",
     "time_log_collapsed_hint": "Time log",
     "time_log_date_label": "Time log date: {date}",
+    "time_log_change_date": "Change date",
+    "time_log_select_date_title": "Select time log date",
     "time_log_for": "Time log for {date}",
     "time_log_no_date": "Time log",
     "time_log_no_entries": "No time entries yet",

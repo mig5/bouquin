@@ -11,7 +11,9 @@ from PySide6.QtCore import Qt, QDate, QUrl
 from PySide6.QtGui import QPainter, QColor, QImage, QTextDocument, QPageLayout
 from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import (
+    QCalendarWidget,
     QDialog,
+    QDialogButtonBox,
     QFrame,
     QVBoxLayout,
     QHBoxLayout,
@@ -40,6 +42,7 @@ from PySide6.QtWidgets import (
 )
 
 from .db import DBManager
+from .theme import ThemeManager
 from . import strings
 
 
@@ -49,9 +52,15 @@ class TimeLogWidget(QFrame):
     Shown in the left sidebar above the Tags widget.
     """
 
-    def __init__(self, db: DBManager, parent: QWidget | None = None):
+    def __init__(
+        self,
+        db: DBManager,
+        themes: ThemeManager | None = None,
+        parent: QWidget | None = None,
+    ):
         super().__init__(parent)
         self._db = db
+        self._themes = themes
         self._current_date: Optional[str] = None
 
         self.setFrameShape(QFrame.StyledPanel)
@@ -162,7 +171,7 @@ class TimeLogWidget(QFrame):
         if not self._current_date:
             return
 
-        dlg = TimeLogDialog(self._db, self._current_date, self)
+        dlg = TimeLogDialog(self._db, self._current_date, self, themes=self._themes)
         dlg.exec()
 
         # Always refresh summary + header totals
@@ -175,7 +184,9 @@ class TimeLogWidget(QFrame):
         if not self._current_date:
             return
 
-        dlg = TimeLogDialog(self._db, self._current_date, self, True)
+        dlg = TimeLogDialog(
+            self._db, self._current_date, self, True, themes=self._themes
+        )
         dlg.exec()
 
         # Always refresh summary + header totals
@@ -202,9 +213,11 @@ class TimeLogDialog(QDialog):
         date_iso: str,
         parent=None,
         log_entry_only: bool | None = False,
+        themes: ThemeManager | None = None,
     ):
         super().__init__(parent)
         self._db = db
+        self._themes = themes
         self._date_iso = date_iso
         self._current_entry_id: Optional[int] = None
         # Guard flag used when repopulating the table so we don’t treat
@@ -216,8 +229,20 @@ class TimeLogDialog(QDialog):
 
         root = QVBoxLayout(self)
 
-        # --- Top: date label
-        root.addWidget(QLabel(strings._("time_log_date_label").format(date=date_iso)))
+        # --- Top: date label + change-date button
+        date_row = QHBoxLayout()
+
+        self.date_label = QLabel(strings._("time_log_date_label").format(date=date_iso))
+        date_row.addWidget(self.date_label)
+
+        date_row.addStretch(1)
+
+        # You can i18n this later if you like
+        self.change_date_btn = QPushButton(strings._("time_log_change_date"))
+        self.change_date_btn.clicked.connect(self._on_change_date_clicked)
+        date_row.addWidget(self.change_date_btn)
+
+        root.addLayout(date_row)
 
         # --- Project / activity / hours row
         form = QFormLayout()
@@ -369,6 +394,52 @@ class TimeLogDialog(QDialog):
         self.add_update_btn.setText("&" + strings._("add_time_entry"))
 
     # ----- Actions -----------------------------------------------------
+
+    def _on_change_date_clicked(self) -> None:
+        """Let the user choose a different date and reload entries."""
+
+        # Start from current dialog date; fall back to today if invalid
+        current_qdate = QDate.fromString(self._date_iso, Qt.ISODate)
+        if not current_qdate.isValid():
+            current_qdate = QDate.currentDate()
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(strings._("time_log_select_date_title"))
+
+        layout = QVBoxLayout(dlg)
+
+        calendar = QCalendarWidget(dlg)
+        calendar.setSelectedDate(current_qdate)
+        layout.addWidget(calendar)
+        # Apply the same theming as the main sidebar calendar
+        if self._themes is not None:
+            self._themes.register_calendar(calendar)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=dlg
+        )
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        new_qdate = calendar.selectedDate()
+        new_iso = new_qdate.toString(Qt.ISODate)
+        if new_iso == self._date_iso:
+            # No change
+            return
+
+        # Update state
+        self._date_iso = new_iso
+
+        # Update window title and header label
+        self.setWindowTitle(strings._("time_log_for").format(date=new_iso))
+        self.date_label.setText(strings._("time_log_date_label").format(date=new_iso))
+
+        # Reload entries for the newly selected date
+        self._reload_entries()
 
     def _ensure_project_id(self) -> Optional[int]:
         """Get selected project_id from combo."""

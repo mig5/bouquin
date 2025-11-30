@@ -2,6 +2,7 @@
 
  * Add + button to time log widget in side bar to have a simplified log entry dialog (without summary or report option)
  * Allow click-and-drag mouse select on lines with checkbox, to capture the checkbox as well as the text.
+ * Allow changing the date when logging time (rather than having to go to that date before clicking on adding time log/opening time log manager)
 
 # 0.5.4
 
