@@ -27,7 +27,6 @@ from PySide6.QtGui import (
     QFont,
     QGuiApplication,
     QKeySequence,
-    QTextCharFormat,
     QTextCursor,
     QTextListFormat,
 )
