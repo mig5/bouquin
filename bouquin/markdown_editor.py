@@ -98,6 +98,10 @@ class MarkdownEditor(QTextEdit):
         # Guard to avoid recursive selection tweaks
         self._adjusting_selection = False
 
+        # Track when the current selection is being created via mouse drag,
+        # so we can treat it differently from triple-click / keyboard selections.
+        self._mouse_drag_selecting = False
+
         # After selections change, trim list prefixes from full-line selections
         # (e.g. after triple-clicking a list item to select the line).
         self.selectionChanged.connect(self._maybe_trim_list_prefix_from_line_selection)
@@ -783,6 +787,12 @@ class MarkdownEditor(QTextEdit):
         just *after* the visual list prefix (checkbox / bullet / number), and
         ends at the end of the text on that line (not on the next line's newline).
         """
+        # When the user is actively dragging with the mouse, we *do* want the
+        # checkbox/bullet to be part of the selection (for deleting whole rows).
+        # So don’t rewrite the selection in that case.
+        if getattr(self, "_mouse_drag_selecting", False):
+            return
+
         # Avoid re-entry when we move the cursor ourselves.
         if getattr(self, "_adjusting_selection", False):
             return
@@ -1217,6 +1227,13 @@ class MarkdownEditor(QTextEdit):
         super().keyPressEvent(event)
 
     def mouseMoveEvent(self, event):
+        # If the left button is down while the mouse moves, we consider this
+        # a drag selection (as opposed to a simple click).
+        if event.buttons() & Qt.LeftButton:
+            self._mouse_drag_selecting = True
+        else:
+            self._mouse_drag_selecting = False
+
         # Change cursor when hovering a link
         url = self._url_at_pos(event.pos())
         if url:
@@ -1229,6 +1246,12 @@ class MarkdownEditor(QTextEdit):
     def mouseReleaseEvent(self, event):
         # Let QTextEdit handle caret/selection first
         super().mouseReleaseEvent(event)
+
+        if event.button() == Qt.LeftButton:
+            # At this point the drag (if any) has finished and the final
+            # selection is already in place (and selectionChanged has fired).
+            # Clear the drag flag for future interactions.
+            self._mouse_drag_selecting = False
 
         if event.button() != Qt.LeftButton:
             return
@@ -1252,7 +1275,10 @@ class MarkdownEditor(QTextEdit):
         # default: don't suppress any upcoming double-click
         self._suppress_next_checkbox_double_click = False
 
+        # Fresh left-button press starts with "no drag" yet.
         if event.button() == Qt.LeftButton:
+            self._mouse_drag_selecting = False
+
             pt = event.pos()
 
             # Cursor and block under the mouse

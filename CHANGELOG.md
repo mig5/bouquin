@@ -1,6 +1,7 @@
 # 0.5.5
 
  * Add + button to time log widget in side bar to have a simplified log entry dialog (without summary or report option)
+ * Allow click-and-drag mouse select on lines with checkbox, to capture the checkbox as well as the text.
 
 # 0.5.4
 
