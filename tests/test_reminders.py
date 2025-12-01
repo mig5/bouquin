@@ -1,6 +1,6 @@
 import pytest
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from bouquin.reminders import (
     Reminder,
     ReminderType,
@@ -302,20 +302,24 @@ def test_upcoming_reminders_widget_add_reminder(qtbot, app, fresh_db):
     widget = UpcomingRemindersWidget(fresh_db)
     qtbot.addWidget(widget)
 
-    with patch.object(ReminderDialog, "exec", return_value=QDialog.Accepted):
-        with patch.object(ReminderDialog, "get_reminder") as mock_get:
-            mock_get.return_value = Reminder(
-                id=None,
-                text="New reminder",
-                time_str="10:00",
-                reminder_type=ReminderType.DAILY,
-            )
+    new_reminder = Reminder(
+        id=None,
+        text="New reminder",
+        time_str="10:00",
+        reminder_type=ReminderType.DAILY,
+    )
 
-            widget._add_reminder()
+    # Mock the entire ReminderDialog class to avoid Qt parent issues
+    mock_dialog = MagicMock()
+    mock_dialog.exec.return_value = QDialog.Accepted
+    mock_dialog.get_reminder.return_value = new_reminder
 
-            # Reminder should be saved
-            reminders = fresh_db.get_all_reminders()
-            assert len(reminders) > 0
+    with patch("bouquin.reminders.ReminderDialog", return_value=mock_dialog):
+        widget._add_reminder()
+
+        # Reminder should be saved
+        reminders = fresh_db.get_all_reminders()
+        assert len(reminders) > 0
 
 
 def test_upcoming_reminders_widget_edit_reminder(qtbot, app, fresh_db):
@@ -338,17 +342,20 @@ def test_upcoming_reminders_widget_edit_reminder(qtbot, app, fresh_db):
     if widget.reminder_list.count() > 0:
         item = widget.reminder_list.item(0)
 
-        with patch.object(ReminderDialog, "exec", return_value=QDialog.Accepted):
-            with patch.object(ReminderDialog, "get_reminder") as mock_get:
-                updated = Reminder(
-                    id=1,
-                    text="Updated",
-                    time_str="11:00",
-                    reminder_type=ReminderType.DAILY,
-                )
-                mock_get.return_value = updated
+        updated = Reminder(
+            id=1,
+            text="Updated",
+            time_str="11:00",
+            reminder_type=ReminderType.DAILY,
+        )
 
-                widget._edit_reminder(item)
+        # Mock the entire ReminderDialog class to avoid Qt parent issues
+        mock_dialog = MagicMock()
+        mock_dialog.exec.return_value = QDialog.Accepted
+        mock_dialog.get_reminder.return_value = updated
+
+        with patch("bouquin.reminders.ReminderDialog", return_value=mock_dialog):
+            widget._edit_reminder(item)
 
 
 def test_upcoming_reminders_widget_delete_selected_single(qtbot, app, fresh_db):
@@ -463,19 +470,23 @@ def test_manage_reminders_dialog_add_reminder(qtbot, app, fresh_db):
 
     initial_count = dialog.table.rowCount()
 
-    with patch.object(ReminderDialog, "exec", return_value=QDialog.Accepted):
-        with patch.object(ReminderDialog, "get_reminder") as mock_get:
-            mock_get.return_value = Reminder(
-                id=None,
-                text="New",
-                time_str="10:00",
-                reminder_type=ReminderType.DAILY,
-            )
+    new_reminder = Reminder(
+        id=None,
+        text="New",
+        time_str="10:00",
+        reminder_type=ReminderType.DAILY,
+    )
 
-            dialog._add_reminder()
+    # Mock the entire ReminderDialog class to avoid Qt parent issues
+    mock_dialog = MagicMock()
+    mock_dialog.exec.return_value = QDialog.Accepted
+    mock_dialog.get_reminder.return_value = new_reminder
 
-            # Table should have one more row
-            assert dialog.table.rowCount() == initial_count + 1
+    with patch("bouquin.reminders.ReminderDialog", return_value=mock_dialog):
+        dialog._add_reminder()
+
+        # Table should have one more row
+        assert dialog.table.rowCount() == initial_count + 1
 
 
 def test_manage_reminders_dialog_edit_reminder(qtbot, app, fresh_db):
@@ -492,16 +503,20 @@ def test_manage_reminders_dialog_edit_reminder(qtbot, app, fresh_db):
     dialog = ManageRemindersDialog(fresh_db)
     qtbot.addWidget(dialog)
 
-    with patch.object(ReminderDialog, "exec", return_value=QDialog.Accepted):
-        with patch.object(ReminderDialog, "get_reminder") as mock_get:
-            mock_get.return_value = Reminder(
-                id=1,
-                text="Updated",
-                time_str="11:00",
-                reminder_type=ReminderType.DAILY,
-            )
+    updated = Reminder(
+        id=1,
+        text="Updated",
+        time_str="11:00",
+        reminder_type=ReminderType.DAILY,
+    )
 
-            dialog._edit_reminder(reminder)
+    # Mock the entire ReminderDialog class to avoid Qt parent issues
+    mock_dialog = MagicMock()
+    mock_dialog.exec.return_value = QDialog.Accepted
+    mock_dialog.get_reminder.return_value = updated
+
+    with patch("bouquin.reminders.ReminderDialog", return_value=mock_dialog):
+        dialog._edit_reminder(reminder)
 
 
 def test_manage_reminders_dialog_delete_reminder(qtbot, app, fresh_db):
@@ -627,7 +642,11 @@ def test_upcoming_reminders_widget_manage_button(qtbot, app, fresh_db):
     widget = UpcomingRemindersWidget(fresh_db)
     qtbot.addWidget(widget)
 
-    with patch.object(ManageRemindersDialog, "exec"):
+    # Mock the entire ManageRemindersDialog class to avoid Qt parent issues
+    mock_dialog = MagicMock()
+    mock_dialog.exec.return_value = QDialog.Accepted
+
+    with patch("bouquin.reminders.ManageRemindersDialog", return_value=mock_dialog):
         widget._manage_reminders()
 
 
