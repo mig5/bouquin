@@ -72,6 +72,7 @@ report from within the app, or optionally to check for new versions to upgrade t
  * English, French and Italian locales provided
  * Ability to set reminder alarms (which will be flashed as the reminder)
  * Ability to log time per day for different projects/activities, pomodoro-style log timer and timesheet reports
+ * Ability to store and tag documents (tied to Projects, same as the Time Logging system). The documents are stored embedded in the encrypted database.
 
 
 ## How to install

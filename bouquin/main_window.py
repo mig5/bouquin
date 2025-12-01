@@ -50,6 +50,7 @@ from PySide6.QtWidgets import (
 
 from .bug_report_dialog import BugReportDialog
 from .db import DBManager
+from .documents import DocumentsDialog, TodaysDocumentsWidget
 from .find_bar import FindBar
 from .history_dialog import HistoryDialog
 from .key_prompt import KeyPrompt
@@ -126,6 +127,8 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.calendar)
         left_layout.addWidget(self.search)
         left_layout.addWidget(self.upcoming_reminders)
+        self.todays_documents = TodaysDocumentsWidget(self.db, self._current_date_iso())
+        left_layout.addWidget(self.todays_documents)
         left_layout.addWidget(self.time_log)
         left_layout.addWidget(self.tags)
         left_panel.setFixedWidth(self.calendar.sizeHint().width() + 16)
@@ -335,6 +338,9 @@ class MainWindow(QMainWindow):
         if not self.cfg.reminders:
             self.upcoming_reminders.hide()
             self.toolBar.actAlarm.setVisible(False)
+        if not self.cfg.documents:
+            self.todays_documents.hide()
+            self.toolBar.actDocuments.setVisible(False)
 
         # Restore window position from settings
         self._restore_window_position()
@@ -1091,6 +1097,7 @@ class MainWindow(QMainWindow):
         self._tb_checkboxes = lambda: self._call_editor("toggle_checkboxes")
         self._tb_alarm = self._on_alarm_requested
         self._tb_timer = self._on_timer_requested
+        self._tb_documents = self._on_documents_requested
         self._tb_font_larger = self._on_font_larger_requested
         self._tb_font_smaller = self._on_font_smaller_requested
 
@@ -1104,6 +1111,7 @@ class MainWindow(QMainWindow):
         tb.checkboxesRequested.connect(self._tb_checkboxes)
         tb.alarmRequested.connect(self._tb_alarm)
         tb.timerRequested.connect(self._tb_timer)
+        tb.documentsRequested.connect(self._tb_documents)
         tb.insertImageRequested.connect(self._on_insert_image)
         tb.historyRequested.connect(self._open_history)
         tb.fontSizeLargerRequested.connect(self._tb_font_larger)
@@ -1320,6 +1328,14 @@ class MainWindow(QMainWindow):
             timer.start(msecs)
             self._reminder_timers.append(timer)
 
+    # ----------- Documents handler ------------#
+    def _on_documents_requested(self):
+        documents_dlg = DocumentsDialog(self.db, self)
+        documents_dlg.exec()
+        # Refresh recent documents after any changes
+        if hasattr(self, "todays_documents"):
+            self.todays_documents.reload()
+
     # ----------- History handler ------------#
     def _open_history(self):
         if hasattr(self.editor, "current_date"):
@@ -1354,6 +1370,8 @@ class MainWindow(QMainWindow):
             self.tags.set_current_date(date_iso)
         if hasattr(self, "time_log"):
             self.time_log.set_current_date(date_iso)
+        if hasattr(self, "todays_documents"):
+            self.todays_documents.set_current_date(date_iso)
 
     def _on_tag_added(self):
         """Called when a tag is added - trigger autosave for current page"""
@@ -1421,6 +1439,7 @@ class MainWindow(QMainWindow):
         self.cfg.tags = getattr(new_cfg, "tags", self.cfg.tags)
         self.cfg.time_log = getattr(new_cfg, "time_log", self.cfg.time_log)
         self.cfg.reminders = getattr(new_cfg, "reminders", self.cfg.reminders)
+        self.cfg.documents = getattr(new_cfg, "documents", self.cfg.documents)
         self.cfg.locale = getattr(new_cfg, "locale", self.cfg.locale)
         self.cfg.font_size = getattr(new_cfg, "font_size", self.cfg.font_size)
 
@@ -1458,6 +1477,12 @@ class MainWindow(QMainWindow):
         else:
             self.upcoming_reminders.show()
             self.toolBar.actAlarm.setVisible(True)
+        if not self.cfg.documents:
+            self.todays_documents.hide()
+            self.toolBar.actDocuments.setVisible(False)
+        else:
+            self.todays_documents.show()
+            self.toolBar.actDocuments.setVisible(True)
 
     # ------------ Statistics handler --------------- #
 

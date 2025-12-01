@@ -33,7 +33,10 @@ def test_open_selected_with_data(qtbot, fresh_db):
     it = QListWidgetItem("dummy")
     from PySide6.QtCore import Qt
 
-    it.setData(Qt.ItemDataRole.UserRole, "1999-12-31")
+    it.setData(
+        Qt.ItemDataRole.UserRole,
+        {"kind": "page", "date": "1999-12-31"},
+    )
     s.results.addItem(it)
     s._open_selected(it)
     assert seen == ["1999-12-31"]
@@ -95,6 +98,6 @@ def test_populate_results_shows_both_ellipses(qtbot, fresh_db):
     qtbot.addWidget(s)
     s.show()
     long = "X" * 40 + "alpha" + "Y" * 40
-    rows = [("2000-01-01", long)]
+    rows = [("page", "2000-01-01", "2000-01-01", long, None)]
     s._populate_results("alpha", rows)
     assert s.results.count() >= 1

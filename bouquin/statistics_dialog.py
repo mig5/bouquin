@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from . import strings
 from .db import DBManager
+from .settings import load_db_config
 
 
 # ---------- Activity heatmap ----------
@@ -265,6 +266,32 @@ class StatisticsDialog(QDialog):
             revisions_by_date,
         ) = self._gather_stats()
 
+        # Optional: per-date document counts for the heatmap.
+        # This uses project_documents.uploaded_at aggregated by day, if the
+        # Documents feature is enabled.
+        self.cfg = load_db_config()
+        documents_by_date: Dict[_dt.date, int] = {}
+        total_documents = 0
+        date_most_documents: _dt.date | None = None
+        date_most_documents_count = 0
+
+        if self.cfg.documents:
+            try:
+                documents_by_date = self._db.documents_by_date() or {}
+            except Exception:
+                documents_by_date = {}
+
+        if documents_by_date:
+            total_documents = sum(documents_by_date.values())
+            # Choose the date with the highest count, tie-breaking by earliest date.
+            date_most_documents, date_most_documents_count = sorted(
+                documents_by_date.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[0]
+
+        # for the heatmap
+        self._documents_by_date = documents_by_date
+
         # --- Numeric summary at the top ----------------------------------
         form = QFormLayout()
         root.addLayout(form)
@@ -291,22 +318,39 @@ class StatisticsDialog(QDialog):
             QLabel(str(total_words)),
         )
 
-        # Unique tag names
-        form.addRow(
-            strings._("stats_unique_tags"),
-            QLabel(str(unique_tags)),
-        )
-
-        if page_most_tags:
+        # Tags
+        if self.cfg.tags:
             form.addRow(
-                strings._("stats_page_most_tags"),
-                QLabel(f"{page_most_tags} ({page_most_tags_count})"),
+                strings._("stats_unique_tags"),
+                QLabel(str(unique_tags)),
             )
-        else:
-            form.addRow(strings._("stats_page_most_tags"), QLabel("—"))
+
+            if page_most_tags:
+                form.addRow(
+                    strings._("stats_page_most_tags"),
+                    QLabel(f"{page_most_tags} ({page_most_tags_count})"),
+                )
+            else:
+                form.addRow(strings._("stats_page_most_tags"), QLabel("—"))
+
+        # Documents
+        if date_most_documents:
+            form.addRow(
+                strings._("stats_total_documents"),
+                QLabel(str(total_documents)),
+            )
+
+            doc_most_label = (
+                f"{date_most_documents.isoformat()} ({date_most_documents_count})"
+            )
+
+            form.addRow(
+                strings._("stats_date_most_documents"),
+                QLabel(doc_most_label),
+            )
 
         # --- Heatmap with switcher ---------------------------------------
-        if words_by_date or revisions_by_date:
+        if words_by_date or revisions_by_date or documents_by_date:
             group = QGroupBox(strings._("stats_activity_heatmap"))
             group_layout = QVBoxLayout(group)
 
@@ -316,6 +360,10 @@ class StatisticsDialog(QDialog):
             self.metric_combo = QComboBox()
             self.metric_combo.addItem(strings._("stats_metric_words"), "words")
             self.metric_combo.addItem(strings._("stats_metric_revisions"), "revisions")
+            if documents_by_date:
+                self.metric_combo.addItem(
+                    strings._("stats_metric_documents"), "documents"
+                )
             combo_row.addWidget(self.metric_combo)
             combo_row.addStretch(1)
             group_layout.addLayout(combo_row)
@@ -344,6 +392,8 @@ class StatisticsDialog(QDialog):
     def _apply_metric(self, metric: str) -> None:
         if metric == "revisions":
             self._heatmap.set_data(self._revisions_by_date)
+        elif metric == "documents":
+            self._heatmap.set_data(self._documents_by_date)
         else:
             self._heatmap.set_data(self._words_by_date)
 

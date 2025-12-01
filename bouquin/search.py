@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from . import strings
 
-Row = Tuple[str, str]
+Row = Tuple[str, str, str, str, str | None]
 
 
 class Search(QWidget):
@@ -52,9 +52,55 @@ class Search(QWidget):
         lay.addWidget(self.results)
 
     def _open_selected(self, item: QListWidgetItem):
-        date_str = item.data(Qt.ItemDataRole.UserRole)
-        if date_str:
-            self.openDateRequested.emit(date_str)
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(data, dict):
+            return
+
+        kind = data.get("kind")
+        if kind == "page":
+            date_iso = data.get("date")
+            if date_iso:
+                self.openDateRequested.emit(date_iso)
+        elif kind == "document":
+            doc_id = data.get("doc_id")
+            file_name = data.get("file_name") or "document"
+            if doc_id is None:
+                return
+            self._open_document(int(doc_id), file_name)
+
+    def _open_document(self, doc_id: int, file_name: str) -> None:
+        """
+        Open a document search result via a temp file.
+        """
+        from pathlib import Path
+        import tempfile
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtWidgets import QMessageBox
+
+        try:
+            data = self._db.document_data(doc_id)
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                strings._("project_documents_title"),
+                strings._("documents_open_failed").format(error=str(e)),
+            )
+            return
+
+        suffix = Path(file_name).suffix or ""
+        tmp = tempfile.NamedTemporaryFile(
+            prefix="bouquin_doc_",
+            suffix=suffix,
+            delete=False,
+        )
+        try:
+            tmp.write(data)
+            tmp.flush()
+        finally:
+            tmp.close()
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
 
     def _search(self, text: str):
         """
@@ -80,28 +126,28 @@ class Search(QWidget):
             self.resultDatesChanged.emit([])  # clear highlights
             return
 
-        self.resultDatesChanged.emit(sorted({d for d, _ in rows}))
+        # Only highlight calendar dates for page results
+        page_dates = sorted(
+            {key for (kind, key, _title, _text, _aux) in rows if kind == "page"}
+        )
+        self.resultDatesChanged.emit(page_dates)
         self.results.show()
 
-        for date_str, content in rows:
-            # Build an HTML fragment around the match and whether to show ellipses
-            frag_html = self._make_html_snippet(content, query, radius=30, maxlen=90)
-            # ---- Per-item widget: date on top, preview row below (with ellipses) ----
+        for kind, key, title, text, aux in rows:
+            # Build an HTML fragment around the match
+            frag_html = self._make_html_snippet(text, query, radius=30, maxlen=90)
+
             container = QWidget()
             outer = QVBoxLayout(container)
-            outer.setContentsMargins(8, 6, 8, 6)
+            outer.setContentsMargins(0, 0, 0, 0)
             outer.setSpacing(2)
 
-            # Date label (plain text)
-            date_lbl = QLabel()
-            date_lbl.setTextFormat(Qt.TextFormat.RichText)
-            date_lbl.setText(f"<h3><i>{date_str}</i></h3>")
-            date_f = date_lbl.font()
-            date_f.setPointSizeF(date_f.pointSizeF() + 1)
-            date_lbl.setFont(date_f)
-            outer.addWidget(date_lbl)
+            # ---- Heading (date for pages, "Document" for docs) ----
+            heading = QLabel(title)
+            heading.setStyleSheet("font-weight:bold;")
+            outer.addWidget(heading)
 
-            # Preview row with optional ellipses
+            # ---- Preview row ----
             row = QWidget()
             h = QHBoxLayout(row)
             h.setContentsMargins(0, 0, 0, 0)
@@ -117,9 +163,9 @@ class Search(QWidget):
                 else "<span style='color:#888'>(no preview)</span>"
             )
             h.addWidget(preview, 1)
-
             outer.addWidget(row)
 
+            # Separator line
             line = QFrame()
             line.setFrameShape(QFrame.HLine)
             line.setFrameShadow(QFrame.Sunken)
@@ -127,9 +173,22 @@ class Search(QWidget):
 
             # ---- Add to list ----
             item = QListWidgetItem()
-            item.setData(Qt.ItemDataRole.UserRole, date_str)
-            item.setSizeHint(container.sizeHint())
+            if kind == "page":
+                item.setData(
+                    Qt.ItemDataRole.UserRole,
+                    {"kind": "page", "date": key},
+                )
+            else:  # document
+                item.setData(
+                    Qt.ItemDataRole.UserRole,
+                    {
+                        "kind": "document",
+                        "doc_id": int(key),
+                        "file_name": aux or "",
+                    },
+                )
 
+            item.setSizeHint(container.sizeHint())
             self.results.addItem(item)
             self.results.setItemWidget(item, container)
 

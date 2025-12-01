@@ -6,11 +6,13 @@ import hashlib
 import html
 import json
 import markdown
+import mimetypes
 import re
 
 from dataclasses import dataclass
 from pathlib import Path
 from sqlcipher3 import dbapi2 as sqlite
+from sqlcipher3 import Binary
 from typing import List, Sequence, Tuple, Dict
 
 
@@ -29,6 +31,15 @@ TimeLogRow = Tuple[
     str,  # activity_id, activity_name
     int,  # minutes
     str | None,  # note
+]
+DocumentRow = Tuple[
+    int,  # id
+    int,  # project_id
+    str,  # project_name
+    str,  # file_name
+    str | None,  # description
+    int,  # size_bytes
+    str,  # uploaded_at (ISO)
 ]
 
 _TAG_COLORS = [
@@ -65,6 +76,7 @@ class DBConfig:
     tags: bool = True
     time_log: bool = True
     reminders: bool = True
+    documents: bool = True
     locale: str = "en"
     font_size: int = 11
 
@@ -211,6 +223,35 @@ class DBManager:
 
             CREATE INDEX IF NOT EXISTS ix_reminders_active
                 ON reminders(active);
+
+            CREATE TABLE IF NOT EXISTS project_documents (
+                id           INTEGER PRIMARY KEY,
+                project_id   INTEGER NOT NULL,           -- FK to projects.id
+                file_name    TEXT    NOT NULL,           -- original filename
+                mime_type    TEXT,                       -- optional
+                description  TEXT,
+                size_bytes   INTEGER NOT NULL,
+                uploaded_at  TEXT NOT NULL DEFAULT (
+                    strftime('%Y-%m-%d','now')
+                ),
+                data         BLOB    NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_project_documents_project
+                ON project_documents(project_id);
+
+            -- New: tags attached to documents (like page_tags, but for docs)
+            CREATE TABLE IF NOT EXISTS document_tags (
+                document_id INTEGER NOT NULL,            -- FK to project_documents.id
+                tag_id      INTEGER NOT NULL,            -- FK to tags.id
+                PRIMARY KEY (document_id, tag_id),
+                FOREIGN KEY(document_id) REFERENCES project_documents(id) ON DELETE CASCADE,
+                FOREIGN KEY(tag_id)      REFERENCES tags(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_document_tags_tag_id
+                ON document_tags(tag_id);
             """
         )
         self.conn.commit()
@@ -248,25 +289,37 @@ class DBManager:
         ).fetchone()
         return row[0] if row else ""
 
-    def search_entries(self, text: str) -> list[str]:
+    def search_entries(self, text: str) -> list[tuple[str, str, str, str, str | None]]:
         """
         Search for entries by term or tag name.
-        This only works against the latest version of the page.
+        Returns both pages and documents.
+
+        kind = "page" or "document"
+        key  = date_iso (page) or str(doc_id) (document)
+        title = heading for the result ("YYYY-MM-DD" or "Document")
+        text  = source text for the snippet
+        aux   = extra info (file_name for documents, else None)
         """
         cur = self.conn.cursor()
         q = text.strip()
+        if not q:
+            return []
+
         pattern = f"%{q.lower()}%"
 
-        rows = cur.execute(
+        results: list[tuple[str, str, str, str, str | None]] = []
+
+        # --- Pages: content or tag matches ---------------------------------
+        page_rows = cur.execute(
             """
-            SELECT DISTINCT p.date, v.content
+            SELECT DISTINCT p.date AS date_iso, v.content
             FROM pages AS p
             JOIN versions AS v
               ON v.id = p.current_version_id
             LEFT JOIN page_tags pt
               ON pt.page_date = p.date
             LEFT JOIN tags t
-                  ON t.id = pt.tag_id
+              ON t.id = pt.tag_id
             WHERE TRIM(v.content) <> ''
               AND (
                 LOWER(v.content) LIKE ?
@@ -276,7 +329,54 @@ class DBManager:
             """,
             (pattern, pattern),
         ).fetchall()
-        return [(r[0], r[1]) for r in rows]
+
+        for r in page_rows:
+            date_iso = r["date_iso"]
+            content = r["content"]
+            results.append(("page", date_iso, date_iso, content, None))
+
+        # --- Documents: file name, description, or tag matches -------------
+        doc_rows = cur.execute(
+            """
+            SELECT DISTINCT
+                d.id          AS doc_id,
+                d.file_name   AS file_name,
+                d.uploaded_at AS uploaded_at,
+                COALESCE(d.description, '') AS description,
+                COALESCE(t.name, '')        AS tag_name
+            FROM project_documents AS d
+            LEFT JOIN document_tags AS dt
+              ON dt.document_id = d.id
+            LEFT JOIN tags AS t
+              ON t.id = dt.tag_id
+            WHERE
+                LOWER(d.file_name) LIKE ?
+                OR LOWER(COALESCE(d.description, '')) LIKE ?
+                OR LOWER(COALESCE(t.name, '')) LIKE ?
+            ORDER BY LOWER(d.file_name);
+            """,
+            (pattern, pattern, pattern),
+        ).fetchall()
+
+        for r in doc_rows:
+            doc_id = r["doc_id"]
+            file_name = r["file_name"]
+            description = r["description"] or ""
+            uploaded_at = r["uploaded_at"]
+            # Simple snippet source: file name + description
+            text_src = f"{file_name}\n{description}".strip()
+
+            results.append(
+                (
+                    "document",
+                    str(doc_id),
+                    strings._("search_result_heading_document") + f" ({uploaded_at})",
+                    text_src,
+                    file_name,
+                )
+            )
+
+        return results
 
     def dates_with_content(self) -> list[str]:
         """
@@ -691,11 +791,12 @@ class DBManager:
 
     def delete_tag(self, tag_id: int) -> None:
         """
-        Delete a tag entirely (removes it from all pages).
+        Delete a tag entirely (removes it from all pages and documents).
         """
         with self.conn:
             cur = self.conn.cursor()
             cur.execute("DELETE FROM page_tags WHERE tag_id=?;", (tag_id,))
+            cur.execute("DELETE FROM document_tags WHERE tag_id=?;", (tag_id,))
             cur.execute("DELETE FROM tags WHERE id=?;", (tag_id,))
 
     def get_pages_for_tag(self, tag_name: str) -> list[Entry]:
@@ -1137,3 +1238,341 @@ class DBManager:
         cur = self.conn.cursor()
         cur.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
         self.conn.commit()
+
+    # ------------------------- Documents logic here ------------------------#
+
+    def documents_for_project(self, project_id: int) -> list[DocumentRow]:
+        """
+        Return metadata for all documents attached to a given project.
+        """
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT
+                d.id,
+                d.project_id,
+                p.name AS project_name,
+                d.file_name,
+                d.description,
+                d.size_bytes,
+                d.uploaded_at
+            FROM project_documents AS d
+            JOIN projects AS p ON p.id = d.project_id
+            WHERE d.project_id = ?
+            ORDER BY d.uploaded_at DESC, LOWER(d.file_name);
+            """,
+            (project_id,),
+        ).fetchall()
+
+        result: list[DocumentRow] = []
+        for r in rows:
+            result.append(
+                (
+                    r["id"],
+                    r["project_id"],
+                    r["project_name"],
+                    r["file_name"],
+                    r["description"],
+                    r["size_bytes"],
+                    r["uploaded_at"],
+                )
+            )
+        return result
+
+    def search_documents(self, query: str) -> list[DocumentRow]:
+        """Search documents across all projects.
+
+        The search is case-insensitive and matches against:
+        - file name
+        - description
+        - project name
+        - tag names associated with the document
+        """
+        pattern = f"%{query.lower()}%"
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT DISTINCT
+                d.id,
+                d.project_id,
+                p.name AS project_name,
+                d.file_name,
+                d.description,
+                d.size_bytes,
+                d.uploaded_at
+            FROM project_documents AS d
+            LEFT JOIN projects AS p ON p.id = d.project_id
+            LEFT JOIN document_tags AS dt ON dt.document_id = d.id
+            LEFT JOIN tags AS t ON t.id = dt.tag_id
+            WHERE LOWER(d.file_name) LIKE :pat
+               OR LOWER(COALESCE(d.description, '')) LIKE :pat
+               OR LOWER(COALESCE(p.name, '')) LIKE :pat
+               OR LOWER(COALESCE(t.name, '')) LIKE :pat
+            ORDER BY d.uploaded_at DESC, LOWER(d.file_name);
+            """,
+            {"pat": pattern},
+        ).fetchall()
+
+        result: list[DocumentRow] = []
+        for r in rows:
+            result.append(
+                (
+                    r["id"],
+                    r["project_id"],
+                    r["project_name"],
+                    r["file_name"],
+                    r["description"],
+                    r["size_bytes"],
+                    r["uploaded_at"],
+                )
+            )
+        return result
+
+    def add_document_from_path(
+        self,
+        project_id: int,
+        file_path: str,
+        description: str | None = None,
+    ) -> int:
+        """
+        Read a file from disk and store it as a BLOB in project_documents.
+        """
+        path = Path(file_path)
+        if not path.is_file():
+            raise ValueError(f"File does not exist: {file_path}")
+
+        data = path.read_bytes()
+        size_bytes = len(data)
+        file_name = path.name
+        mime_type, _ = mimetypes.guess_type(str(path))
+        mime_type = mime_type or None
+
+        with self.conn:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO project_documents
+                    (project_id, file_name, mime_type,
+                     description, size_bytes, data)
+                VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    project_id,
+                    file_name,
+                    mime_type,
+                    description,
+                    size_bytes,
+                    Binary(data),
+                ),
+            )
+            doc_id = cur.lastrowid or 0
+
+        return int(doc_id)
+
+    def update_document_description(self, doc_id: int, description: str | None) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE project_documents SET description = ? WHERE id = ?;",
+                (description, doc_id),
+            )
+
+    def delete_document(self, doc_id: int) -> None:
+        with self.conn:
+            self.conn.execute("DELETE FROM project_documents WHERE id = ?;", (doc_id,))
+
+    def document_data(self, doc_id: int) -> bytes:
+        """
+        Return just the raw bytes for a document.
+        """
+        cur = self.conn.cursor()
+        row = cur.execute(
+            "SELECT data FROM project_documents WHERE id = ?;",
+            (doc_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown document id {doc_id}")
+        return bytes(row["data"])
+
+    def get_tags_for_document(self, document_id: int) -> list[TagRow]:
+        """
+        Return (id, name, color) for all tags attached to this document.
+        """
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT t.id, t.name, t.color
+            FROM document_tags dt
+            JOIN tags t ON t.id = dt.tag_id
+            WHERE dt.document_id = ?
+            ORDER BY LOWER(t.name);
+            """,
+            (document_id,),
+        ).fetchall()
+        return [(r[0], r[1], r[2]) for r in rows]
+
+    def set_tags_for_document(self, document_id: int, tag_names: Sequence[str]) -> None:
+        """
+        Replace the tag set for a document with the given names.
+        Behaviour mirrors set_tags_for_page.
+        """
+        # Normalise + dedupe (case-insensitive)
+        clean_names: list[str] = []
+        seen: set[str] = set()
+        for name in tag_names:
+            name = name.strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            clean_names.append(name)
+
+        with self.conn:
+            cur = self.conn.cursor()
+
+            # Ensure the document exists
+            exists = cur.execute(
+                "SELECT 1 FROM project_documents WHERE id = ?;", (document_id,)
+            ).fetchone()
+            if not exists:
+                raise sqlite.IntegrityError(f"Unknown document id {document_id}")
+
+            if not clean_names:
+                cur.execute(
+                    "DELETE FROM document_tags WHERE document_id = ?;",
+                    (document_id,),
+                )
+                return
+
+            # For each tag name, reuse existing tag (case-insensitive) or create new
+            final_tag_names: list[str] = []
+            for name in clean_names:
+                existing = cur.execute(
+                    "SELECT name FROM tags WHERE LOWER(name) = LOWER(?);", (name,)
+                ).fetchone()
+                if existing:
+                    final_tag_names.append(existing["name"])
+                else:
+                    cur.execute(
+                        """
+                        INSERT OR IGNORE INTO tags(name, color)
+                        VALUES (?, ?);
+                        """,
+                        (name, self._default_tag_colour(name)),
+                    )
+                    final_tag_names.append(name)
+
+            # Lookup ids for the final tag names
+            placeholders = ",".join("?" for _ in final_tag_names)
+            rows = cur.execute(
+                f"""
+                SELECT id, name
+                FROM tags
+                WHERE name IN ({placeholders});
+                """,  # nosec
+                tuple(final_tag_names),
+            ).fetchall()
+            ids_by_name = {r["name"]: r["id"] for r in rows}
+
+            # Reset document_tags for this document
+            cur.execute(
+                "DELETE FROM document_tags WHERE document_id = ?;",
+                (document_id,),
+            )
+            for name in final_tag_names:
+                tag_id = ids_by_name.get(name)
+                if tag_id is not None:
+                    cur.execute(
+                        """
+                        INSERT OR IGNORE INTO document_tags(document_id, tag_id)
+                        VALUES (?, ?);
+                        """,
+                        (document_id, tag_id),
+                    )
+
+    def documents_by_date(self) -> Dict[_dt.date, int]:
+        """
+        Return a mapping of date -> number of documents uploaded on that date.
+
+        The keys are datetime.date objects derived from the
+        project_documents.uploaded_at column, which is stored as a
+        YYYY-MM-DD ISO date string (or a timestamp whose leading part
+        is that date).
+        """
+        cur = self.conn.cursor()
+        try:
+            rows = cur.execute(
+                """
+                SELECT uploaded_at AS date_iso,
+                       COUNT(*)     AS c
+                FROM project_documents
+                WHERE uploaded_at IS NOT NULL
+                  AND uploaded_at != ''
+                GROUP BY uploaded_at
+                ORDER BY uploaded_at;
+                """
+            ).fetchall()
+        except Exception:
+            # Older DBs without project_documents/uploaded_at → no document stats
+            return {}
+
+        result: Dict[_dt.date, int] = {}
+        for r in rows:
+            date_iso = r["date_iso"]
+            if not date_iso:
+                continue
+
+            # If uploaded_at ever contains a full timestamp, only use
+            # the leading date portion.
+            date_part = str(date_iso).split(" ", 1)[0][:10]
+            try:
+                d = _dt.date.fromisoformat(date_part)
+            except Exception:  # nosec B112
+                continue
+
+            result[d] = int(r["c"])
+
+        return result
+
+    def todays_documents(self, date_iso: str) -> list[tuple[int, str, str | None, str]]:
+        """
+        Return today's documents as
+        (doc_id, file_name, project_name, uploaded_at).
+        """
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT d.id            AS doc_id,
+                   d.file_name     AS file_name,
+                   p.name          AS project_name
+            FROM project_documents AS d
+            LEFT JOIN projects     AS p ON p.id = d.project_id
+            WHERE d.uploaded_at LIKE ?
+            ORDER BY d.uploaded_at DESC, LOWER(d.file_name);
+            """,
+            (f"%{date_iso}%",),
+        ).fetchall()
+
+        return [(r["doc_id"], r["file_name"], r["project_name"]) for r in rows]
+
+    def get_documents_for_tag(self, tag_name: str) -> list[tuple[int, str, str]]:
+        """
+        Return (document_id, project_name, file_name) for documents with a given tag.
+        """
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT d.id AS doc_id,
+                   p.name AS project_name,
+                   d.file_name
+            FROM project_documents AS d
+            JOIN document_tags AS dt ON dt.document_id = d.id
+            JOIN tags AS t ON t.id = dt.tag_id
+            LEFT JOIN projects AS p ON p.id = d.project_id
+            WHERE LOWER(t.name) = LOWER(?)
+            ORDER BY LOWER(d.file_name);
+            """,
+            (tag_name,),
+        ).fetchall()
+        return [(r["doc_id"], r["project_name"], r["file_name"]) for r in rows]

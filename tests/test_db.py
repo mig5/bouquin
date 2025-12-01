@@ -61,8 +61,10 @@ def test_dates_with_content_and_search(fresh_db):
     assert _today() in dates and _yesterday() in dates and _tomorrow() in dates
 
     hits = list(fresh_db.search_entries("alpha"))
-    assert any(d == _today() for d, _ in hits)
-    assert any(d == _tomorrow() for d, _ in hits)
+    # search_entries now returns (kind, key, title, text, aux)
+    page_dates = [key for (kind, key, _title, _text, _aux) in hits if kind == "page"]
+    assert _today() in page_dates
+    assert _tomorrow() in page_dates
 
 
 def test_get_all_entries_and_export(fresh_db, tmp_path):

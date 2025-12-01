@@ -1,3 +1,10 @@
+# 0.6.0
+
+ * Add 'Documents' feature. Documents are tied to Projects in the same way as Time Logging, and can be tagged via the Tags feature.
+ * Close time log dialog if opened via the + button from sidebar widget
+ * Only show tags in Statistics widget if tags are enabled
+ * Fix rounding up/down in Pomodoro timer to the closest 15 min interval
+
 # 0.5.5
 
  * Add + button to time log widget in side bar to have a simplified log entry dialog (without summary or report option)

@@ -185,7 +185,12 @@ class TimeLogWidget(QFrame):
             return
 
         dlg = TimeLogDialog(
-            self._db, self._current_date, self, True, themes=self._themes
+            self._db,
+            self._current_date,
+            self,
+            True,
+            themes=self._themes,
+            close_after_add=True,
         )
         dlg.exec()
 
@@ -214,6 +219,7 @@ class TimeLogDialog(QDialog):
         parent=None,
         log_entry_only: bool | None = False,
         themes: ThemeManager | None = None,
+        close_after_add: bool | None = False,
     ):
         super().__init__(parent)
         self._db = db
@@ -223,6 +229,8 @@ class TimeLogDialog(QDialog):
         # Guard flag used when repopulating the table so we don’t treat
         # programmatic item changes as user edits.
         self._reloading_entries: bool = False
+
+        self.close_after_add = close_after_add
 
         self.setWindowTitle(strings._("time_log_for").format(date=date_iso))
         self.resize(900, 600)
@@ -488,6 +496,8 @@ class TimeLogDialog(QDialog):
             )
 
         self._reload_entries()
+        if self.close_after_add:
+            self.close()
 
     def _on_row_selected(self) -> None:
         items = self.table.selectedItems()

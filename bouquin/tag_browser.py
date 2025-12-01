@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, Signal, QUrl
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -13,7 +13,11 @@ from PySide6.QtWidgets import (
     QInputDialog,
 )
 
+from pathlib import Path
+import tempfile
+
 from .db import DBManager
+from .settings import load_db_config
 from . import strings
 from sqlcipher3.dbapi2 import IntegrityError
 
@@ -25,6 +29,7 @@ class TagBrowserDialog(QDialog):
     def __init__(self, db: DBManager, parent=None, focus_tag: str | None = None):
         super().__init__(parent)
         self._db = db
+        self.cfg = load_db_config()
         self.setWindowTitle(
             strings._("tag_browser_title") + " / " + strings._("manage_tags")
         )
@@ -38,9 +43,18 @@ class TagBrowserDialog(QDialog):
         layout.addWidget(instructions)
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(
-            [strings._("tag"), strings._("color_hex"), strings._("date")]
-        )
+        if not self.cfg.documents:
+            self.tree.setHeaderLabels(
+                [strings._("tag"), strings._("color_hex"), strings._("date")]
+            )
+        else:
+            self.tree.setHeaderLabels(
+                [
+                    strings._("tag"),
+                    strings._("color_hex"),
+                    strings._("page_or_document"),
+                ]
+            )
         self.tree.setColumnWidth(0, 200)
         self.tree.setColumnWidth(1, 100)
         self.tree.itemActivated.connect(self._on_item_activated)
@@ -119,6 +133,7 @@ class TagBrowserDialog(QDialog):
 
             self.tree.addTopLevelItem(root)
 
+            # Pages with this tag
             pages = self._db.get_pages_for_tag(name)
             for date_iso, _content in pages:
                 child = QTreeWidgetItem(["", "", date_iso])
@@ -126,6 +141,21 @@ class TagBrowserDialog(QDialog):
                     0, Qt.ItemDataRole.UserRole, {"type": "page", "date": date_iso}
                 )
                 root.addChild(child)
+
+            # Documents with this tag
+            if self.cfg.documents:
+                docs = self._db.get_documents_for_tag(name)
+                for doc_id, project_name, file_name in docs:
+                    label = file_name
+                    if project_name:
+                        label = f"{file_name} ({project_name})"
+                    child = QTreeWidgetItem(["", "", label])
+                    child.setData(
+                        0,
+                        Qt.ItemDataRole.UserRole,
+                        {"type": "document", "id": doc_id},
+                    )
+                    root.addChild(child)
 
             if focus_tag and name.lower() == focus_tag.lower():
                 focus_item = root
@@ -153,11 +183,44 @@ class TagBrowserDialog(QDialog):
     def _on_item_activated(self, item: QTreeWidgetItem, column: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if isinstance(data, dict):
-            if data.get("type") == "page":
+            item_type = data.get("type")
+
+            if item_type == "page":
                 date_iso = data.get("date")
                 if date_iso:
                     self.openDateRequested.emit(date_iso)
                     self.accept()
+
+            elif item_type == "document":
+                doc_id = data.get("id")
+                if doc_id is not None:
+                    self._open_document(int(doc_id), str(data.get("file_name")))
+
+    def _open_document(self, doc_id: int, file_name: str) -> None:
+        """Open a tagged document via the default external application."""
+        try:
+            data = self._db.document_data(doc_id)
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                strings._("project_documents_title"),
+                strings._("documents_open_failed").format(error=str(e)),
+            )
+            return
+
+        suffix = Path(file_name).suffix or ""
+        tmp = tempfile.NamedTemporaryFile(
+            prefix="bouquin_doc_",
+            suffix=suffix,
+            delete=False,
+        )
+        try:
+            tmp.write(data)
+            tmp.flush()
+        finally:
+            tmp.close()
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
 
     def _add_a_tag(self):
         """Add a new tag"""

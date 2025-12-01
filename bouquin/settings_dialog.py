@@ -181,6 +181,11 @@ class SettingsDialog(QDialog):
         self.reminders.setCursor(Qt.PointingHandCursor)
         features_layout.addWidget(self.reminders)
 
+        self.documents = QCheckBox(strings._("enable_documents_feature"))
+        self.documents.setChecked(self.current_settings.documents)
+        self.documents.setCursor(Qt.PointingHandCursor)
+        features_layout.addWidget(self.documents)
+
         layout.addWidget(features_group)
         layout.addStretch()
         return page
@@ -308,6 +313,7 @@ class SettingsDialog(QDialog):
             tags=self.tags.isChecked(),
             time_log=self.time_log.isChecked(),
             reminders=self.reminders.isChecked(),
+            documents=self.documents.isChecked(),
             locale=self.locale_combobox.currentText(),
             font_size=self.font_size.value(),
         )
