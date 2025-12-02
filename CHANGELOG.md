@@ -1,3 +1,8 @@
+# 0.6.1
+
+ * Consolidate some code related to opening documents using the Documents feature.
+ * More code coverage
+
 # 0.6.0
 
  * Add 'Documents' feature. Documents are tied to Projects in the same way as Time Logging, and can be tagged via the Tags feature.

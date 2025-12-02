@@ -69,38 +69,10 @@ class Search(QWidget):
             self._open_document(int(doc_id), file_name)
 
     def _open_document(self, doc_id: int, file_name: str) -> None:
-        """
-        Open a document search result via a temp file.
-        """
-        from pathlib import Path
-        import tempfile
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
-        from PySide6.QtWidgets import QMessageBox
+        """Open the selected document in the user's default app."""
+        from bouquin.document_utils import open_document_from_db
 
-        try:
-            data = self._db.document_data(doc_id)
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                strings._("project_documents_title"),
-                strings._("documents_open_failed").format(error=str(e)),
-            )
-            return
-
-        suffix = Path(file_name).suffix or ""
-        tmp = tempfile.NamedTemporaryFile(
-            prefix="bouquin_doc_",
-            suffix=suffix,
-            delete=False,
-        )
-        try:
-            tmp.write(data)
-            tmp.flush()
-        finally:
-            tmp.close()
-
-        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
+        open_document_from_db(self._db, doc_id, file_name, parent_widget=self)
 
     def _search(self, text: str):
         """

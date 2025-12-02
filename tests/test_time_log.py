@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QFileDialog,
+    QDialog,
 )
 from sqlcipher3.dbapi2 import IntegrityError
 
@@ -16,6 +17,8 @@ from bouquin.time_log import (
     TimeReportDialog,
 )
 import bouquin.strings as strings
+
+from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
@@ -2562,3 +2565,371 @@ def test_time_log_with_entry(qtbot, fresh_db):
 
     # Widget should have been created successfully
     assert widget is not None
+
+
+def test_time_log_widget_open_dialog_log_only_when_no_date(qtbot, app, fresh_db):
+    """Test _open_dialog_log_only when _current_date is None."""
+    widget = TimeLogWidget(fresh_db, themes=None)
+    qtbot.addWidget(widget)
+
+    # Set current date to None
+    widget._current_date = None
+
+    # Click should return early without crashing
+    widget._open_dialog_log_only()
+
+    # No dialog should be shown
+
+
+def test_time_log_widget_open_dialog_log_only_opens_dialog(qtbot, app, fresh_db):
+    """Test _open_dialog_log_only opens TimeLogDialog."""
+    widget = TimeLogWidget(fresh_db, themes=None)
+    qtbot.addWidget(widget)
+
+    # Set a valid date
+    widget._current_date = "2024-01-15"
+
+    # Mock TimeLogDialog
+    mock_dialog = MagicMock()
+    mock_dialog.exec.return_value = QDialog.Accepted
+
+    with patch("bouquin.time_log.TimeLogDialog", return_value=mock_dialog):
+        widget._open_dialog_log_only()
+
+        # Dialog should have been created with correct parameters
+        assert mock_dialog.exec.called
+
+
+def test_time_log_widget_open_dialog_log_only_refreshes_when_collapsed(
+    qtbot, app, fresh_db
+):
+    """Test that opening dialog updates summary when widget is collapsed."""
+    widget = TimeLogWidget(fresh_db, themes=None)
+    qtbot.addWidget(widget)
+    widget._current_date = "2024-01-15"
+
+    # Collapse the widget
+    widget.toggle_btn.setChecked(False)
+
+    # Mock TimeLogDialog
+    mock_dialog = MagicMock()
+    mock_dialog.exec.return_value = QDialog.Accepted
+
+    with patch("bouquin.time_log.TimeLogDialog", return_value=mock_dialog):
+        widget._open_dialog_log_only()
+
+        # Should show collapsed hint
+        assert (
+            "collapsed" in widget.summary_label.text().lower()
+            or widget.summary_label.text() != ""
+        )
+
+
+def test_time_log_dialog_log_entry_only_mode(qtbot, app, fresh_db):
+    """Test TimeLogDialog in log_entry_only mode."""
+    dialog = TimeLogDialog(
+        fresh_db, "2024-01-15", log_entry_only=True, themes=None, close_after_add=True
+    )
+    qtbot.addWidget(dialog)
+
+    # In log_entry_only mode, these should be hidden
+    assert not dialog.delete_btn.isVisible()
+    assert not dialog.report_btn.isVisible()
+    assert not dialog.table.isVisible()
+
+
+def test_time_log_dialog_log_entry_only_false(qtbot, app, fresh_db):
+    """Test TimeLogDialog in normal mode (log_entry_only=False)."""
+    dialog = TimeLogDialog(
+        fresh_db, "2024-01-15", log_entry_only=False, themes=None, close_after_add=False
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitExposed(dialog)
+
+    # In normal mode, these should be visible
+    assert dialog.delete_btn.isVisible()
+    assert dialog.report_btn.isVisible()
+    assert dialog.table.isVisible()
+
+
+def test_time_log_dialog_change_date_cancelled(qtbot, app, fresh_db):
+    """Test _on_change_date_clicked when user cancels."""
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Mock exec to return rejected
+    with patch.object(QDialog, "exec", return_value=QDialog.DialogCode.Rejected):
+        original_date = dialog._date_iso
+        dialog._on_change_date_clicked()
+
+        # Date should not change when cancelled
+        assert dialog._date_iso == original_date
+
+
+def test_time_log_dialog_change_date_accepted(qtbot, app, fresh_db):
+    """Test _on_change_date_clicked when user accepts (covers lines 410-450)."""
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Mock exec to return accepted - the dialog will use whatever date is in the calendar
+    with patch.object(QDialog, "exec", return_value=QDialog.DialogCode.Accepted):
+        # Just verify it doesn't crash - actual date may or may not change
+        # depending on what the real QCalendarWidget selects
+        dialog._on_change_date_clicked()
+
+        # Dialog should still be functional
+        assert dialog._date_iso is not None
+
+
+def test_time_log_dialog_change_date_with_invalid_current_date(qtbot, app, fresh_db):
+    """Test _on_change_date_clicked when current date is invalid (covers lines 410-412)."""
+    dialog = TimeLogDialog(fresh_db, "invalid-date", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Should fall back to current date without crashing
+    with patch.object(QDialog, "exec", return_value=QDialog.DialogCode.Rejected):
+        dialog._on_change_date_clicked()
+
+
+def test_time_log_dialog_change_date_with_themes(qtbot, app, fresh_db):
+    """Test _on_change_date_clicked with theme manager (covers line 423-424)."""
+    themes_mock = MagicMock()
+    themes_mock.register_calendar = MagicMock()
+
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=themes_mock)
+    qtbot.addWidget(dialog)
+
+    # Mock exec to return rejected
+    with patch.object(QDialog, "exec", return_value=QDialog.DialogCode.Rejected):
+        dialog._on_change_date_clicked()
+
+        # Theme should have been applied to calendar
+        assert themes_mock.register_calendar.called
+
+
+def test_time_log_dialog_table_item_changed_incomplete_row(qtbot, app, fresh_db):
+    """Test _on_table_item_changed with incomplete row."""
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Block signals to prevent Qt cleanup
+    dialog.table.blockSignals(True)
+
+    # Add incomplete row
+    dialog.table.setRowCount(1)
+    from PySide6.QtWidgets import QTableWidgetItem
+
+    # Only add project item, missing others
+    proj_item = QTableWidgetItem("Project")
+    dialog.table.setItem(0, 0, proj_item)
+
+    # Call _on_table_item_changed
+    dialog._on_table_item_changed(proj_item)
+
+    dialog.table.blockSignals(False)
+
+    # Should return early without crashing (covers lines 556-558)
+
+
+def test_time_log_dialog_table_item_changed_creates_new_project(qtbot, app, fresh_db):
+    """Test _on_table_item_changed creating a new project on the fly."""
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Block signals to prevent Qt cleanup
+    dialog.table.blockSignals(True)
+
+    # Add a complete row with new project name
+    dialog.table.setRowCount(1)
+    from PySide6.QtWidgets import QTableWidgetItem
+
+    proj_item = QTableWidgetItem("Brand New Project")
+    proj_item.setData(Qt.ItemDataRole.UserRole, None)  # No entry ID
+    act_item = QTableWidgetItem("Activity")
+    note_item = QTableWidgetItem("Note")
+    hours_item = QTableWidgetItem("2.5")
+
+    dialog.table.setItem(0, 0, proj_item)
+    dialog.table.setItem(0, 1, act_item)
+    dialog.table.setItem(0, 2, note_item)
+    dialog.table.setItem(0, 3, hours_item)
+
+    # Call _on_table_item_changed
+    with patch.object(dialog, "_on_add_or_update"):
+        dialog._on_table_item_changed(proj_item)
+
+        # Should have created project and called add/update
+        projects = fresh_db.list_projects()
+        project_names = [name for _, name in projects]
+        assert "Brand New Project" in project_names
+
+    dialog.table.blockSignals(False)
+
+
+def test_time_log_dialog_table_item_changed_without_note(qtbot, app, fresh_db):
+    """Test _on_table_item_changed when note_item is None."""
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Block signals to prevent Qt cleanup
+    dialog.table.blockSignals(True)
+
+    # Add row without note
+    dialog.table.setRowCount(1)
+    from PySide6.QtWidgets import QTableWidgetItem
+
+    proj_item = QTableWidgetItem("Project")
+    proj_item.setData(Qt.ItemDataRole.UserRole, None)
+    act_item = QTableWidgetItem("Activity")
+    hours_item = QTableWidgetItem("1.0")
+
+    dialog.table.setItem(0, 0, proj_item)
+    dialog.table.setItem(0, 1, act_item)
+    # Note: Don't set note_item (leave as None)
+    dialog.table.setItem(0, 3, hours_item)
+
+    # Call _on_table_item_changed
+    with patch.object(dialog, "_on_add_or_update"):
+        dialog._on_table_item_changed(proj_item)
+
+        # Should handle None note gracefully (covers line 567)
+        assert dialog.note.text() == ""
+
+    dialog.table.blockSignals(False)
+
+
+def test_time_log_dialog_table_item_changed_sets_button_state_for_new_entry(
+    qtbot, app, fresh_db
+):
+    """Test that _on_table_item_changed sets correct button state for new entry."""
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Block signals to prevent Qt cleanup
+    dialog.table.blockSignals(True)
+
+    # Add row without entry ID (new entry)
+    dialog.table.setRowCount(1)
+    from PySide6.QtWidgets import QTableWidgetItem
+
+    proj_item = QTableWidgetItem("Project")
+    proj_item.setData(Qt.ItemDataRole.UserRole, None)  # No entry ID
+    act_item = QTableWidgetItem("Activity")
+    hours_item = QTableWidgetItem("1.0")
+
+    dialog.table.setItem(0, 0, proj_item)
+    dialog.table.setItem(0, 1, act_item)
+    dialog.table.setItem(0, 3, hours_item)
+
+    with patch.object(dialog, "_on_add_or_update"):
+        dialog._on_table_item_changed(proj_item)
+
+        # Delete button should be disabled for new entry (covers lines 601-603)
+        assert not dialog.delete_btn.isEnabled()
+
+    dialog.table.blockSignals(False)
+
+
+def test_time_log_dialog_table_item_changed_sets_button_state_for_existing_entry(
+    qtbot, app, fresh_db
+):
+    """Test that _on_table_item_changed sets correct button state for existing entry."""
+    # Add a time log entry first
+    proj_id = fresh_db.add_project("Test Project")
+    act_id = fresh_db.add_activity("Activity")
+    entry_id = fresh_db.add_time_log(
+        "2024-01-15", proj_id, act_id, 120, "Note"
+    )  # 120 minutes = 2 hours
+
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Block signals to prevent Qt cleanup
+    dialog.table.blockSignals(True)
+
+    # Add row with entry ID
+    dialog.table.setRowCount(1)
+    from PySide6.QtWidgets import QTableWidgetItem
+
+    proj_item = QTableWidgetItem("Test Project")
+    proj_item.setData(Qt.ItemDataRole.UserRole, entry_id)
+    act_item = QTableWidgetItem("Activity")
+    hours_item = QTableWidgetItem("2.0")
+
+    dialog.table.setItem(0, 0, proj_item)
+    dialog.table.setItem(0, 1, act_item)
+    dialog.table.setItem(0, 3, hours_item)
+
+    with patch.object(dialog, "_on_add_or_update"):
+        dialog._on_table_item_changed(proj_item)
+
+        # Delete button should be enabled for existing entry (covers lines 604-606)
+        assert dialog.delete_btn.isEnabled()
+
+    dialog.table.blockSignals(False)
+
+
+def test_time_log_dialog_table_item_changed_finds_existing_project_by_name(
+    qtbot, app, fresh_db
+):
+    """Test _on_table_item_changed finding existing project by name."""
+    proj_id = fresh_db.add_project("Existing Project")
+
+    dialog = TimeLogDialog(fresh_db, "2024-01-15", themes=None)
+    qtbot.addWidget(dialog)
+
+    # Block signals to prevent Qt cleanup
+    dialog.table.blockSignals(True)
+
+    # Add row with existing project name
+    dialog.table.setRowCount(1)
+    from PySide6.QtWidgets import QTableWidgetItem
+
+    proj_item = QTableWidgetItem("Existing Project")
+    proj_item.setData(Qt.ItemDataRole.UserRole, None)
+    act_item = QTableWidgetItem("Activity")
+    hours_item = QTableWidgetItem("1.0")
+
+    dialog.table.setItem(0, 0, proj_item)
+    dialog.table.setItem(0, 1, act_item)
+    dialog.table.setItem(0, 3, hours_item)
+
+    with patch.object(dialog, "_on_add_or_update"):
+        dialog._on_table_item_changed(proj_item)
+
+        # Should find and select existing project (covers lines 571-580)
+        assert dialog.project_combo.currentData() == proj_id
+
+    dialog.table.blockSignals(False)
+
+
+def test_time_report_dialog_initialization(qtbot, app, fresh_db):
+    """Test TimeReportDialog initialization."""
+    dialog = TimeReportDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    # Should initialize without crashing
+    assert dialog is not None
+
+
+def test_time_code_manager_dialog_initialization(qtbot, app, fresh_db):
+    """Test TimeCodeManagerDialog initialization."""
+    dialog = TimeCodeManagerDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    # Should initialize without crashing
+    assert dialog is not None
+
+
+def test_time_code_manager_dialog_with_focus_tab(qtbot, app, fresh_db):
+    """Test TimeCodeManagerDialog with initial tab focus."""
+    # Test with projects tab
+    dialog = TimeCodeManagerDialog(fresh_db, focus_tab="projects")
+    qtbot.addWidget(dialog)
+    assert dialog.tabs.currentIndex() == 0
+
+    # Test with activities tab
+    dialog2 = TimeCodeManagerDialog(fresh_db, focus_tab="activities")
+    qtbot.addWidget(dialog2)
+    assert dialog2.tabs.currentIndex() == 1

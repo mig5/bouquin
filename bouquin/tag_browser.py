@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt, Signal, QUrl
-from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -12,9 +12,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QInputDialog,
 )
-
-from pathlib import Path
-import tempfile
 
 from .db import DBManager
 from .settings import load_db_config
@@ -197,30 +194,10 @@ class TagBrowserDialog(QDialog):
                     self._open_document(int(doc_id), str(data.get("file_name")))
 
     def _open_document(self, doc_id: int, file_name: str) -> None:
-        """Open a tagged document via the default external application."""
-        try:
-            data = self._db.document_data(doc_id)
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                strings._("project_documents_title"),
-                strings._("documents_open_failed").format(error=str(e)),
-            )
-            return
+        """Open a tagged document from the list."""
+        from bouquin.document_utils import open_document_from_db
 
-        suffix = Path(file_name).suffix or ""
-        tmp = tempfile.NamedTemporaryFile(
-            prefix="bouquin_doc_",
-            suffix=suffix,
-            delete=False,
-        )
-        try:
-            tmp.write(data)
-            tmp.flush()
-        finally:
-            tmp.close()
-
-        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
+        open_document_from_db(self._db, doc_id, file_name, parent_widget=self)
 
     def _add_a_tag(self):
         """Add a new tag"""

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
-import tempfile
 from typing import Optional
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QColor
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -147,29 +145,9 @@ class TodaysDocumentsWidget(QFrame):
 
     def _open_document(self, doc_id: int, file_name: str) -> None:
         """Open a document from the list."""
-        try:
-            data = self._db.document_data(doc_id)
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                strings._("project_documents_title"),
-                strings._("documents_open_failed").format(error=str(e)),
-            )
-            return
+        from .document_utils import open_document_from_db
 
-        suffix = Path(file_name).suffix or ""
-        tmp = tempfile.NamedTemporaryFile(
-            prefix="bouquin_doc_",
-            suffix=suffix,
-            delete=False,
-        )
-        try:
-            tmp.write(data)
-            tmp.flush()
-        finally:
-            tmp.close()
-
-        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
+        open_document_from_db(self._db, doc_id, file_name, parent_widget=self)
 
     def _open_documents_dialog(self) -> None:
         """Open the full DocumentsDialog."""
@@ -553,29 +531,9 @@ class DocumentsDialog(QDialog):
         """
         Fetch BLOB from DB, write to a temporary file, and open with default app.
         """
-        try:
-            data = self._db.document_data(doc_id)
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                strings._("project_documents_title"),
-                strings._("documents_open_failed").format(error=str(e)),
-            )
-            return
+        from .document_utils import open_document_from_db
 
-        suffix = Path(file_name).suffix or ""
-        tmp = tempfile.NamedTemporaryFile(
-            prefix="bouquin_doc_",
-            suffix=suffix,
-            delete=False,
-        )
-        try:
-            tmp.write(data)
-            tmp.flush()
-        finally:
-            tmp.close()
-
-        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
+        open_document_from_db(self._db, doc_id, file_name, parent_widget=self)
 
     @staticmethod
     def _format_size(size_bytes: int) -> str:
