@@ -1,6 +1,7 @@
 # 0.6.1
 
  * Consolidate some code related to opening documents using the Documents feature.
+ * Ensure time log dialog gets closed when Pomodoro Timer finishes and user logs time.
  * More code coverage
 
 # 0.6.0

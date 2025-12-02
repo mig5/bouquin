@@ -139,7 +139,12 @@ class PomodoroManager:
 
         # Open time log dialog
         dlg = TimeLogDialog(
-            self._db, date_iso, self._parent, True, themes=self._parent.themes
+            self._db,
+            date_iso,
+            self._parent,
+            True,
+            themes=self._parent.themes,
+            close_after_add=True,
         )
 
         # Pre-fill the hours
