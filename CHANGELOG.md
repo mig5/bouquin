@@ -1,3 +1,7 @@
+# 0.6.2
+
+ * Ensure that adding a document whilst on an older date page, uses that date as its upload date
+
 # 0.6.1
 
  * Consolidate some code related to opening documents using the Documents feature.

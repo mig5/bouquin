@@ -1333,9 +1333,16 @@ class DBManager:
         project_id: int,
         file_path: str,
         description: str | None = None,
+        uploaded_at: str | None = None,
     ) -> int:
         """
         Read a file from disk and store it as a BLOB in project_documents.
+
+        Args:
+            project_id: The project to attach the document to
+            file_path: Path to the file to upload
+            description: Optional description
+            uploaded_at: Optional date in YYYY-MM-DD format. If None, uses current date.
         """
         path = Path(file_path)
         if not path.is_file():
@@ -1349,22 +1356,43 @@ class DBManager:
 
         with self.conn:
             cur = self.conn.cursor()
-            cur.execute(
-                """
-                INSERT INTO project_documents
-                    (project_id, file_name, mime_type,
-                     description, size_bytes, data)
-                VALUES (?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    project_id,
-                    file_name,
-                    mime_type,
-                    description,
-                    size_bytes,
-                    Binary(data),
-                ),
-            )
+            if uploaded_at is not None:
+                # Use explicit date
+                cur.execute(
+                    """
+                    INSERT INTO project_documents
+                        (project_id, file_name, mime_type,
+                         description, size_bytes, uploaded_at, data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        project_id,
+                        file_name,
+                        mime_type,
+                        description,
+                        size_bytes,
+                        uploaded_at,
+                        Binary(data),
+                    ),
+                )
+            else:
+                # Let DB default to current date
+                cur.execute(
+                    """
+                    INSERT INTO project_documents
+                        (project_id, file_name, mime_type,
+                         description, size_bytes, data)
+                    VALUES (?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        project_id,
+                        file_name,
+                        mime_type,
+                        description,
+                        size_bytes,
+                        Binary(data),
+                    ),
+                )
             doc_id = cur.lastrowid or 0
 
         return int(doc_id)
@@ -1374,6 +1402,20 @@ class DBManager:
             self.conn.execute(
                 "UPDATE project_documents SET description = ? WHERE id = ?;",
                 (description, doc_id),
+            )
+
+    def update_document_uploaded_at(self, doc_id: int, uploaded_at: str) -> None:
+        """
+        Update the uploaded_at date for a document.
+
+        Args:
+            doc_id: Document ID
+            uploaded_at: Date in YYYY-MM-DD format
+        """
+        with self.conn:
+            self.conn.execute(
+                "UPDATE project_documents SET uploaded_at = ? WHERE id = ?;",
+                (uploaded_at, doc_id),
             )
 
     def delete_document(self, doc_id: int) -> None:

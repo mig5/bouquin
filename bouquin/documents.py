@@ -151,7 +151,7 @@ class TodaysDocumentsWidget(QFrame):
 
     def _open_documents_dialog(self) -> None:
         """Open the full DocumentsDialog."""
-        dlg = DocumentsDialog(self._db, self)
+        dlg = DocumentsDialog(self._db, self, current_date=self._current_date)
         dlg.exec()
         # Refresh after any changes
         self.reload()
@@ -179,12 +179,14 @@ class DocumentsDialog(QDialog):
         db: DBManager,
         parent: QWidget | None = None,
         initial_project_id: Optional[int] = None,
+        current_date: Optional[str] = None,
     ) -> None:
         super().__init__(parent)
         self._db = db
         self.cfg = load_db_config()
         self._reloading_docs = False
         self._search_text: str = ""
+        self._current_date = current_date  # Store the current date for document uploads
 
         self.setWindowTitle(strings._("project_documents_title"))
         self.resize(900, 450)
@@ -382,10 +384,9 @@ class DocumentsDialog(QDialog):
                 desc_item = QTableWidgetItem(description or "")
                 self.table.setItem(row_idx, self.DESC_COL, desc_item)
 
-                # Col 3: Added at (not editable)
+                # Col 3: Added at (editable)
                 added_label = uploaded_at
                 added_item = QTableWidgetItem(added_label)
-                added_item.setFlags(added_item.flags() & ~Qt.ItemIsEditable)
                 self.table.setItem(row_idx, self.ADDED_COL, added_item)
 
                 # Col 4: Size (not editable)
@@ -422,7 +423,9 @@ class DocumentsDialog(QDialog):
 
         for path in paths:
             try:
-                self._db.add_document_from_path(proj_id, path)
+                self._db.add_document_from_path(
+                    proj_id, path, uploaded_at=self._current_date
+                )
             except Exception as e:  # pragma: no cover
                 QMessageBox.warning(
                     self,
@@ -469,7 +472,7 @@ class DocumentsDialog(QDialog):
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         """
-        Handle inline edits to Description and Tags.
+        Handle inline edits to Description, Tags, and Added date.
         """
         if self._reloading_docs or item is None:
             return
@@ -524,8 +527,54 @@ class DocumentsDialog(QDialog):
                     item.setForeground(QColor())
             finally:
                 self._reloading_docs = False
+            return
+
+        # Added date column
+        if col == self.ADDED_COL:
+            date_str = item.text().strip()
+
+            # Validate date format (YYYY-MM-DD)
+            if not self._validate_date_format(date_str):
+                QMessageBox.warning(
+                    self,
+                    strings._("project_documents_title"),
+                    (
+                        strings._("documents_invalid_date_format")
+                        if hasattr(strings, "_")
+                        and callable(getattr(strings, "_"))
+                        and "documents_invalid_date_format" in dir(strings)
+                        else f"Invalid date format. Please use YYYY-MM-DD format.\nExample: {date_str[:4]}-01-15"
+                    ),
+                )
+                # Reload to reset the cell to its original value
+                self._reload_documents()
+                return
+
+            # Update the database
+            self._db.update_document_uploaded_at(doc_id, date_str)
+            return
 
     # --- utils -------------------------------------------------------------
+
+    def _validate_date_format(self, date_str: str) -> bool:
+        """
+        Validate that a date string is in YYYY-MM-DD format.
+
+        Returns True if valid, False otherwise.
+        """
+        import re
+        from datetime import datetime
+
+        # Check basic format with regex
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+            return False
+
+        # Validate it's a real date
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
 
     def _open_document(self, doc_id: int, file_name: str) -> None:
         """
