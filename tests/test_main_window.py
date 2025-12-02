@@ -1861,44 +1861,76 @@ def test_main_window_update_tag_views_no_tags_widget(
     assert True
 
 
-def test_main_window_with_tags_disabled(qtbot, app, tmp_path):
-    """Test MainWindow with tags disabled in config - covers line 319"""
-    db_path = tmp_path / "notebook.db"
+def test_main_window_without_tags(qtbot, app, tmp_db_cfg):
+    """Test main window when tags feature is disabled."""
     s = get_settings()
-    s.setValue("db/default_db", str(db_path))
-    s.setValue("db/key", "test-key")
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
     s.setValue("ui/idle_minutes", 0)
     s.setValue("ui/theme", "light")
-    s.setValue("ui/tags", False)  # Disable tags
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", False)  # Disabled
     s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    w = MainWindow(themes=themes)
-    qtbot.addWidget(w)
-    w.show()
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
 
-    # Tags widget should be hidden
-    assert w.tags.isHidden()
+    # Verify tags widget is hidden
+    assert window.tags.isHidden()
 
 
-def test_main_window_with_time_log_disabled(qtbot, app, tmp_path):
-    """Test MainWindow with time_log disabled in config - covers line 321"""
-    db_path = tmp_path / "notebook.db"
+def test_main_window_without_time_log(qtbot, app, tmp_db_cfg):
+    """Test main window when time_log feature is disabled."""
     s = get_settings()
-    s.setValue("db/default_db", str(db_path))
-    s.setValue("db/key", "test-key")
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
     s.setValue("ui/idle_minutes", 0)
     s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
     s.setValue("ui/tags", True)
-    s.setValue("ui/time_log", False)  # Disable time log
+    s.setValue("ui/time_log", False)  # Disabled
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
 
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    w = MainWindow(themes=themes)
-    qtbot.addWidget(w)
-    w.show()
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
 
-    # Time log widget should be hidden
-    assert w.time_log.isHidden()
+    # Verify time_log widget is hidden
+    assert window.time_log.isHidden()
+    assert not window.toolBar.actTimer.isVisible()
+
+
+def test_main_window_without_documents(qtbot, app, tmp_db_cfg):
+    """Test main window when documents feature is disabled."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/documents", False)  # Disabled
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    # Verify documents widget is hidden
+    assert window.todays_documents.isHidden()
+    assert not window.toolBar.actDocuments.isVisible()
 
 
 def test_export_csv_format(qtbot, app, tmp_path, monkeypatch):
@@ -2159,53 +2191,6 @@ def test_main_window_without_reminders(qtbot, app, tmp_db_cfg):
     # Verify reminders widget is hidden
     assert window.upcoming_reminders.isHidden()
     assert not window.toolBar.actAlarm.isVisible()
-
-
-def test_main_window_without_time_log(qtbot, app, tmp_db_cfg):
-    """Test main window when time_log feature is disabled."""
-    s = get_settings()
-    s.setValue("db/default_db", str(tmp_db_cfg.path))
-    s.setValue("db/key", tmp_db_cfg.key)
-    s.setValue("ui/idle_minutes", 0)
-    s.setValue("ui/theme", "light")
-    s.setValue("ui/move_todos", True)
-    s.setValue("ui/tags", True)
-    s.setValue("ui/time_log", False)  # Disabled
-    s.setValue("ui/reminders", True)
-    s.setValue("ui/locale", "en")
-    s.setValue("ui/font_size", 11)
-
-    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    window = MainWindow(themes=themes)
-    qtbot.addWidget(window)
-    window.show()
-
-    # Verify time_log widget is hidden
-    assert window.time_log.isHidden()
-    assert not window.toolBar.actTimer.isVisible()
-
-
-def test_main_window_without_tags(qtbot, app, tmp_db_cfg):
-    """Test main window when tags feature is disabled."""
-    s = get_settings()
-    s.setValue("db/default_db", str(tmp_db_cfg.path))
-    s.setValue("db/key", tmp_db_cfg.key)
-    s.setValue("ui/idle_minutes", 0)
-    s.setValue("ui/theme", "light")
-    s.setValue("ui/move_todos", True)
-    s.setValue("ui/tags", False)  # Disabled
-    s.setValue("ui/time_log", True)
-    s.setValue("ui/reminders", True)
-    s.setValue("ui/locale", "en")
-    s.setValue("ui/font_size", 11)
-
-    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
-    window = MainWindow(themes=themes)
-    qtbot.addWidget(window)
-    window.show()
-
-    # Verify tags widget is hidden
-    assert window.tags.isHidden()
 
 
 def test_close_current_tab(qtbot, app, tmp_db_cfg, fresh_db):
