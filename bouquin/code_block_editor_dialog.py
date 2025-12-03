@@ -40,8 +40,20 @@ class CodeEditorWithLineNumbers(QPlainTextEdit):
         self.cursorPositionChanged.connect(self._line_number_area.update)
 
         self._update_line_number_area_width()
+        self._update_tab_stop_width()
 
     # ---- layout / sizing -------------------------------------------------
+
+    def setFont(self, font: QFont) -> None:  # type: ignore[override]
+        """Ensure tab width stays at 4 spaces when the font changes."""
+        super().setFont(font)
+        self._update_tab_stop_width()
+
+    def _update_tab_stop_width(self) -> None:
+        """Set tab width to 4 spaces."""
+        metrics = QFontMetrics(self.font())
+        # Tab width = width of 4 space characters
+        self.setTabStopDistance(metrics.horizontalAdvance(" ") * 4)
 
     def line_number_area_width(self) -> int:
         # Enough digits for large-ish code blocks.
