@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QSignalBlocker
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QFrame,
     QVBoxLayout,
@@ -167,9 +167,12 @@ class PomodoroManager:
         # Untoggle the toolbar button without retriggering the slot
         tool_bar = getattr(self._parent, "toolBar", None)
         if tool_bar is not None and hasattr(tool_bar, "actTimer"):
-            blocker = QSignalBlocker(tool_bar.actTimer)
-            tool_bar.actTimer.setChecked(False)
-            del blocker
+            action = tool_bar.actTimer
+            was_blocked = action.blockSignals(True)
+            try:
+                action.setChecked(False)
+            finally:
+                action.blockSignals(was_blocked)
 
         # Remove the embedded widget
         self.cancel_timer()
