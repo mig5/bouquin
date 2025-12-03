@@ -151,7 +151,7 @@ class DateHeatmap(QWidget):
         fm = painter.fontMetrics()
 
         # --- weekday labels on left -------------------------------------
-        # Python's weekday(): Monday=0 ... Sunday=6, same as your rows.
+        # Python's weekday(): Monday=0 ... Sunday=6
         weekday_labels = ["M", "T", "W", "T", "F", "S", "S"]
 
         for dow in range(7):

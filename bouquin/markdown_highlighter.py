@@ -356,7 +356,6 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         for m in re.finditer(r"[☐☑]", text):
             self._overlay_range(m.start(), 1, self.checkbox_format)
 
-        # (If you add Unicode bullets later…)
         for m in re.finditer(r"•", text):
             self._overlay_range(m.start(), 1, self.bullet_format)
 
