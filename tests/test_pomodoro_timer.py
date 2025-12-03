@@ -1,6 +1,54 @@
 from unittest.mock import Mock, patch
 from bouquin.pomodoro_timer import PomodoroTimer, PomodoroManager
 from bouquin.theme import ThemeManager, ThemeConfig, Theme
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QToolBar, QLabel
+from PySide6.QtGui import QAction
+
+
+class DummyTimeLogWidget(QWidget):
+    """Minimal stand-in for the real TimeLogWidget used by PomodoroManager."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout(self)
+        self.summary_label = QLabel(self)
+        # toggle_btn and _reload_summary are used by PomodoroManager._on_timer_stopped
+        self.toggle_btn = Mock()
+        self.toggle_btn.isChecked.return_value = True
+
+    def show_pomodoro_widget(self, widget):
+        # Manager calls this when embedding the timer
+        if widget is not None:
+            self.layout.addWidget(widget)
+
+    def clear_pomodoro_widget(self):
+        # Manager calls this when removing the embedded timer
+        while self.layout.count():
+            item = self.layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+
+    def _reload_summary(self):
+        # Called after TimeLogDialog closes; no-op is fine for tests
+        pass
+
+
+class DummyMainWindow(QWidget):
+    """Minimal stand-in for MainWindow that PomodoroManager expects."""
+
+    def __init__(self, app, parent=None):
+        super().__init__(parent)
+        # Sidebar time log widget
+        self.time_log = DummyTimeLogWidget(self)
+
+        # Toolbar with an actTimer QAction so QSignalBlocker works
+        self.toolBar = QToolBar(self)
+        self.toolBar.actTimer = QAction(self)
+        self.toolBar.addAction(self.toolBar.actTimer)
+
+        # Themes attribute used when constructing TimeLogDialog
+        self.themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
 
 
 def test_pomodoro_timer_init(qtbot, app, fresh_db):
@@ -148,15 +196,6 @@ def test_pomodoro_timer_modal_state(qtbot, app):
     assert timer.isModal() is False
 
 
-def test_pomodoro_timer_window_title(qtbot, app):
-    """Test timer window title."""
-    timer = PomodoroTimer("Test task")
-    qtbot.addWidget(timer)
-
-    # Window title should contain some reference to timer/pomodoro
-    assert len(timer.windowTitle()) > 0
-
-
 def test_pomodoro_manager_init(app, fresh_db):
     """Test PomodoroManager initialization."""
     parent = Mock()
@@ -169,10 +208,10 @@ def test_pomodoro_manager_init(app, fresh_db):
 
 def test_pomodoro_manager_start_timer(qtbot, app, fresh_db):
     """Test starting a timer through the manager."""
-    from PySide6.QtWidgets import QWidget
-
-    parent = QWidget()
+    parent = DummyMainWindow(app)
     qtbot.addWidget(parent)
+    qtbot.addWidget(parent.time_log)
+
     manager = PomodoroManager(fresh_db, parent)
 
     line_text = "Important task"
@@ -182,15 +221,16 @@ def test_pomodoro_manager_start_timer(qtbot, app, fresh_db):
 
     assert manager._active_timer is not None
     assert manager._active_timer._task_text == line_text
-    qtbot.addWidget(manager._active_timer)
+    # Timer should be embedded in the sidebar time log widget
+    assert manager._active_timer.parent() is parent.time_log
 
 
 def test_pomodoro_manager_replace_active_timer(qtbot, app, fresh_db):
-    """Test that starting a new timer closes the previous one."""
-    from PySide6.QtWidgets import QWidget
-
-    parent = QWidget()
+    """Test that starting a new timer closes/replaces the previous one."""
+    parent = DummyMainWindow(app)
     qtbot.addWidget(parent)
+    qtbot.addWidget(parent.time_log)
+
     manager = PomodoroManager(fresh_db, parent)
 
     # Start first timer
@@ -206,16 +246,20 @@ def test_pomodoro_manager_replace_active_timer(qtbot, app, fresh_db):
 
     assert first_timer is not second_timer
     assert second_timer._task_text == "Task 2"
+    assert second_timer.parent() is parent.time_log
 
 
 def test_pomodoro_manager_on_timer_stopped_minimum_hours(
     qtbot, app, fresh_db, monkeypatch
 ):
-    """Test that timer stopped with very short time logs minimum hours."""
-    parent = Mock()
+    """Timer stopped with very short time logs should enforce minimum hours."""
+    parent = DummyMainWindow(app)
+    qtbot.addWidget(parent)
+    qtbot.addWidget(parent.time_log)
+
     manager = PomodoroManager(fresh_db, parent)
 
-    # Mock TimeLogDialog to avoid actually showing it
+    # Mock TimeLogDialog to avoid showing it
     mock_dialog = Mock()
     mock_dialog.hours_spin = Mock()
     mock_dialog.note = Mock()
@@ -231,8 +275,11 @@ def test_pomodoro_manager_on_timer_stopped_minimum_hours(
 
 
 def test_pomodoro_manager_on_timer_stopped_rounding(qtbot, app, fresh_db, monkeypatch):
-    """Test that elapsed time is properly rounded to decimal hours."""
-    parent = Mock()
+    """Elapsed time should be rounded up to the nearest 0.25 hours."""
+    parent = DummyMainWindow(app)
+    qtbot.addWidget(parent)
+    qtbot.addWidget(parent.time_log)
+
     manager = PomodoroManager(fresh_db, parent)
 
     mock_dialog = Mock()
@@ -241,21 +288,25 @@ def test_pomodoro_manager_on_timer_stopped_rounding(qtbot, app, fresh_db, monkey
     mock_dialog.exec = Mock()
 
     with patch("bouquin.pomodoro_timer.TimeLogDialog", return_value=mock_dialog):
-        # Test with 1800 seconds (30 minutes)
+        # 1800 seconds (30 min) should round up to 0.5
         manager._on_timer_stopped(1800, "Task", "2024-01-15")
 
         mock_dialog.hours_spin.setValue.assert_called_once()
         hours_set = mock_dialog.hours_spin.setValue.call_args[0][0]
-        # Should round up and be a multiple of 0.25
+
         assert hours_set > 0
-        assert hours_set * 4 == int(hours_set * 4)  # Multiple of 0.25
+        # Should be a multiple of 0.25
+        assert hours_set * 4 == int(hours_set * 4)
 
 
 def test_pomodoro_manager_on_timer_stopped_prefills_note(
     qtbot, app, fresh_db, monkeypatch
 ):
-    """Test that timer stopped pre-fills the note in time log dialog."""
-    parent = Mock()
+    """Timer stopped should pre-fill the note in the time log dialog."""
+    parent = DummyMainWindow(app)
+    qtbot.addWidget(parent)
+    qtbot.addWidget(parent.time_log)
+
     manager = PomodoroManager(fresh_db, parent)
 
     mock_dialog = Mock()
@@ -274,12 +325,11 @@ def test_pomodoro_manager_on_timer_stopped_prefills_note(
 def test_pomodoro_manager_timer_stopped_signal_connection(
     qtbot, app, fresh_db, monkeypatch
 ):
-    """Test that timer stopped signal is properly connected."""
-    from PySide6.QtWidgets import QWidget
-
-    parent = QWidget()
-    parent.themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    """Timer's stop button should result in TimeLogDialog being executed."""
+    parent = DummyMainWindow(app)
     qtbot.addWidget(parent)
+    qtbot.addWidget(parent.time_log)
+
     manager = PomodoroManager(fresh_db, parent)
 
     # Mock TimeLogDialog
@@ -293,11 +343,12 @@ def test_pomodoro_manager_timer_stopped_signal_connection(
         timer = manager._active_timer
         qtbot.addWidget(timer)
 
-        # Simulate timer stopped
+        # Simulate timer having run for a bit
         timer._elapsed_seconds = 1000
+
+        # Clicking "Stop and log" should emit timerStopped and open the dialog
         timer._stop_and_log()
 
-        # TimeLogDialog should have been created
         assert mock_dialog.exec.called
 
 

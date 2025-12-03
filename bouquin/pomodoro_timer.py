@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QSignalBlocker
 from PySide6.QtWidgets import (
-    QDialog,
+    QFrame,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
@@ -18,16 +18,13 @@ from .db import DBManager
 from .time_log import TimeLogDialog
 
 
-class PomodoroTimer(QDialog):
-    """A simple timer dialog for tracking work time on a specific task."""
+class PomodoroTimer(QFrame):
+    """A simple timer for tracking work time on a specific task."""
 
     timerStopped = Signal(int, str)  # Emits (elapsed_seconds, task_text)
 
     def __init__(self, task_text: str, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle(strings._("toolbar_pomodoro_timer"))
-        self.setModal(False)
-        self.setMinimumWidth(300)
 
         self._task_text = task_text
         self._elapsed_seconds = 0
@@ -43,7 +40,7 @@ class PomodoroTimer(QDialog):
         # Timer display
         self.time_label = QLabel("00:00:00")
         font = self.time_label.font()
-        font.setPointSize(24)
+        font.setPointSize(20)
         font.setBold(True)
         self.time_label.setFont(font)
         self.time_label.setAlignment(Qt.AlignCenter)
@@ -103,7 +100,7 @@ class PomodoroTimer(QDialog):
             self._timer.stop()
 
         self.timerStopped.emit(self._elapsed_seconds, self._task_text)
-        self.accept()
+        self.close()
 
 
 class PomodoroManager:
@@ -115,17 +112,47 @@ class PomodoroManager:
         self._active_timer: Optional[PomodoroTimer] = None
 
     def start_timer_for_line(self, line_text: str, date_iso: str):
-        """Start a new timer for the given line of text."""
-        # Stop any existing timer
-        if self._active_timer and self._active_timer.isVisible():
-            self._active_timer.close()
+        """
+        Start a new timer for the given line of text and embed it into the
+        TimeLogWidget in the main window sidebar.
+        """
+        # Cancel any existing timer first
+        self.cancel_timer()
 
-        # Create new timer
-        self._active_timer = PomodoroTimer(line_text, self._parent)
+        # The timer lives inside the TimeLogWidget in the sidebar
+        time_log_widget = getattr(self._parent, "time_log", None)
+        if time_log_widget is None:
+            return
+
+        self._active_timer = PomodoroTimer(line_text, time_log_widget)
         self._active_timer.timerStopped.connect(
             lambda seconds, text: self._on_timer_stopped(seconds, text, date_iso)
         )
-        self._active_timer.show()
+
+        # Ask the TimeLogWidget to own and display the widget
+        if hasattr(time_log_widget, "show_pomodoro_widget"):
+            time_log_widget.show_pomodoro_widget(self._active_timer)
+        else:
+            # Fallback – just attach it as a child widget
+            self._active_timer.setParent(time_log_widget)
+            self._active_timer.show()
+
+    def cancel_timer(self):
+        """Cancel any running timer without logging and remove it from the sidebar."""
+        if not self._active_timer:
+            return
+
+        time_log_widget = getattr(self._parent, "time_log", None)
+        if time_log_widget is not None and hasattr(
+            time_log_widget, "clear_pomodoro_widget"
+        ):
+            time_log_widget.clear_pomodoro_widget()
+        else:
+            # Fallback if the widget API doesn't exist
+            self._active_timer.setParent(None)
+
+        self._active_timer.deleteLater()
+        self._active_timer = None
 
     def _on_timer_stopped(self, elapsed_seconds: int, task_text: str, date_iso: str):
         """Handle timer stop - open time log dialog with pre-filled data."""
@@ -136,6 +163,16 @@ class PomodoroManager:
         # Ensure minimum of 0.25 hours
         if hours < 0.25:
             hours = 0.25
+
+        # Untoggle the toolbar button without retriggering the slot
+        tool_bar = getattr(self._parent, "toolBar", None)
+        if tool_bar is not None and hasattr(tool_bar, "actTimer"):
+            blocker = QSignalBlocker(tool_bar.actTimer)
+            tool_bar.actTimer.setChecked(False)
+            del blocker
+
+        # Remove the embedded widget
+        self.cancel_timer()
 
         # Open time log dialog
         dlg = TimeLogDialog(
@@ -155,3 +192,13 @@ class PomodoroManager:
 
         # Show the dialog
         dlg.exec()
+
+        time_log_widget = getattr(self._parent, "time_log", None)
+        if time_log_widget is not None:
+            # Same behaviour as TimeLogWidget._open_dialog/_open_dialog_log_only:
+            # reload the summary so the TimeLogWidget in sidebar updates its totals
+            time_log_widget._reload_summary()
+            if not time_log_widget.toggle_btn.isChecked():
+                time_log_widget.summary_label.setText(
+                    strings._("time_log_collapsed_hint")
+                )

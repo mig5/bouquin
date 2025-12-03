@@ -3,6 +3,7 @@
  * Ensure that adding a document whilst on an older date page, uses that date as its upload date
  * Add 'Created at' to time log table.
  * Show total hours for the day in the time log table (not just in the widget in sidebar)
+ * Pomodoro timer is now in the sidebar when toggled on, rather than as a separate dialog, so it stays out of the way
 
 # 0.6.1
 

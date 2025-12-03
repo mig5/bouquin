@@ -1194,22 +1194,30 @@ class MainWindow(QMainWindow):
         self.upcoming_reminders._add_reminder()
 
     def _on_timer_requested(self):
-        """Start a Pomodoro timer for the current line."""
-        editor = getattr(self, "editor", None)
-        if editor is None:
-            return
+        """Toggle the embedded Pomodoro timer for the current line."""
+        action = self.toolBar.actTimer
 
-        # Get the current line text
-        line_text = editor.get_current_line_task_text()
+        # Turned on -> start a new timer for the current line
+        if action.isChecked():
+            editor = getattr(self, "editor", None)
+            if editor is None:
+                # No editor; immediately reset the toggle
+                action.setChecked(False)
+                return
 
-        if not line_text:
-            line_text = strings._("pomodoro_time_log_default_text")
+            # Get the current line text
+            line_text = editor.get_current_line_task_text()
+            if not line_text:
+                line_text = strings._("pomodoro_time_log_default_text")
 
-        # Get current date
-        date_iso = self.editor.current_date.toString("yyyy-MM-dd")
+            # Get current date
+            date_iso = self.editor.current_date.toString("yyyy-MM-dd")
 
-        # Start the timer
-        self.pomodoro_manager.start_timer_for_line(line_text, date_iso)
+            # Start the timer embedded in the sidebar
+            self.pomodoro_manager.start_timer_for_line(line_text, date_iso)
+        else:
+            # Turned off -> cancel any running timer and remove the widget
+            self.pomodoro_manager.cancel_timer()
 
     def _show_flashing_reminder(self, text: str):
         """

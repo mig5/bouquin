@@ -106,6 +106,8 @@ class TimeLogWidget(QFrame):
         self.summary_label = QLabel(strings._("time_log_no_entries"))
         self.summary_label.setWordWrap(True)
         self.body_layout.addWidget(self.summary_label)
+        # Optional embedded Pomodoro timer widget lives underneath the summary.
+        self._pomodoro_widget: Optional[QWidget] = None
         self.body.setVisible(False)
 
         main = QVBoxLayout(self)
@@ -120,6 +122,30 @@ class TimeLogWidget(QFrame):
         self._reload_summary()
         if not self.toggle_btn.isChecked():
             self.summary_label.setText(strings._("time_log_collapsed_hint"))
+
+    def show_pomodoro_widget(self, widget: QWidget) -> None:
+        """Embed Pomodoro timer widget in the body area."""
+        if self._pomodoro_widget is not None:
+            self.body_layout.removeWidget(self._pomodoro_widget)
+            self._pomodoro_widget.deleteLater()
+
+        self._pomodoro_widget = widget
+        self.body_layout.addWidget(widget)
+        widget.show()
+
+        # Ensure the body is visible so the timer is obvious
+        self.body.setVisible(True)
+        self.toggle_btn.setChecked(True)
+        self.toggle_btn.setArrowType(Qt.DownArrow)
+
+    def clear_pomodoro_widget(self) -> None:
+        """Remove any embedded Pomodoro timer widget."""
+        if self._pomodoro_widget is None:
+            return
+
+        self.body_layout.removeWidget(self._pomodoro_widget)
+        self._pomodoro_widget.deleteLater()
+        self._pomodoro_widget = None
 
     # ----- internals ---------------------------------------------------
 

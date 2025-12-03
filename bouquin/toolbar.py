@@ -119,6 +119,7 @@ class ToolBar(QToolBar):
         # Focus timer
         self.actTimer = QAction("⌛", self)
         self.actTimer.setToolTip(strings._("toolbar_pomodoro_timer"))
+        self.actTimer.setCheckable(True)
         self.actTimer.triggered.connect(self.timerRequested)
 
         # Documents
