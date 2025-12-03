@@ -206,6 +206,7 @@
     "delete_time_entry": "Delete time entry",
     "group_by": "Group by",
     "hours": "Hours",
+    "created_at": "Created at",
     "invalid_activity_message": "The activity is invalid",
     "invalid_activity_title": "Invalid activity",
     "invalid_project_message": "The project is invalid",

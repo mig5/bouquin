@@ -1075,7 +1075,8 @@ class DBManager:
                 t.activity_id,
                 a.name AS activity_name,
                 t.minutes,
-                t.note
+                t.note,
+                t.created_at AS created_at
             FROM time_log t
             JOIN projects  p ON p.id = t.project_id
             JOIN activities a ON a.id = t.activity_id
@@ -1097,6 +1098,7 @@ class DBManager:
                     r["activity_name"],
                     r["minutes"],
                     r["note"],
+                    r["created_at"],
                 )
             )
         return result

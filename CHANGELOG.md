@@ -1,6 +1,8 @@
 # 0.6.2
 
  * Ensure that adding a document whilst on an older date page, uses that date as its upload date
+ * Add 'Created at' to time log table.
+ * Show total hours for the day in the time log table (not just in the widget in sidebar)
 
 # 0.6.1
 

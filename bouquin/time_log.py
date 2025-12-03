@@ -4,8 +4,9 @@ import csv
 import html
 
 from collections import defaultdict
-from typing import Optional
+from datetime import datetime
 from sqlcipher3.dbapi2 import IntegrityError
+from typing import Optional
 
 from PySide6.QtCore import Qt, QDate, QUrl
 from PySide6.QtGui import QPainter, QColor, QImage, QTextDocument, QPageLayout
@@ -204,12 +205,6 @@ class TimeLogWidget(QFrame):
 class TimeLogDialog(QDialog):
     """
     Per-day time log dialog.
-
-    Lets you:
-      1) choose a project
-      2) enter an activity (free-text with autocomplete)
-      3) enter time in decimal hours (0.25 = 15 min, 0.17 ≈ 10 min)
-      4) manage entries for this date
     """
 
     def __init__(
@@ -230,6 +225,8 @@ class TimeLogDialog(QDialog):
         # programmatic item changes as user edits.
         self._reloading_entries: bool = False
 
+        self.total_hours = 0
+
         self.close_after_add = close_after_add
 
         self.setWindowTitle(strings._("time_log_for").format(date=date_iso))
@@ -245,7 +242,6 @@ class TimeLogDialog(QDialog):
 
         date_row.addStretch(1)
 
-        # You can i18n this later if you like
         self.change_date_btn = QPushButton(strings._("time_log_change_date"))
         self.change_date_btn.clicked.connect(self._on_change_date_clicked)
         date_row.addWidget(self.change_date_btn)
@@ -309,13 +305,14 @@ class TimeLogDialog(QDialog):
 
         # --- Table of entries for this date
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
             [
                 strings._("project"),
                 strings._("activity"),
                 strings._("note"),
                 strings._("hours"),
+                strings._("created_at"),
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -324,6 +321,7 @@ class TimeLogDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(
             3, QHeaderView.ResizeToContents
         )
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
@@ -331,8 +329,12 @@ class TimeLogDialog(QDialog):
         self.table.itemChanged.connect(self._on_table_item_changed)
         root.addWidget(self.table, 1)
 
-        # --- Close button
+        # --- Total time and Close button
         close_row = QHBoxLayout()
+        self.total_label = QLabel(
+            strings._("time_log_total_hours").format(hours=self.total_hours)
+        )
+        close_row.addWidget(self.total_label)
         close_row.addStretch(1)
         close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
@@ -381,11 +383,16 @@ class TimeLogDialog(QDialog):
                 note = r[7] or ""
                 minutes = r[6]
                 hours = minutes / 60.0
+                created_at = r[8]
+                ca_utc = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                ca_local = ca_utc.astimezone()
+                created = f"{ca_local.day} {ca_local.strftime('%b %Y, %H:%M%p')}"
 
                 item_proj = QTableWidgetItem(project_name)
                 item_act = QTableWidgetItem(activity_name)
                 item_note = QTableWidgetItem(note)
                 item_hours = QTableWidgetItem(f"{hours:.2f}")
+                item_created_at = QTableWidgetItem(created)
 
                 # store the entry id on the first column
                 item_proj.setData(Qt.ItemDataRole.UserRole, entry_id)
@@ -394,8 +401,15 @@ class TimeLogDialog(QDialog):
                 self.table.setItem(row_idx, 1, item_act)
                 self.table.setItem(row_idx, 2, item_note)
                 self.table.setItem(row_idx, 3, item_hours)
+                self.table.setItem(row_idx, 4, item_created_at)
         finally:
             self._reloading_entries = False
+
+        total_minutes = sum(r[6] for r in rows)
+        self.total_hours = total_minutes / 60.0
+        self.total_label.setText(
+            strings._("time_log_total_hours").format(hours=self.total_hours)
+        )
 
         self._current_entry_id = None
         self.delete_btn.setEnabled(False)
