@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QAbstractItemView,
     QHeaderView,
+    QSpinBox,
 )
 
 from . import strings
@@ -37,6 +38,9 @@ class ReminderType(Enum):
     DAILY = strings._("daily")
     WEEKDAYS = strings._("weekdays")  # Mon-Fri
     WEEKLY = strings._("weekly")  # specific day of week
+    FORTNIGHTLY = strings._("fortnightly")  # every 2 weeks
+    MONTHLY_DATE = strings._("monthly_same_date")  # same calendar date
+    MONTHLY_NTH_WEEKDAY = strings._("monthly_nth_weekday")  # e.g. 3rd Monday
 
 
 @dataclass
@@ -81,7 +85,7 @@ class ReminderDialog(QDialog):
         else:
             # Default to 5 minutes in the future
             future = QTime.currentTime().addSecs(5 * 60)
-            self.time_edit.setTime(future)            
+            self.time_edit.setTime(future)
         self.form.addRow("&" + strings._("time") + ":", self.time_edit)
 
         # Recurrence type
@@ -90,6 +94,11 @@ class ReminderDialog(QDialog):
         self.type_combo.addItem(strings._("every_day"), ReminderType.DAILY)
         self.type_combo.addItem(strings._("every_weekday"), ReminderType.WEEKDAYS)
         self.type_combo.addItem(strings._("every_week"), ReminderType.WEEKLY)
+        self.type_combo.addItem(strings._("every_fortnight"), ReminderType.FORTNIGHTLY)
+        self.type_combo.addItem(strings._("every_month"), ReminderType.MONTHLY_DATE)
+        self.type_combo.addItem(
+            strings._("every_month_nth_weekday"), ReminderType.MONTHLY_NTH_WEEKDAY
+        )
 
         if reminder:
             for i in range(self.type_combo.count()):
@@ -123,6 +132,25 @@ class ReminderDialog(QDialog):
         day_label = self.form.labelForField(self.weekday_combo)
         day_label.setVisible(False)
 
+        self.nth_spin = QSpinBox()
+        self.nth_spin.setRange(1, 5)  # up to 5th Monday, etc.
+        self.nth_spin.setValue(1)
+        # If editing an existing MONTHLY_NTH_WEEKDAY reminder, derive the nth from date_iso
+        if (
+            reminder
+            and reminder.reminder_type == ReminderType.MONTHLY_NTH_WEEKDAY
+            and reminder.date_iso
+        ):
+            anchor = QDate.fromString(reminder.date_iso, "yyyy-MM-dd")
+            if anchor.isValid():
+                nth_index = (anchor.day() - 1) // 7  # 0-based
+                self.nth_spin.setValue(nth_index + 1)
+
+        self.form.addRow("&" + strings._("week_in_month") + ":", self.nth_spin)
+        nth_label = self.form.labelForField(self.nth_spin)
+        nth_label.setVisible(False)
+        self.nth_spin.setVisible(False)
+
         layout.addLayout(self.form)
 
         # Buttons
@@ -143,11 +171,21 @@ class ReminderDialog(QDialog):
         self._on_type_changed()
 
     def _on_type_changed(self):
-        """Show/hide weekday selector based on reminder type."""
+        """Show/hide weekday / nth selectors based on reminder type."""
         reminder_type = self.type_combo.currentData()
-        self.weekday_combo.setVisible(reminder_type == ReminderType.WEEKLY)
+
+        show_weekday = reminder_type in (
+            ReminderType.WEEKLY,
+            ReminderType.MONTHLY_NTH_WEEKDAY,
+        )
+        self.weekday_combo.setVisible(show_weekday)
         day_label = self.form.labelForField(self.weekday_combo)
-        day_label.setVisible(reminder_type == ReminderType.WEEKLY)
+        day_label.setVisible(show_weekday)
+
+        show_nth = reminder_type == ReminderType.MONTHLY_NTH_WEEKDAY
+        nth_label = self.form.labelForField(self.nth_spin)
+        self.nth_spin.setVisible(show_nth)
+        nth_label.setVisible(show_nth)
 
     def get_reminder(self) -> Reminder:
         """Get the configured reminder."""
@@ -156,13 +194,53 @@ class ReminderDialog(QDialog):
         time_str = f"{time_obj.hour():02d}:{time_obj.minute():02d}"
 
         weekday = None
-        if reminder_type == ReminderType.WEEKLY:
+        if reminder_type in (ReminderType.WEEKLY, ReminderType.MONTHLY_NTH_WEEKDAY):
             weekday = self.weekday_combo.currentData()
 
         date_iso = None
+        today = QDate.currentDate()
+
         if reminder_type == ReminderType.ONCE:
-            # Right now this just means "today at the chosen time".
-            date_iso = QDate.currentDate().toString("yyyy-MM-dd")
+            # Fire once, today, at the chosen time
+            date_iso = today.toString("yyyy-MM-dd")
+
+        elif reminder_type == ReminderType.FORTNIGHTLY:
+            # Anchor: today. Every 14 days from this date.
+            if (
+                self._reminder
+                and self._reminder.reminder_type == ReminderType.FORTNIGHTLY
+                and self._reminder.date_iso
+            ):
+                date_iso = self._reminder.date_iso
+            else:
+                date_iso = today.toString("yyyy-MM-dd")
+
+        elif reminder_type == ReminderType.MONTHLY_DATE:
+            # Anchor: today's calendar date. "Same date each month"
+            if (
+                self._reminder
+                and self._reminder.reminder_type == ReminderType.MONTHLY_DATE
+                and self._reminder.date_iso
+            ):
+                date_iso = self._reminder.date_iso
+            else:
+                date_iso = today.toString("yyyy-MM-dd")
+
+        elif reminder_type == ReminderType.MONTHLY_NTH_WEEKDAY:
+            # Anchor: the nth weekday for this month (gives us “3rd Monday” etc.)
+            weekday = self.weekday_combo.currentData()
+            nth_index = self.nth_spin.value() - 1  # 0-based
+
+            first = QDate(today.year(), today.month(), 1)
+            target_dow = weekday + 1  # Qt: Monday=1
+            offset = (target_dow - first.dayOfWeek() + 7) % 7
+            anchor = first.addDays(offset + nth_index * 7)
+
+            # If nth weekday doesn't exist in this month, fall back to the last such weekday
+            if anchor.month() != today.month():
+                anchor = anchor.addDays(-7)
+
+            date_iso = anchor.toString("yyyy-MM-dd")
 
         return Reminder(
             id=self._reminder.id if self._reminder else None,
@@ -189,7 +267,7 @@ class UpcomingRemindersWidget(QFrame):
 
         # Header with toggle button
         self.toggle_btn = QToolButton()
-        self.toggle_btn.setText("Upcoming Reminders")
+        self.toggle_btn.setText(strings._("upcoming_reminders"))
         self.toggle_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.toggle_btn.setCheckable(True)
         self.toggle_btn.setChecked(False)
@@ -198,7 +276,7 @@ class UpcomingRemindersWidget(QFrame):
 
         self.add_btn = QToolButton()
         self.add_btn.setText("⏰")
-        self.add_btn.setToolTip("Add Reminder")
+        self.add_btn.setToolTip(strings._("add_reminder"))
         self.add_btn.setAutoRaise(True)
         self.add_btn.clicked.connect(self._add_reminder)
 
@@ -206,7 +284,7 @@ class UpcomingRemindersWidget(QFrame):
         self.manage_btn.setIcon(
             self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
         )
-        self.manage_btn.setToolTip("Manage All Reminders")
+        self.manage_btn.setToolTip(strings._("manage_reminders"))
         self.manage_btn.setAutoRaise(True)
         self.manage_btn.clicked.connect(self._manage_reminders)
 
@@ -330,24 +408,75 @@ class UpcomingRemindersWidget(QFrame):
             self.reminder_list.addItem(item)
 
         if not upcoming:
-            item = QListWidgetItem("No upcoming reminders")
+            item = QListWidgetItem(strings._("no_upcoming_reminders"))
             item.setFlags(Qt.NoItemFlags)
             self.reminder_list.addItem(item)
 
     def _should_fire_on_date(self, reminder: Reminder, date: QDate) -> bool:
         """Check if a reminder should fire on a given date."""
-        if reminder.reminder_type == ReminderType.ONCE:
+        rtype = reminder.reminder_type
+
+        if rtype == ReminderType.ONCE:
             if reminder.date_iso:
                 return date.toString("yyyy-MM-dd") == reminder.date_iso
             return False
-        elif reminder.reminder_type == ReminderType.DAILY:
+
+        if rtype == ReminderType.DAILY:
             return True
-        elif reminder.reminder_type == ReminderType.WEEKDAYS:
+
+        if rtype == ReminderType.WEEKDAYS:
             # Monday=1, Sunday=7
             return 1 <= date.dayOfWeek() <= 5
-        elif reminder.reminder_type == ReminderType.WEEKLY:
+
+        if rtype == ReminderType.WEEKLY:
             # Qt: Monday=1, reminder: Monday=0
             return date.dayOfWeek() - 1 == reminder.weekday
+
+        if rtype == ReminderType.FORTNIGHTLY:
+            if not reminder.date_iso:
+                return False
+            anchor = QDate.fromString(reminder.date_iso, "yyyy-MM-dd")
+            if not anchor.isValid() or date < anchor:
+                return False
+            days = anchor.daysTo(date)
+            return days % 14 == 0
+
+        if rtype == ReminderType.MONTHLY_DATE:
+            if not reminder.date_iso:
+                return False
+            anchor = QDate.fromString(reminder.date_iso, "yyyy-MM-dd")
+            if not anchor.isValid():
+                return False
+            anchor_day = anchor.day()
+            # Clamp to the last day of this month (for 29/30/31)
+            first_of_month = QDate(date.year(), date.month(), 1)
+            last_of_month = first_of_month.addMonths(1).addDays(-1)
+            target_day = min(anchor_day, last_of_month.day())
+            return date.day() == target_day
+
+        if rtype == ReminderType.MONTHLY_NTH_WEEKDAY:
+            if not reminder.date_iso or reminder.weekday is None:
+                return False
+
+            anchor = QDate.fromString(reminder.date_iso, "yyyy-MM-dd")
+            if not anchor.isValid():
+                return False
+
+            # Which "nth" weekday is the anchor? (0=1st, 1=2nd, etc.)
+            anchor_n = (anchor.day() - 1) // 7
+            target_dow = reminder.weekday + 1  # Qt dayOfWeek (1..7)
+
+            # Compute the anchor_n-th target weekday in this month
+            first = QDate(date.year(), date.month(), 1)
+            offset = (target_dow - first.dayOfWeek() + 7) % 7
+            candidate = first.addDays(offset + anchor_n * 7)
+
+            # If that nth weekday doesn’t exist this month (e.g. 5th Monday), skip
+            if candidate.month() != date.month():
+                return False
+
+            return date == candidate
+
         return False
 
     def _check_reminders(self):
@@ -433,7 +562,7 @@ class UpcomingRemindersWidget(QFrame):
         if len(selected_items) == 1:
             reminder = selected_items[0].data(Qt.UserRole)
             if reminder:
-                edit_action = QAction("Edit", self)
+                edit_action = QAction(strings._("edit"), self)
                 edit_action.triggered.connect(
                     lambda: self._edit_reminder(selected_items[0])
                 )
@@ -441,9 +570,13 @@ class UpcomingRemindersWidget(QFrame):
 
         # Delete option for any selection
         if len(selected_items) == 1:
-            delete_text = "Delete"
+            delete_text = strings._("delete")
         else:
-            delete_text = f"Delete {len(selected_items)} Reminders"
+            delete_text = (
+                strings._("delete")
+                + f" {len(selected_items)} "
+                + strings._("reminders")
+            )
 
         delete_action = QAction(delete_text, self)
         delete_action.triggered.connect(lambda: self._delete_selected_reminders())
@@ -470,15 +603,31 @@ class UpcomingRemindersWidget(QFrame):
         # Confirmation message
         if len(unique_reminders) == 1:
             reminder = list(unique_reminders.values())[0]
-            msg = f"Delete reminder '{reminder.text}'?"
+            msg = (
+                strings._("delete")
+                + " "
+                + strings._("reminder")
+                + f" '{reminder.text}'?"
+            )
             if reminder.reminder_type != ReminderType.ONCE:
-                msg += f"\n\nNote: This is a {reminder.reminder_type.value} reminder. Deleting it will remove all future occurrences."
+                msg += (
+                    "\n\n"
+                    + strings._("this_is_a_reminder_of_type")
+                    + f" '{reminder.reminder_type.value}'. "
+                    + strings._("deleting_it_will_remove_all_future_occurrences")
+                )
         else:
-            msg = f"Delete {len(unique_reminders)} reminders?\n\nNote: This will delete the actual reminders, not just individual occurrences."
+            msg = (
+                strings._("delete")
+                + f"{len(unique_reminders)} "
+                + strings._("reminders")
+                + " ?\n\n"
+                + strings._("this_will_delete_the_actual_reminders")
+            )
 
         reply = QMessageBox.question(
             self,
-            "Delete Reminders",
+            strings._("delete_reminders"),
             msg,
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
@@ -491,13 +640,18 @@ class UpcomingRemindersWidget(QFrame):
 
     def _delete_reminder(self, reminder):
         """Delete a single reminder after confirmation."""
-        msg = f"Delete reminder '{reminder.text}'?"
+        msg = strings._("delete") + " " + strings._("reminder") + f" '{reminder.text}'?"
         if reminder.reminder_type != ReminderType.ONCE:
-            msg += f"\n\nNote: This is a {reminder.reminder_type.value} reminder. Deleting it will remove all future occurrences."
+            msg += (
+                "\n\n"
+                + strings._("this_is_a_reminder_of_type")
+                + f" '{reminder.reminder_type.value}'. "
+                + strings._("deleting_it_will_remove_all_future_occurrences")
+            )
 
         reply = QMessageBox.question(
             self,
-            "Delete Reminder",
+            strings._("delete_reminder"),
             msg,
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
@@ -522,7 +676,7 @@ class ManageRemindersDialog(QDialog):
         super().__init__(parent)
         self._db = db
 
-        self.setWindowTitle("Manage Reminders")
+        self.setWindowTitle(strings._("manage_reminders"))
         self.setMinimumSize(700, 500)
 
         layout = QVBoxLayout(self)
@@ -531,23 +685,30 @@ class ManageRemindersDialog(QDialog):
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
-            ["Text", "Time", "Type", "Active", "Actions"]
+            [
+                strings._("text"),
+                strings._("time"),
+                strings._("type"),
+                strings._("active"),
+                strings._("actions"),
+            ]
         )
         self.table.horizontalHeader().setStretchLastSection(False)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         layout.addWidget(self.table)
 
         # Buttons
         btn_layout = QHBoxLayout()
 
-        add_btn = QPushButton("Add Reminder")
+        add_btn = QPushButton(strings._("add_reminder"))
         add_btn.clicked.connect(self._add_reminder)
         btn_layout.addWidget(add_btn)
 
         btn_layout.addStretch()
 
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
         btn_layout.addWidget(close_btn)
 
@@ -581,13 +742,30 @@ class ManageRemindersDialog(QDialog):
                 ReminderType.DAILY: "Daily",
                 ReminderType.WEEKDAYS: "Weekdays",
                 ReminderType.WEEKLY: "Weekly",
+                ReminderType.FORTNIGHTLY: "Fortnightly",
+                ReminderType.MONTHLY_DATE: "Monthly (date)",
+                ReminderType.MONTHLY_NTH_WEEKDAY: "Monthly (nth weekday)",
             }.get(reminder.reminder_type, "Unknown")
 
+            # Add day-of-week annotation where it makes sense
             if (
-                reminder.reminder_type == ReminderType.WEEKLY
+                reminder.reminder_type
+                in (
+                    ReminderType.WEEKLY,
+                    ReminderType.FORTNIGHTLY,
+                    ReminderType.MONTHLY_NTH_WEEKDAY,
+                )
                 and reminder.weekday is not None
             ):
-                days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                days = [
+                    strings._("monday_short"),
+                    strings._("tuesday_short"),
+                    strings._("wednesday_short"),
+                    strings._("thursday_short"),
+                    strings._("friday_short"),
+                    strings._("saturday_short"),
+                    strings._("sunday_short"),
+                ]
                 type_str += f" ({days[reminder.weekday]})"
 
             type_item = QTableWidgetItem(type_str)
@@ -602,11 +780,11 @@ class ManageRemindersDialog(QDialog):
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(2, 2, 2, 2)
 
-            edit_btn = QPushButton("Edit")
+            edit_btn = QPushButton(strings._("edit"))
             edit_btn.clicked.connect(lambda checked, r=reminder: self._edit_reminder(r))
             actions_layout.addWidget(edit_btn)
 
-            delete_btn = QPushButton("Delete")
+            delete_btn = QPushButton(strings._("delete"))
             delete_btn.clicked.connect(
                 lambda checked, r=reminder: self._delete_reminder(r)
             )
@@ -634,8 +812,8 @@ class ManageRemindersDialog(QDialog):
         """Delete a reminder."""
         reply = QMessageBox.question(
             self,
-            "Delete Reminder",
-            f"Delete reminder '{reminder.text}'?",
+            strings._("delete_reminder"),
+            strings._("delete") + " " + strings._("reminder") + f" '{reminder.text}'?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
