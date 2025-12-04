@@ -79,7 +79,9 @@ class ReminderDialog(QDialog):
             parts = reminder.time_str.split(":")
             self.time_edit.setTime(QTime(int(parts[0]), int(parts[1])))
         else:
-            self.time_edit.setTime(QTime.currentTime())
+            # Default to 5 minutes in the future
+            future = QTime.currentTime().addSecs(5 * 60)
+            self.time_edit.setTime(future)            
         self.form.addRow("&" + strings._("time") + ":", self.time_edit)
 
         # Recurrence type

@@ -2,6 +2,7 @@
 
  * Allow 'this week', 'this month', 'this year' granularity in Timesheet reports. Default date range to start from this month.
  * Allow 'All Projects' for timesheet reports.
+ * Make Reminder alarm proposed time be 5 minutes into the future (no point in being right now - that time is already passed)
 
 # 0.6.2
 
