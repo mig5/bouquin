@@ -1149,6 +1149,53 @@ class DBManager:
             for r in rows
         ]
 
+    def time_report_all(
+        self,
+        start_date_iso: str,
+        end_date_iso: str,
+        granularity: str = "day",  # 'day' | 'week' | 'month'
+    ) -> list[tuple[str, str, str, str, int]]:
+        """
+        Return (project_name, time_period, activity_name, note, total_minutes)
+        across *all* projects between start and end, grouped by project + period + activity.
+        """
+        if granularity == "day":
+            bucket_expr = "page_date"
+        elif granularity == "week":
+            bucket_expr = "strftime('%Y-%W', page_date)"
+        else:  # month
+            bucket_expr = "substr(page_date, 1, 7)"  # YYYY-MM
+
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            f"""
+            SELECT
+                p.name        AS project_name,
+                {bucket_expr} AS bucket,
+                a.name        AS activity_name,
+                t.note        AS note,
+                SUM(t.minutes) AS total_minutes
+            FROM time_log t
+            JOIN projects  p ON p.id = t.project_id
+            JOIN activities a ON a.id = t.activity_id
+            WHERE t.page_date BETWEEN ? AND ?
+            GROUP BY p.id, bucket, activity_name
+            ORDER BY LOWER(p.name), bucket, LOWER(activity_name);
+            """,  # nosec
+            (start_date_iso, end_date_iso),
+        ).fetchall()
+
+        return [
+            (
+                r["project_name"],
+                r["bucket"],
+                r["activity_name"],
+                r["note"],
+                r["total_minutes"],
+            )
+            for r in rows
+        ]
+
     def close(self) -> None:
         if self.conn is not None:
             self.conn.close()

@@ -1190,7 +1190,7 @@ def test_time_report_dialog_creation(qtbot, fresh_db):
     dialog = TimeReportDialog(fresh_db)
     qtbot.addWidget(dialog)
 
-    assert dialog.project_combo.count() == 0
+    assert dialog.project_combo.count() == 1
     assert dialog.granularity.count() == 3  # day, week, month
 
 
@@ -1202,18 +1202,18 @@ def test_time_report_dialog_loads_projects(qtbot, fresh_db):
     dialog = TimeReportDialog(fresh_db)
     qtbot.addWidget(dialog)
 
-    assert dialog.project_combo.count() == 2
+    assert dialog.project_combo.count() == 3
 
 
 def test_time_report_dialog_default_date_range(qtbot, fresh_db):
-    """Dialog defaults to last 7 days."""
+    """Dialog defaults to start of month."""
     dialog = TimeReportDialog(fresh_db)
     qtbot.addWidget(dialog)
 
     today = QDate.currentDate()
-    week_ago = today.addDays(-7)
+    start_of_month = QDate(today.year(), today.month(), 1)
 
-    assert dialog.from_date.date() == week_ago
+    assert dialog.from_date.date() == start_of_month
     assert dialog.to_date.date() == today
 
 
@@ -1235,7 +1235,7 @@ def test_time_report_dialog_run_report(qtbot, fresh_db):
     dialog._run_report()
 
     assert dialog.table.rowCount() == 1
-    assert "Activity" in dialog.table.item(0, 1).text()
+    assert "Activity" in dialog.table.item(0, 2).text()
     assert "1.5" in dialog.total_label.text() or "1.50" in dialog.total_label.text()
 
 
@@ -1423,7 +1423,7 @@ def test_time_report_dialog_granularity_week(qtbot, fresh_db):
 
     # Should aggregate to single week
     assert dialog.table.rowCount() == 1
-    hours_text = dialog.table.item(0, 3).text()
+    hours_text = dialog.table.item(0, 4).text()
     assert "2.5" in hours_text or "2.50" in hours_text
 
 
@@ -1451,7 +1451,7 @@ def test_time_report_dialog_granularity_month(qtbot, fresh_db):
 
     # Should aggregate to single month
     assert dialog.table.rowCount() == 1
-    hours_text = dialog.table.item(0, 3).text()
+    hours_text = dialog.table.item(0, 4).text()
     assert "2.5" in hours_text or "2.50" in hours_text
 
 
@@ -1937,7 +1937,7 @@ def test_time_report_dialog_stores_report_state(qtbot, fresh_db):
     dialog = TimeReportDialog(fresh_db)
     qtbot.addWidget(dialog)
 
-    dialog.project_combo.setCurrentIndex(0)
+    dialog.project_combo.setCurrentIndex(1)
     dialog.from_date.setDate(QDate.fromString(_today(), "yyyy-MM-dd"))
     dialog.to_date.setDate(QDate.fromString(_today(), "yyyy-MM-dd"))
     dialog.granularity.setCurrentIndex(1)  # week
@@ -2154,10 +2154,10 @@ def test_full_workflow_add_project_activity_log_report(
 
     # Verify report
     assert report_dialog.table.rowCount() == 1
-    assert "Test Activity" in report_dialog.table.item(0, 1).text()
+    assert "Test Activity" in report_dialog.table.item(0, 2).text()
     assert (
-        "2.5" in report_dialog.table.item(0, 3).text()
-        or "2.50" in report_dialog.table.item(0, 3).text()
+        "2.5" in report_dialog.table.item(0, 4).text()
+        or "2.50" in report_dialog.table.item(0, 4).text()
     )
 
     # 5. Export CSV

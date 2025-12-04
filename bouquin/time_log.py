@@ -1001,22 +1001,40 @@ class TimeReportDialog(QDialog):
         form = QFormLayout()
         # Project
         self.project_combo = QComboBox()
+        self.project_combo.addItem(strings._("all_projects"), None)
         for proj_id, name in self._db.list_projects():
             self.project_combo.addItem(name, proj_id)
         form.addRow(strings._("project"), self.project_combo)
 
         # Date range
         today = QDate.currentDate()
-        self.from_date = QDateEdit(today.addDays(-7))
+        start_of_month = QDate(today.year(), today.month(), 1)
+
+        self.range_preset = QComboBox()
+        self.range_preset.addItem(strings._("custom_range"), "custom")
+        self.range_preset.addItem(strings._("today"), "today")
+        self.range_preset.addItem(strings._("this_week"), "this_week")
+        self.range_preset.addItem(strings._("this_month"), "this_month")
+        self.range_preset.addItem(strings._("this_year"), "this_year")
+        self.range_preset.currentIndexChanged.connect(self._on_range_preset_changed)
+
+        self.from_date = QDateEdit(start_of_month)
         self.from_date.setCalendarPopup(True)
         self.to_date = QDateEdit(today)
         self.to_date.setCalendarPopup(True)
 
         range_row = QHBoxLayout()
+        range_row.addWidget(self.range_preset)
         range_row.addWidget(self.from_date)
         range_row.addWidget(QLabel("—"))
         range_row.addWidget(self.to_date)
+
         form.addRow(strings._("date_range"), range_row)
+
+        # After widgets are created, choose default preset
+        idx = self.range_preset.findData("this_month")
+        if idx != -1:
+            self.range_preset.setCurrentIndex(idx)
 
         # Granularity
         self.granularity = QComboBox()
@@ -1046,9 +1064,10 @@ class TimeReportDialog(QDialog):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
             [
+                strings._("project"),
                 strings._("time_period"),
                 strings._("activity"),
                 strings._("note"),
@@ -1058,8 +1077,9 @@ class TimeReportDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeToContents
+            4, QHeaderView.ResizeToContents
         )
         root.addWidget(self.table, 1)
 
@@ -1075,39 +1095,110 @@ class TimeReportDialog(QDialog):
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
 
+    def _on_range_preset_changed(self, index: int) -> None:
+        preset = self.range_preset.currentData()
+        today = QDate.currentDate()
+
+        if preset == "today":
+            start = end = today
+
+        elif preset == "this_week":
+            # Monday-based week, clamp end to today
+            # dayOfWeek(): Monday=1, Sunday=7
+            start = today.addDays(1 - today.dayOfWeek())
+            end = today
+
+        elif preset == "this_month":
+            start = QDate(today.year(), today.month(), 1)
+            end = today
+
+        elif preset == "this_year":
+            start = QDate(today.year(), 1, 1)
+            end = today
+
+        else:  # "custom" – leave fields as user-set
+            return
+
+        # Update date edits without triggering anything else
+        self.from_date.blockSignals(True)
+        self.to_date.blockSignals(True)
+        self.from_date.setDate(start)
+        self.to_date.setDate(end)
+        self.from_date.blockSignals(False)
+        self.to_date.blockSignals(False)
+
     def _run_report(self):
         idx = self.project_combo.currentIndex()
         if idx < 0:
             return
-        proj_id = int(self.project_combo.itemData(idx))
 
+        proj_data = self.project_combo.itemData(idx)
         start = self.from_date.date().toString("yyyy-MM-dd")
         end = self.to_date.date().toString("yyyy-MM-dd")
         gran = self.granularity.currentData()
 
-        # Keep human-friendly copies for PDF header
-        self._last_project_name = self.project_combo.currentText()
         self._last_start = start
         self._last_end = end
         self._last_gran_label = self.granularity.currentText()
 
-        rows = self._db.time_report(proj_id, start, end, gran)
+        rows_for_table: list[tuple[str, str, str, str, int]] = []
 
-        self._last_rows = rows
-        self._last_total_minutes = sum(r[3] for r in rows)
+        if proj_data is None:
+            # All projects
+            self._last_all_projects = True
+            self._last_project_name = strings._("all_projects")
+            rows_for_table = self._db.time_report_all(start, end, gran)
+        else:
+            self._last_all_projects = False
+            proj_id = int(proj_data)
+            project_name = self.project_combo.currentText()
+            self._last_project_name = project_name
 
-        self.table.setRowCount(len(rows))
-        for i, (time_period, activity_name, note, minutes) in enumerate(rows):
+            per_project_rows = self._db.time_report(proj_id, start, end, gran)
+            # Adapt DB rows (period, activity, note, minutes) → include project
+            rows_for_table = [
+                (project_name, period, activity, note, minutes)
+                for (period, activity, note, minutes) in per_project_rows
+            ]
+
+        # Store for export
+        self._last_rows = rows_for_table
+        self._last_total_minutes = sum(r[4] for r in rows_for_table)
+
+        # Per-project totals
+        self._last_project_totals = defaultdict(int)
+        for project, _period, _activity, _note, minutes in rows_for_table:
+            self._last_project_totals[project] += minutes
+
+        # Populate table
+        self.table.setRowCount(len(rows_for_table))
+        for i, (project, time_period, activity_name, note, minutes) in enumerate(
+            rows_for_table
+        ):
             hrs = minutes / 60.0
-            self.table.setItem(i, 0, QTableWidgetItem(time_period))
-            self.table.setItem(i, 1, QTableWidgetItem(activity_name))
-            self.table.setItem(i, 2, QTableWidgetItem(note))
-            self.table.setItem(i, 3, QTableWidgetItem(f"{hrs:.2f}"))
+            self.table.setItem(i, 0, QTableWidgetItem(project))
+            self.table.setItem(i, 1, QTableWidgetItem(time_period))
+            self.table.setItem(i, 2, QTableWidgetItem(activity_name))
+            self.table.setItem(i, 3, QTableWidgetItem(note))
+            self.table.setItem(i, 4, QTableWidgetItem(f"{hrs:.2f}"))
 
+        # Summary label – include per-project totals when in "all projects" mode
         total_hours = self._last_total_minutes / 60.0
-        self.total_label.setText(
-            strings._("time_report_total").format(hours=total_hours)
-        )
+        if self._last_all_projects:
+            per_project_bits = [
+                f"{proj}: {mins/60.0:.2f}h"
+                for proj, mins in sorted(self._last_project_totals.items())
+            ]
+            self.total_label.setText(
+                strings._("time_report_total").format(hours=total_hours)
+                + "  ("
+                + ", ".join(per_project_bits)
+                + ")"
+            )
+        else:
+            self.total_label.setText(
+                strings._("time_report_total").format(hours=total_hours)
+            )
 
     def _export_csv(self):
         if not self._last_rows:
@@ -1136,6 +1227,7 @@ class TimeReportDialog(QDialog):
                 # Header
                 writer.writerow(
                     [
+                        strings._("project"),
                         strings._("time_period"),
                         strings._("activity"),
                         strings._("note"),
@@ -1144,9 +1236,17 @@ class TimeReportDialog(QDialog):
                 )
 
                 # Data rows
-                for time_period, activity_name, note, minutes in self._last_rows:
+                for (
+                    project,
+                    time_period,
+                    activity_name,
+                    note,
+                    minutes,
+                ) in self._last_rows:
                     hours = minutes / 60.0
-                    writer.writerow([time_period, activity_name, note, f"{hours:.2f}"])
+                    writer.writerow(
+                        [project, time_period, activity_name, note, f"{hours:.2f}"]
+                    )
 
                 # Blank line + total
                 total_hours = self._last_total_minutes / 60.0
@@ -1181,7 +1281,7 @@ class TimeReportDialog(QDialog):
 
         # ---------- Build chart image (hours per period) ----------
         per_period_minutes: dict[str, int] = defaultdict(int)
-        for period, _activity, note, minutes in self._last_rows:
+        for _project, period, _activity, note, minutes in self._last_rows:
             per_period_minutes[period] += minutes
 
         periods = sorted(per_period_minutes.keys())
@@ -1282,10 +1382,11 @@ class TimeReportDialog(QDialog):
 
         # Table rows (period, activity, hours)
         row_html_parts: list[str] = []
-        for period, activity, note, minutes in self._last_rows:
+        for project, period, activity, note, minutes in self._last_rows:
             hours = minutes / 60.0
             row_html_parts.append(
                 "<tr>"
+                f"<td>{html.escape(project)}</td>"
                 f"<td>{html.escape(period)}</td>"
                 f"<td>{html.escape(activity)}</td>"
                 f"<td style='text-align:right'>{hours:.2f}</td>"
@@ -1343,6 +1444,7 @@ class TimeReportDialog(QDialog):
   <p><img src="chart" class="chart" /></p>
   <table>
     <tr>
+      <th>{html.escape(strings._("project"))}</th>
       <th>{html.escape(strings._("time_period"))}</th>
       <th>{html.escape(strings._("activity"))}</th>
       <th>{html.escape(strings._("hours"))}</th>

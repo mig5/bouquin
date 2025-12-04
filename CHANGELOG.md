@@ -1,3 +1,8 @@
+# 0.6.3
+
+ * Allow 'this week', 'this month', 'this year' granularity in Timesheet reports. Default date range to start from this month.
+ * Allow 'All Projects' for timesheet reports.
+
 # 0.6.2
 
  * Ensure that adding a document whilst on an older date page, uses that date as its upload date
