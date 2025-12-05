@@ -2,6 +2,7 @@
 
  * Time reports: Fix report 'group by' logic to not show ambiguous 'note' data.
  * Time reports: Add default option to 'don't group'. This gives every individual time log row (and so the 'note' is shown in this case)
+ * Reminders: Ability to explicitly set the date of a reminder and have it handle recurrence based on that date
 
 # 0.6.3
 

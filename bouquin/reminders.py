@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
     QSpinBox,
+    QDateEdit,
 )
 
 from . import strings
@@ -75,6 +76,22 @@ class ReminderDialog(QDialog):
         if reminder:
             self.text_edit.setText(reminder.text)
         self.form.addRow("&" + strings._("reminder") + ":", self.text_edit)
+
+        # Date
+        self.date_edit = QDateEdit()
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+
+        if reminder and reminder.date_iso:
+            d = QDate.fromString(reminder.date_iso, "yyyy-MM-dd")
+            if d.isValid():
+                self.date_edit.setDate(d)
+            else:
+                self.date_edit.setDate(QDate.currentDate())
+        else:
+            self.date_edit.setDate(QDate.currentDate())
+
+        self.form.addRow("&" + strings._("date") + ":", self.date_edit)
 
         # Time
         self.time_edit = QTimeEdit()
@@ -126,7 +143,7 @@ class ReminderDialog(QDialog):
         if reminder and reminder.weekday is not None:
             self.weekday_combo.setCurrentIndex(reminder.weekday)
         else:
-            self.weekday_combo.setCurrentIndex(QDate.currentDate().dayOfWeek() - 1)
+            self.weekday_combo.setCurrentIndex(self.date_edit.date().dayOfWeek() - 1)
 
         self.form.addRow("&" + strings._("day") + ":", self.weekday_combo)
         day_label = self.form.labelForField(self.weekday_combo)
@@ -187,6 +204,16 @@ class ReminderDialog(QDialog):
         self.nth_spin.setVisible(show_nth)
         nth_label.setVisible(show_nth)
 
+        # For new reminders, when switching to a type that uses a weekday,
+        # snap the weekday to match the currently selected date.
+        if reminder_type in (
+            ReminderType.WEEKLY,
+            ReminderType.MONTHLY_NTH_WEEKDAY,
+        ) and (self._reminder is None or self._reminder.reminder_type != reminder_type):
+            dow = self.date_edit.date().dayOfWeek() - 1  # 0..6 (Mon..Sun)
+            if 0 <= dow < self.weekday_combo.count():
+                self.weekday_combo.setCurrentIndex(dow)
+
     def get_reminder(self) -> Reminder:
         """Get the configured reminder."""
         reminder_type = self.type_combo.currentData()
@@ -198,46 +225,32 @@ class ReminderDialog(QDialog):
             weekday = self.weekday_combo.currentData()
 
         date_iso = None
-        today = QDate.currentDate()
+        anchor_date = self.date_edit.date()
 
         if reminder_type == ReminderType.ONCE:
-            # Fire once, today, at the chosen time
-            date_iso = today.toString("yyyy-MM-dd")
+            # Fire once, on the chosen calendar date at the chosen time
+            date_iso = anchor_date.toString("yyyy-MM-dd")
 
         elif reminder_type == ReminderType.FORTNIGHTLY:
-            # Anchor: today. Every 14 days from this date.
-            if (
-                self._reminder
-                and self._reminder.reminder_type == ReminderType.FORTNIGHTLY
-                and self._reminder.date_iso
-            ):
-                date_iso = self._reminder.date_iso
-            else:
-                date_iso = today.toString("yyyy-MM-dd")
+            # Anchor: the chosen calendar date. Every 14 days from this date.
+            date_iso = anchor_date.toString("yyyy-MM-dd")
 
         elif reminder_type == ReminderType.MONTHLY_DATE:
-            # Anchor: today's calendar date. "Same date each month"
-            if (
-                self._reminder
-                and self._reminder.reminder_type == ReminderType.MONTHLY_DATE
-                and self._reminder.date_iso
-            ):
-                date_iso = self._reminder.date_iso
-            else:
-                date_iso = today.toString("yyyy-MM-dd")
+            # Anchor: the chosen calendar date. "Same date each month"
+            date_iso = anchor_date.toString("yyyy-MM-dd")
 
         elif reminder_type == ReminderType.MONTHLY_NTH_WEEKDAY:
-            # Anchor: the nth weekday for this month (gives us “3rd Monday” etc.)
+            # Anchor: the nth weekday for the chosen month (gives us “3rd Monday” etc.)
             weekday = self.weekday_combo.currentData()
             nth_index = self.nth_spin.value() - 1  # 0-based
 
-            first = QDate(today.year(), today.month(), 1)
+            first = QDate(anchor_date.year(), anchor_date.month(), 1)
             target_dow = weekday + 1  # Qt: Monday=1
             offset = (target_dow - first.dayOfWeek() + 7) % 7
             anchor = first.addDays(offset + nth_index * 7)
 
             # If nth weekday doesn't exist in this month, fall back to the last such weekday
-            if anchor.month() != today.month():
+            if anchor.month() != anchor_date.month():
                 anchor = anchor.addDays(-7)
 
             date_iso = anchor.toString("yyyy-MM-dd")
