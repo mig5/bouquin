@@ -1,3 +1,8 @@
+# 0.6.4
+
+ * Time reports: Fix report 'group by' logic to not show ambiguous 'note' data.
+ * Time reports: Add default option to 'don't group'. This gives every individual time log row (and so the 'note' is shown in this case)
+
 # 0.6.3
 
  * Allow 'this week', 'this month', 'this year' granularity in Timesheet reports. Default date range to start from this month.

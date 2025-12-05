@@ -986,7 +986,7 @@ class TimeReportDialog(QDialog):
         self._db = db
 
         # state for last run
-        self._last_rows: list[tuple[str, str, int]] = []
+        self._last_rows: list[tuple[str, str, str, str, int]] = []
         self._last_total_minutes: int = 0
         self._last_project_name: str = ""
         self._last_start: str = ""
@@ -1038,6 +1038,7 @@ class TimeReportDialog(QDialog):
 
         # Granularity
         self.granularity = QComboBox()
+        self.granularity.addItem(strings._("dont_group"), "none")
         self.granularity.addItem(strings._("by_day"), "day")
         self.granularity.addItem(strings._("by_week"), "week")
         self.granularity.addItem(strings._("by_month"), "month")
@@ -1095,6 +1096,43 @@ class TimeReportDialog(QDialog):
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
 
+    def _configure_table_columns(self, granularity: str) -> None:
+        if granularity == "none":
+            # Show notes
+            self.table.setColumnCount(5)
+            self.table.setHorizontalHeaderLabels(
+                [
+                    strings._("project"),
+                    strings._("time_period"),
+                    strings._("activity"),
+                    strings._("note"),
+                    strings._("hours"),
+                ]
+            )
+            # project, period, activity, note stretch; hours shrink
+            header = self.table.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.Stretch)
+            header.setSectionResizeMode(3, QHeaderView.Stretch)
+            header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        else:
+            # Grouped: no note column
+            self.table.setColumnCount(4)
+            self.table.setHorizontalHeaderLabels(
+                [
+                    strings._("project"),
+                    strings._("time_period"),
+                    strings._("activity"),
+                    strings._("hours"),
+                ]
+            )
+            header = self.table.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.Stretch)
+            header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
     def _on_range_preset_changed(self, index: int) -> None:
         preset = self.range_preset.currentData()
         today = QDate.currentDate()
@@ -1140,6 +1178,9 @@ class TimeReportDialog(QDialog):
         self._last_start = start
         self._last_end = end
         self._last_gran_label = self.granularity.currentText()
+        self._last_gran = gran  # remember which grouping was used
+
+        self._configure_table_columns(gran)
 
         rows_for_table: list[tuple[str, str, str, str, int]] = []
 
@@ -1179,8 +1220,13 @@ class TimeReportDialog(QDialog):
             self.table.setItem(i, 0, QTableWidgetItem(project))
             self.table.setItem(i, 1, QTableWidgetItem(time_period))
             self.table.setItem(i, 2, QTableWidgetItem(activity_name))
-            self.table.setItem(i, 3, QTableWidgetItem(note))
-            self.table.setItem(i, 4, QTableWidgetItem(f"{hrs:.2f}"))
+
+            if self._last_gran == "none":
+                self.table.setItem(i, 3, QTableWidgetItem(note or ""))
+                self.table.setItem(i, 4, QTableWidgetItem(f"{hrs:.2f}"))
+            else:
+                # no note column
+                self.table.setItem(i, 3, QTableWidgetItem(f"{hrs:.2f}"))
 
         # Summary label – include per-project totals when in "all projects" mode
         total_hours = self._last_total_minutes / 60.0
@@ -1224,16 +1270,18 @@ class TimeReportDialog(QDialog):
             with open(filename, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
 
+                show_note = getattr(self, "_last_gran", "day") == "none"
+
                 # Header
-                writer.writerow(
-                    [
-                        strings._("project"),
-                        strings._("time_period"),
-                        strings._("activity"),
-                        strings._("note"),
-                        strings._("hours"),
-                    ]
-                )
+                header = [
+                    strings._("project"),
+                    strings._("time_period"),
+                    strings._("activity"),
+                ]
+                if show_note:
+                    header.append(strings._("note"))
+                header.append(strings._("hours"))
+                writer.writerow(header)
 
                 # Data rows
                 for (
@@ -1244,9 +1292,11 @@ class TimeReportDialog(QDialog):
                     minutes,
                 ) in self._last_rows:
                     hours = minutes / 60.0
-                    writer.writerow(
-                        [project, time_period, activity_name, note, f"{hours:.2f}"]
-                    )
+                    row = [project, time_period, activity_name]
+                    if show_note:
+                        row.append(note)
+                    row.append(f"{hours:.2f}")
+                    writer.writerow(row)
 
                 # Blank line + total
                 total_hours = self._last_total_minutes / 60.0

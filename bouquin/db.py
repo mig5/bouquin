@@ -1108,8 +1108,8 @@ class DBManager:
         project_id: int,
         start_date_iso: str,
         end_date_iso: str,
-        granularity: str = "day",  # 'day' | 'week' | 'month'
-    ) -> list[tuple[str, str, int]]:
+        granularity: str = "day",  # 'day' | 'week' | 'month' | 'none'
+    ) -> list[tuple[str, str, str, int]]:
         """
         Return (time_period, activity_name, total_minutes) tuples between start and end
         for a project, grouped by period and activity.
@@ -1117,7 +1117,33 @@ class DBManager:
           - 'YYYY-MM-DD' for day
           - 'YYYY-WW'    for week
           - 'YYYY-MM'    for month
+        For 'none' granularity,  each individual time log entry becomes a row.
         """
+        cur = self.conn.cursor()
+
+        if granularity == "none":
+            # No grouping: one row per entry
+            rows = cur.execute(
+                """
+                SELECT
+                    t.page_date   AS period,
+                    a.name        AS activity_name,
+                    t.note        AS note,
+                    t.minutes     AS total_minutes
+                FROM time_log t
+                JOIN activities a ON a.id = t.activity_id
+                WHERE t.project_id = ?
+                  AND t.page_date BETWEEN ? AND ?
+                ORDER BY period, LOWER(a.name), t.id;
+                """,
+                (project_id, start_date_iso, end_date_iso),
+            ).fetchall()
+
+            return [
+                (r["period"], r["activity_name"], r["note"], r["total_minutes"])
+                for r in rows
+            ]
+
         if granularity == "day":
             bucket_expr = "page_date"
         elif granularity == "week":
@@ -1126,13 +1152,11 @@ class DBManager:
         else:  # month
             bucket_expr = "substr(page_date, 1, 7)"  # YYYY-MM
 
-        cur = self.conn.cursor()
         rows = cur.execute(
             f"""
             SELECT
                 {bucket_expr} AS bucket,
                 a.name         AS activity_name,
-                t.note         AS note,
                 SUM(t.minutes) AS total_minutes
             FROM time_log t
             JOIN activities a ON a.id = t.activity_id
@@ -1144,21 +1168,50 @@ class DBManager:
             (project_id, start_date_iso, end_date_iso),
         ).fetchall()
 
-        return [
-            (r["bucket"], r["activity_name"], r["note"], r["total_minutes"])
-            for r in rows
-        ]
+        return [(r["bucket"], r["activity_name"], "", r["total_minutes"]) for r in rows]
 
     def time_report_all(
         self,
         start_date_iso: str,
         end_date_iso: str,
-        granularity: str = "day",  # 'day' | 'week' | 'month'
+        granularity: str = "day",  # 'day' | 'week' | 'month' | 'none'
     ) -> list[tuple[str, str, str, str, int]]:
         """
         Return (project_name, time_period, activity_name, note, total_minutes)
         across *all* projects between start and end, grouped by project + period + activity.
         """
+        cur = self.conn.cursor()
+
+        if granularity == "none":
+            # No grouping – one row per time_log record
+            rows = cur.execute(
+                """
+                SELECT
+                    p.name       AS project_name,
+                    t.page_date  AS period,
+                    a.name       AS activity_name,
+                    t.note       AS note,
+                    t.minutes    AS total_minutes
+                FROM time_log t
+                JOIN projects  p ON p.id = t.project_id
+                JOIN activities a ON a.id = t.activity_id
+                WHERE t.page_date BETWEEN ? AND ?
+                ORDER BY LOWER(p.name), period, LOWER(activity_name), t.id;
+                """,
+                (start_date_iso, end_date_iso),
+            ).fetchall()
+
+            return [
+                (
+                    r["project_name"],
+                    r["period"],
+                    r["activity_name"],
+                    r["note"],
+                    r["total_minutes"],
+                )
+                for r in rows
+            ]
+
         if granularity == "day":
             bucket_expr = "page_date"
         elif granularity == "week":
@@ -1166,14 +1219,12 @@ class DBManager:
         else:  # month
             bucket_expr = "substr(page_date, 1, 7)"  # YYYY-MM
 
-        cur = self.conn.cursor()
         rows = cur.execute(
             f"""
             SELECT
                 p.name        AS project_name,
                 {bucket_expr} AS bucket,
                 a.name        AS activity_name,
-                t.note        AS note,
                 SUM(t.minutes) AS total_minutes
             FROM time_log t
             JOIN projects  p ON p.id = t.project_id
@@ -1190,7 +1241,7 @@ class DBManager:
                 r["project_name"],
                 r["bucket"],
                 r["activity_name"],
-                r["note"],
+                "",
                 r["total_minutes"],
             )
             for r in rows

@@ -1191,7 +1191,7 @@ def test_time_report_dialog_creation(qtbot, fresh_db):
     qtbot.addWidget(dialog)
 
     assert dialog.project_combo.count() == 1
-    assert dialog.granularity.count() == 3  # day, week, month
+    assert dialog.granularity.count() == 4
 
 
 def test_time_report_dialog_loads_projects(qtbot, fresh_db):
@@ -1230,7 +1230,9 @@ def test_time_report_dialog_run_report(qtbot, fresh_db):
     dialog.project_combo.setCurrentIndex(0)
     dialog.from_date.setDate(QDate.fromString(_today(), "yyyy-MM-dd"))
     dialog.to_date.setDate(QDate.fromString(_today(), "yyyy-MM-dd"))
-    dialog.granularity.setCurrentIndex(0)  # day
+    idx_day = dialog.granularity.findData("day")
+    assert idx_day != -1
+    dialog.granularity.setCurrentIndex(idx_day)
 
     dialog._run_report()
 
@@ -1417,13 +1419,18 @@ def test_time_report_dialog_granularity_week(qtbot, fresh_db):
     dialog.project_combo.setCurrentIndex(0)
     dialog.from_date.setDate(QDate.fromString(date1, "yyyy-MM-dd"))
     dialog.to_date.setDate(QDate.fromString(date2, "yyyy-MM-dd"))
-    dialog.granularity.setCurrentIndex(1)  # week
+
+    idx_week = dialog.granularity.findData("week")
+    assert idx_week != -1
+    dialog.granularity.setCurrentIndex(idx_week)
 
     dialog._run_report()
 
     # Should aggregate to single week
     assert dialog.table.rowCount() == 1
-    hours_text = dialog.table.item(0, 4).text()
+    # In grouped modes the Note column is hidden → hours are in column 3
+    hours_text = dialog.table.item(0, 3).text()
+
     assert "2.5" in hours_text or "2.50" in hours_text
 
 
@@ -1445,13 +1452,17 @@ def test_time_report_dialog_granularity_month(qtbot, fresh_db):
     dialog.project_combo.setCurrentIndex(0)
     dialog.from_date.setDate(QDate.fromString(date1, "yyyy-MM-dd"))
     dialog.to_date.setDate(QDate.fromString(date2, "yyyy-MM-dd"))
-    dialog.granularity.setCurrentIndex(2)  # month
+
+    idx_month = dialog.granularity.findData("month")
+    assert idx_month != -1
+    dialog.granularity.setCurrentIndex(idx_month)
 
     dialog._run_report()
 
     # Should aggregate to single month
     assert dialog.table.rowCount() == 1
-    hours_text = dialog.table.item(0, 4).text()
+    hours_text = dialog.table.item(0, 3).text()
+
     assert "2.5" in hours_text or "2.50" in hours_text
 
 
@@ -1940,7 +1951,10 @@ def test_time_report_dialog_stores_report_state(qtbot, fresh_db):
     dialog.project_combo.setCurrentIndex(1)
     dialog.from_date.setDate(QDate.fromString(_today(), "yyyy-MM-dd"))
     dialog.to_date.setDate(QDate.fromString(_today(), "yyyy-MM-dd"))
-    dialog.granularity.setCurrentIndex(1)  # week
+
+    idx_week = dialog.granularity.findData("week")
+    assert idx_week != -1
+    dialog.granularity.setCurrentIndex(idx_week)
 
     dialog._run_report()
 
@@ -1976,7 +1990,10 @@ def test_time_report_dialog_pdf_export_with_multiple_periods(
     dialog.project_combo.setCurrentIndex(0)
     dialog.from_date.setDate(QDate.fromString(date1, "yyyy-MM-dd"))
     dialog.to_date.setDate(QDate.fromString(date3, "yyyy-MM-dd"))
-    dialog.granularity.setCurrentIndex(0)  # day
+
+    idx_day = dialog.granularity.findData("day")
+    assert idx_day != -1
+    dialog.granularity.setCurrentIndex(idx_day)
 
     dialog._run_report()
 
@@ -2933,3 +2950,69 @@ def test_time_code_manager_dialog_with_focus_tab(qtbot, app, fresh_db):
     dialog2 = TimeCodeManagerDialog(fresh_db, focus_tab="activities")
     qtbot.addWidget(dialog2)
     assert dialog2.tabs.currentIndex() == 1
+
+
+def test_time_report_no_grouping_returns_each_entry_and_note(fresh_db):
+    """Granularity 'none' returns one row per entry and includes notes."""
+    proj_id = fresh_db.add_project("Project")
+    act_id = fresh_db.add_activity("Activity")
+    date = _today()
+
+    fresh_db.add_time_log(date, proj_id, act_id, 60, note="First")
+    fresh_db.add_time_log(date, proj_id, act_id, 30, note="Second")
+
+    report = fresh_db.time_report(proj_id, date, date, "none")
+
+    # Two separate rows, not aggregated.
+    assert len(report) == 2
+
+    # Each row is (period, activity_name, note, total_minutes)
+    periods = {r[0] for r in report}
+    activities = {r[1] for r in report}
+    notes = {r[2] for r in report}
+    minutes = sorted(r[3] for r in report)
+
+    assert periods == {date}
+    assert activities == {"Activity"}
+    assert notes == {"First", "Second"}
+    assert minutes == [30, 60]
+
+
+def test_time_report_dialog_granularity_none_shows_each_entry_and_notes(
+    qtbot, fresh_db
+):
+    """'Don't group' granularity shows one row per log entry and includes notes."""
+    strings.load_strings("en")
+    proj_id = fresh_db.add_project("Project")
+    act_id = fresh_db.add_activity("Activity")
+    date = _today()
+
+    fresh_db.add_time_log(date, proj_id, act_id, 60, note="First")
+    fresh_db.add_time_log(date, proj_id, act_id, 30, note="Second")
+
+    dialog = TimeReportDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    # Select the concrete project (index 0 is "All projects")
+    dialog.project_combo.setCurrentIndex(1)
+    dialog.from_date.setDate(QDate.fromString(date, "yyyy-MM-dd"))
+    dialog.to_date.setDate(QDate.fromString(date, "yyyy-MM-dd"))
+
+    idx_none = dialog.granularity.findData("none")
+    assert idx_none != -1
+    dialog.granularity.setCurrentIndex(idx_none)
+
+    dialog._run_report()
+
+    # Two rows, not aggregated
+    assert dialog.table.rowCount() == 2
+
+    # Notes in column 3
+    notes = {dialog.table.item(row, 3).text() for row in range(dialog.table.rowCount())}
+    assert "First" in notes
+    assert "Second" in notes
+
+    # Hours in last column (index 4) when not grouped
+    hours = [dialog.table.item(row, 4).text() for row in range(dialog.table.rowCount())]
+    assert any("1.00" in h or "1.0" in h for h in hours)
+    assert any("0.50" in h or "0.5" in h for h in hours)
