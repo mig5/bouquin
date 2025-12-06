@@ -2311,7 +2311,7 @@ def test_parse_today_alarms_invalid_time(qtbot, app, tmp_db_cfg, fresh_db):
     assert len(window._reminder_timers) == 0
 
 
-def test_parse_today_alarms_past_time(qtbot, app, tmp_db_cfg, fresh_db):
+def test_parse_today_alarms_past_time(qtbot, app, tmp_db_cfg, fresh_db, freeze_qt_time):
     """Test that past alarms are skipped."""
     from PySide6.QtCore import QTime
 
