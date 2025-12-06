@@ -2255,7 +2255,7 @@ def test_parse_today_alarms(qtbot, app, tmp_db_cfg, fresh_db):
     window._open_date_in_tab(today_qdate)
 
     # Set content with a future alarm
-    future_time = QTime.currentTime().addSecs(3600)  # 1 hour from now
+    future_time = QTime.currentTime().addSecs(5)
     alarm_text = f"Do something ⏰ {future_time.hour():02d}:{future_time.minute():02d}"
 
     # Set the editor's current_date attribute
@@ -2379,7 +2379,7 @@ def test_parse_today_alarms_no_text(qtbot, app, tmp_db_cfg, fresh_db):
     window._open_date_in_tab(today_qdate)
 
     # Set content with alarm but no text
-    future_time = QTime.currentTime().addSecs(3600)
+    future_time = QTime.currentTime().addSecs(5)
     alarm_text = f"⏰ {future_time.hour():02d}:{future_time.minute():02d}"
 
     window.editor.current_date = today_qdate
