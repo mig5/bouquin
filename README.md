@@ -79,8 +79,6 @@ report from within the app, or optionally to check for new versions to upgrade t
 
 Make sure you have `libxcb-cursor0` installed (on Debian-based distributions) or `xcb-util-cursor` (RedHat/Fedora-based distributions).
 
-It's also recommended that you have Noto Sans fonts installed, but it's up to you. It just can impact the display of unicode symbols such as checkboxes.
-
 If downloading from my Forgejo's Releases page, you may wish to verify the GPG signatures with my [GPG key](https://mig5.net/static/mig5.asc).
 
 ### From PyPi/pip

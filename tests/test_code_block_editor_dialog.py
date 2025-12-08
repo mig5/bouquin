@@ -159,7 +159,7 @@ def test_line_number_area_paint_with_multiple_blocks(qtbot, app):
     rect = QRect(0, 0, line_area.width(), line_area.height())
     paint_event = QPaintEvent(rect)
 
-    # This should exercise the painting loop (lines 87-130)
+    # This should exercise the painting loop
     editor.line_number_area_paint_event(paint_event)
 
     # Should not crash

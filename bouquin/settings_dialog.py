@@ -7,8 +7,11 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFrame,
+    QFileDialog,
     QGroupBox,
     QLabel,
+    QLineEdit,
+    QFormLayout,
     QHBoxLayout,
     QVBoxLayout,
     QPushButton,
@@ -19,6 +22,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QWidget,
     QTabWidget,
+    QTextEdit,
 )
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QPalette
@@ -176,6 +180,17 @@ class SettingsDialog(QDialog):
         self.time_log.setCursor(Qt.PointingHandCursor)
         features_layout.addWidget(self.time_log)
 
+        self.invoicing = QCheckBox(strings._("enable_invoicing_feature"))
+        invoicing_enabled = getattr(self.current_settings, "invoicing", False)
+        self.invoicing.setChecked(invoicing_enabled and self.current_settings.time_log)
+        self.invoicing.setCursor(Qt.PointingHandCursor)
+        features_layout.addWidget(self.invoicing)
+        # Invoicing only if time_log is enabled
+        if not self.current_settings.time_log:
+            self.invoicing.setChecked(False)
+            self.invoicing.setEnabled(False)
+        self.time_log.toggled.connect(self._on_time_log_toggled)
+
         self.reminders = QCheckBox(strings._("enable_reminders_feature"))
         self.reminders.setChecked(self.current_settings.reminders)
         self.reminders.setCursor(Qt.PointingHandCursor)
@@ -187,6 +202,68 @@ class SettingsDialog(QDialog):
         features_layout.addWidget(self.documents)
 
         layout.addWidget(features_group)
+
+        # --- Invoicing / company profile section -------------------------
+        self.invoicing_group = QGroupBox(strings._("invoice_company_profile"))
+        invoicing_layout = QFormLayout(self.invoicing_group)
+
+        profile = self._db.get_company_profile() or (
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        name, address, phone, email, tax_id, payment_details, logo_bytes = profile
+
+        self.company_name_edit = QLineEdit(name or "")
+        self.company_address_edit = QTextEdit(address or "")
+        self.company_phone_edit = QLineEdit(phone or "")
+        self.company_email_edit = QLineEdit(email or "")
+        self.company_tax_id_edit = QLineEdit(tax_id or "")
+        self.company_payment_details_edit = QTextEdit()
+        self.company_payment_details_edit.setPlainText(payment_details or "")
+
+        invoicing_layout.addRow(
+            strings._("invoice_company_name") + ":", self.company_name_edit
+        )
+        invoicing_layout.addRow(
+            strings._("invoice_company_address") + ":", self.company_address_edit
+        )
+        invoicing_layout.addRow(
+            strings._("invoice_company_phone") + ":", self.company_phone_edit
+        )
+        invoicing_layout.addRow(
+            strings._("invoice_company_email") + ":", self.company_email_edit
+        )
+        invoicing_layout.addRow(
+            strings._("invoice_company_tax_id") + ":", self.company_tax_id_edit
+        )
+        invoicing_layout.addRow(
+            strings._("invoice_company_payment_details") + ":",
+            self.company_payment_details_edit,
+        )
+
+        # Logo picker – store bytes on self._logo_bytes
+        self._logo_bytes = logo_bytes
+        logo_row = QHBoxLayout()
+        self.logo_label = QLabel(strings._("invoice_company_logo_not_set"))
+        if logo_bytes:
+            self.logo_label.setText(strings._("invoice_company_logo_set"))
+        logo_btn = QPushButton(strings._("invoice_company_logo_choose"))
+        logo_btn.clicked.connect(self._on_choose_logo)
+        logo_row.addWidget(self.logo_label)
+        logo_row.addWidget(logo_btn)
+        invoicing_layout.addRow(strings._("invoice_company_logo") + ":", logo_row)
+
+        # Show/hide this whole block based on invoicing checkbox
+        self.invoicing_group.setVisible(self.invoicing.isChecked())
+        self.invoicing.toggled.connect(self.invoicing_group.setVisible)
+
+        layout.addWidget(self.invoicing_group)
+
         layout.addStretch()
         return page
 
@@ -314,13 +391,59 @@ class SettingsDialog(QDialog):
             time_log=self.time_log.isChecked(),
             reminders=self.reminders.isChecked(),
             documents=self.documents.isChecked(),
+            invoicing=(
+                self.invoicing.isChecked() if self.time_log.isChecked() else False
+            ),
             locale=self.locale_combobox.currentText(),
             font_size=self.font_size.value(),
         )
 
         save_db_config(self._cfg)
+
+        # Save company profile only if invoicing is enabled
+        if self.invoicing.isChecked() and self.time_log.isChecked():
+            self._db.save_company_profile(
+                name=self.company_name_edit.text().strip() or None,
+                address=self.company_address_edit.toPlainText().strip() or None,
+                phone=self.company_phone_edit.text().strip() or None,
+                email=self.company_email_edit.text().strip() or None,
+                tax_id=self.company_tax_id_edit.text().strip() or None,
+                payment_details=self.company_payment_details_edit.toPlainText().strip()
+                or None,
+                logo=getattr(self, "_logo_bytes", None),
+            )
+
         self.parent().themes.set(selected_theme)
         self.accept()
+
+    def _on_time_log_toggled(self, checked: bool) -> None:
+        """
+        Enforce 'invoicing depends on time logging'.
+        """
+        if not checked:
+            # Turn off + disable invoicing if time logging is disabled
+            self.invoicing.setChecked(False)
+            self.invoicing.setEnabled(False)
+        else:
+            # Let the user enable invoicing when time logging is enabled
+            self.invoicing.setEnabled(True)
+
+    def _on_choose_logo(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            strings._("company_logo_choose"),
+            "",
+            "Images (*.png *.jpg *.jpeg *.bmp)",
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "rb") as f:
+                self._logo_bytes = f.read()
+            self.logo_label.setText(Path(path).name)
+        except OSError as exc:
+            QMessageBox.warning(self, strings._("error"), str(exc))
 
     def _change_key(self):
         p1 = KeyPrompt(

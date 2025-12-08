@@ -117,6 +117,9 @@ class MainWindow(QMainWindow):
         self.upcoming_reminders = UpcomingRemindersWidget(self.db)
         self.upcoming_reminders.reminderTriggered.connect(self._show_flashing_reminder)
 
+        # When invoices change reminders (e.g. invoice paid), refresh the Reminders widget
+        self.time_log.remindersChanged.connect(self.upcoming_reminders.refresh)
+
         self.pomodoro_manager = PomodoroManager(self.db, self)
 
         # Lock the calendar to the left panel at the top to stop it stretching
@@ -1448,6 +1451,7 @@ class MainWindow(QMainWindow):
         self.cfg.time_log = getattr(new_cfg, "time_log", self.cfg.time_log)
         self.cfg.reminders = getattr(new_cfg, "reminders", self.cfg.reminders)
         self.cfg.documents = getattr(new_cfg, "documents", self.cfg.documents)
+        self.cfg.invoicing = getattr(new_cfg, "invoicing", self.cfg.invoicing)
         self.cfg.locale = getattr(new_cfg, "locale", self.cfg.locale)
         self.cfg.font_size = getattr(new_cfg, "font_size", self.cfg.font_size)
 

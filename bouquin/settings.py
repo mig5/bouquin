@@ -45,6 +45,7 @@ def load_db_config() -> DBConfig:
     time_log = s.value("ui/time_log", True, type=bool)
     reminders = s.value("ui/reminders", True, type=bool)
     documents = s.value("ui/documents", True, type=bool)
+    invoicing = s.value("ui/invoicing", True, type=bool)
     locale = s.value("ui/locale", "en", type=str)
     font_size = s.value("ui/font_size", 11, type=int)
     return DBConfig(
@@ -57,6 +58,7 @@ def load_db_config() -> DBConfig:
         time_log=time_log,
         reminders=reminders,
         documents=documents,
+        invoicing=invoicing,
         locale=locale,
         font_size=font_size,
     )
@@ -73,5 +75,6 @@ def save_db_config(cfg: DBConfig) -> None:
     s.setValue("ui/time_log", str(cfg.time_log))
     s.setValue("ui/reminders", str(cfg.reminders))
     s.setValue("ui/documents", str(cfg.documents))
+    s.setValue("ui/invoicing", str(cfg.invoicing))
     s.setValue("ui/locale", str(cfg.locale))
     s.setValue("ui/font_size", str(cfg.font_size))

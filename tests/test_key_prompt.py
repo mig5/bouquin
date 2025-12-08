@@ -97,7 +97,7 @@ def test_key_prompt_with_existing_db_path(qtbot, app, tmp_path):
 
 
 def test_key_prompt_with_db_path_none_and_show_db_change(qtbot, app):
-    """Test KeyPrompt with show_db_change but no initial_db_path - covers line 57"""
+    """Test KeyPrompt with show_db_change but no initial_db_path"""
     prompt = KeyPrompt(show_db_change=True, initial_db_path=None)
     qtbot.addWidget(prompt)
 
@@ -168,7 +168,7 @@ def test_key_prompt_db_path_method(qtbot, app, tmp_path):
 
 
 def test_key_prompt_browse_with_initial_path(qtbot, app, tmp_path, monkeypatch):
-    """Test browsing when initial_db_path is set - covers line 57 with non-None path"""
+    """Test browsing when initial_db_path is set"""
     initial_db = tmp_path / "initial.db"
     initial_db.touch()
 
@@ -180,7 +180,7 @@ def test_key_prompt_browse_with_initial_path(qtbot, app, tmp_path, monkeypatch):
 
     # Mock the file dialog to return a different file
     def mock_get_open_filename(*args, **kwargs):
-        # Verify that start_dir was passed correctly (line 57)
+        # Verify that start_dir was passed correctly
         return str(new_db), "SQLCipher DB (*.db)"
 
     monkeypatch.setattr(QFileDialog, "getOpenFileName", mock_get_open_filename)

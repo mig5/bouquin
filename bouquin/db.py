@@ -41,6 +41,26 @@ DocumentRow = Tuple[
     int,  # size_bytes
     str,  # uploaded_at (ISO)
 ]
+ProjectBillingRow = Tuple[
+    int,  # project_id
+    int,  # hourly_rate_cents
+    str,  # currency
+    str | None,  # tax_label
+    float | None,  # tax_rate_percent
+    str | None,  # client_name
+    str | None,  # client_company
+    str | None,  # client_address
+    str | None,  # client_email
+]
+CompanyProfileRow = Tuple[
+    str | None,  # name
+    str | None,  # address
+    str | None,  # phone
+    str | None,  # email
+    str | None,  # tax_id
+    str | None,  # payment_details
+    bytes | None,  # logo
+]
 
 _TAG_COLORS = [
     "#FFB3BA",  # soft red
@@ -77,11 +97,31 @@ class DBConfig:
     time_log: bool = True
     reminders: bool = True
     documents: bool = True
+    invoicing: bool = False
     locale: str = "en"
     font_size: int = 11
 
 
 class DBManager:
+    # Allow list of invoice columns allowed for dynamic field helpers
+    _INVOICE_COLUMN_ALLOWLIST = frozenset(
+        {
+            "invoice_number",
+            "issue_date",
+            "due_date",
+            "currency",
+            "tax_label",
+            "tax_rate_percent",
+            "subtotal_cents",
+            "tax_cents",
+            "total_cents",
+            "detail_mode",
+            "paid_at",
+            "payment_note",
+            "document_id",
+        }
+    )
+
     def __init__(self, cfg: DBConfig):
         self.cfg = cfg
         self.conn: sqlite.Connection | None = None
@@ -252,6 +292,76 @@ class DBManager:
 
             CREATE INDEX IF NOT EXISTS ix_document_tags_tag_id
                 ON document_tags(tag_id);
+
+            CREATE TABLE IF NOT EXISTS project_billing (
+                project_id        INTEGER PRIMARY KEY
+                                   REFERENCES projects(id) ON DELETE CASCADE,
+                hourly_rate_cents INTEGER NOT NULL DEFAULT 0,
+                currency          TEXT NOT NULL DEFAULT 'AUD',
+                tax_label         TEXT,
+                tax_rate_percent  REAL,
+                client_name       TEXT, -- contact person
+                client_company    TEXT, -- business name
+                client_address    TEXT,
+                client_email      TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS company_profile (
+                id       INTEGER PRIMARY KEY CHECK (id = 1),
+                name     TEXT,
+                address  TEXT,
+                phone    TEXT,
+                email    TEXT,
+                tax_id   TEXT,
+                payment_details TEXT,
+                logo     BLOB
+            );
+
+            CREATE TABLE IF NOT EXISTS invoices (
+                id               INTEGER PRIMARY KEY,
+                project_id       INTEGER NOT NULL
+                                 REFERENCES projects(id) ON DELETE RESTRICT,
+                invoice_number   TEXT NOT NULL,
+                issue_date       TEXT NOT NULL, -- yyyy-MM-dd
+                due_date         TEXT,
+                currency         TEXT NOT NULL,
+                tax_label        TEXT,
+                tax_rate_percent REAL,
+                subtotal_cents   INTEGER NOT NULL,
+                tax_cents        INTEGER NOT NULL,
+                total_cents      INTEGER NOT NULL,
+                detail_mode      TEXT NOT NULL,      -- 'detailed' | 'summary'
+                paid_at          TEXT,
+                payment_note     TEXT,
+                document_id      INTEGER,
+                FOREIGN KEY(document_id) REFERENCES project_documents(id)
+                    ON DELETE SET NULL,
+                UNIQUE(project_id, invoice_number)
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_invoices_project
+                ON invoices(project_id);
+
+            CREATE TABLE IF NOT EXISTS invoice_line_items (
+                id          INTEGER PRIMARY KEY,
+                invoice_id  INTEGER NOT NULL
+                            REFERENCES invoices(id) ON DELETE CASCADE,
+                description TEXT NOT NULL,
+                hours       REAL NOT NULL,
+                rate_cents  INTEGER NOT NULL,
+                amount_cents INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_invoice_line_items_invoice
+                ON invoice_line_items(invoice_id);
+
+            CREATE TABLE IF NOT EXISTS invoice_time_log (
+                invoice_id  INTEGER NOT NULL
+                            REFERENCES invoices(id) ON DELETE CASCADE,
+                time_log_id INTEGER NOT NULL
+                            REFERENCES time_log(id) ON DELETE RESTRICT,
+                PRIMARY KEY (invoice_id, time_log_id)
+            );
             """
         )
         self.conn.commit()
@@ -941,6 +1051,14 @@ class DBManager:
             "SELECT id, name FROM projects ORDER BY LOWER(name);"
         ).fetchall()
         return [(r["id"], r["name"]) for r in rows]
+
+    def list_projects_by_id(self, project_id: int) -> str:
+        cur = self.conn.cursor()
+        row = cur.execute(
+            "SELECT name FROM projects WHERE id = ?;",
+            (project_id,),
+        ).fetchone()
+        return row["name"] if row else ""
 
     def add_project(self, name: str) -> int:
         name = name.strip()
@@ -1718,3 +1836,431 @@ class DBManager:
             (tag_name,),
         ).fetchall()
         return [(r["doc_id"], r["project_name"], r["file_name"]) for r in rows]
+
+    # ------------------------- Billing settings ------------------------#
+
+    def get_project_billing(self, project_id: int) -> ProjectBillingRow | None:
+        cur = self.conn.cursor()
+        row = cur.execute(
+            """
+            SELECT
+                project_id,
+                hourly_rate_cents,
+                currency,
+                tax_label,
+                tax_rate_percent,
+                client_name,
+                client_company,
+                client_address,
+                client_email
+            FROM project_billing
+            WHERE project_id = ?
+            """,
+            (project_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return (
+            row["project_id"],
+            row["hourly_rate_cents"],
+            row["currency"],
+            row["tax_label"],
+            row["tax_rate_percent"],
+            row["client_name"],
+            row["client_company"],
+            row["client_address"],
+            row["client_email"],
+        )
+
+    def upsert_project_billing(
+        self,
+        project_id: int,
+        hourly_rate_cents: int,
+        currency: str,
+        tax_label: str | None,
+        tax_rate_percent: float | None,
+        client_name: str | None,
+        client_company: str | None,
+        client_address: str | None,
+        client_email: str | None,
+    ) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO project_billing (
+                    project_id,
+                    hourly_rate_cents,
+                    currency,
+                    tax_label,
+                    tax_rate_percent,
+                    client_name,
+                    client_company,
+                    client_address,
+                    client_email
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(project_id) DO UPDATE SET
+                    hourly_rate_cents = excluded.hourly_rate_cents,
+                    currency          = excluded.currency,
+                    tax_label         = excluded.tax_label,
+                    tax_rate_percent  = excluded.tax_rate_percent,
+                    client_name       = excluded.client_name,
+                    client_company    = excluded.client_company,
+                    client_address    = excluded.client_address,
+                    client_email      = excluded.client_email;
+                """,
+                (
+                    project_id,
+                    hourly_rate_cents,
+                    currency,
+                    tax_label,
+                    tax_rate_percent,
+                    client_name,
+                    client_company,
+                    client_address,
+                    client_email,
+                ),
+            )
+
+    def list_client_companies(self) -> list[str]:
+        """Return distinct client display names from project_billing."""
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT DISTINCT client_company
+            FROM project_billing
+            WHERE client_company IS NOT NULL
+              AND TRIM(client_company) <> ''
+            ORDER BY LOWER(client_company);
+            """
+        ).fetchall()
+        return [r["client_company"] for r in rows]
+
+    def get_client_by_company(
+        self, client_company: str
+    ) -> tuple[str | None, str | None, str | None, str | None] | None:
+        """
+        Return (contact_name, client_display_name, address, email)
+        for a given client display name, based on the most recent project using it.
+        """
+        cur = self.conn.cursor()
+        row = cur.execute(
+            """
+            SELECT client_name, client_company, client_address, client_email
+            FROM project_billing
+            WHERE client_company = ?
+              AND client_company IS NOT NULL
+              AND TRIM(client_company) <> ''
+            ORDER BY project_id DESC
+            LIMIT 1
+            """,
+            (client_company,),
+        ).fetchone()
+        if not row:
+            return None
+        return (
+            row["client_name"],
+            row["client_company"],
+            row["client_address"],
+            row["client_email"],
+        )
+
+    # ------------------------- Company profile ------------------------#
+
+    def get_company_profile(self) -> CompanyProfileRow | None:
+        cur = self.conn.cursor()
+        row = cur.execute(
+            """
+            SELECT name, address, phone, email, tax_id, payment_details, logo
+            FROM company_profile
+            WHERE id = 1
+            """
+        ).fetchone()
+        if not row:
+            return None
+        return (
+            row["name"],
+            row["address"],
+            row["phone"],
+            row["email"],
+            row["tax_id"],
+            row["payment_details"],
+            row["logo"],
+        )
+
+    def save_company_profile(
+        self,
+        name: str | None,
+        address: str | None,
+        phone: str | None,
+        email: str | None,
+        tax_id: str | None,
+        payment_details: str | None,
+        logo: bytes | None,
+    ) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO company_profile (id, name, address, phone, email, tax_id, payment_details, logo)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name    = excluded.name,
+                    address = excluded.address,
+                    phone   = excluded.phone,
+                    email   = excluded.email,
+                    tax_id  = excluded.tax_id,
+                    payment_details = excluded.payment_details,
+                    logo    = excluded.logo;
+                """,
+                (
+                    name,
+                    address,
+                    phone,
+                    email,
+                    tax_id,
+                    payment_details,
+                    Binary(logo) if logo else None,
+                ),
+            )
+
+    # ------------------------- Invoices -------------------------------#
+
+    def create_invoice(
+        self,
+        project_id: int,
+        invoice_number: str,
+        issue_date: str,
+        due_date: str | None,
+        currency: str,
+        tax_label: str | None,
+        tax_rate_percent: float | None,
+        detail_mode: str,  # 'detailed' or 'summary'
+        line_items: list[tuple[str, float, int]],  # (description, hours, rate_cents)
+        time_log_ids: list[int],
+    ) -> int:
+        """
+        Create invoice + line items + link time logs.
+        Returns invoice ID.
+        """
+        if line_items:
+            first_rate_cents = line_items[0][2]
+        else:
+            first_rate_cents = 0
+
+        total_hours = sum(hours for _desc, hours, _rate in line_items)
+        subtotal_cents = int(round(total_hours * first_rate_cents))
+        tax_cents = int(round(subtotal_cents * (tax_rate_percent or 0) / 100.0))
+        total_cents = subtotal_cents + tax_cents
+
+        with self.conn:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO invoices (
+                    project_id,
+                    invoice_number,
+                    issue_date,
+                    due_date,
+                    currency,
+                    tax_label,
+                    tax_rate_percent,
+                    subtotal_cents,
+                    tax_cents,
+                    total_cents,
+                    detail_mode
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    project_id,
+                    invoice_number,
+                    issue_date,
+                    due_date,
+                    currency,
+                    tax_label,
+                    tax_rate_percent,
+                    subtotal_cents,
+                    tax_cents,
+                    total_cents,
+                    detail_mode,
+                ),
+            )
+            invoice_id = cur.lastrowid
+
+            # Line items
+            for desc, hours, rate_cents in line_items:
+                amount_cents = int(round(hours * rate_cents))
+                cur.execute(
+                    """
+                    INSERT INTO invoice_line_items (
+                        invoice_id, description, hours, rate_cents, amount_cents
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (invoice_id, desc, hours, rate_cents, amount_cents),
+                )
+
+            # Link time logs
+            for tl_id in time_log_ids:
+                cur.execute(
+                    "INSERT INTO invoice_time_log (invoice_id, time_log_id) VALUES (?, ?)",
+                    (invoice_id, tl_id),
+                )
+
+            return invoice_id
+
+    def get_invoice_count_by_project_id_and_year(
+        self, project_id: int, year: str
+    ) -> None:
+        with self.conn:
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS c FROM invoices WHERE project_id = ? AND issue_date LIKE ?",
+                (project_id, year),
+            ).fetchone()
+        return row["c"]
+
+    def get_all_invoices(self, project_id: int | None = None) -> None:
+        with self.conn:
+            if project_id is None:
+                rows = self.conn.execute(
+                    """
+                    SELECT
+                        i.id,
+                        i.project_id,
+                        p.name AS project_name,
+                        i.invoice_number,
+                        i.issue_date,
+                        i.due_date,
+                        i.currency,
+                        i.tax_label,
+                        i.tax_rate_percent,
+                        i.subtotal_cents,
+                        i.tax_cents,
+                        i.total_cents,
+                        i.paid_at,
+                        i.payment_note
+                    FROM invoices AS i
+                    LEFT JOIN projects AS p ON p.id = i.project_id
+                    ORDER BY i.issue_date DESC, i.invoice_number COLLATE NOCASE;
+                    """
+                ).fetchall()
+            else:
+                rows = self.conn.execute(
+                    """
+                    SELECT
+                        i.id,
+                        i.project_id,
+                        p.name AS project_name,
+                        i.invoice_number,
+                        i.issue_date,
+                        i.due_date,
+                        i.currency,
+                        i.tax_label,
+                        i.tax_rate_percent,
+                        i.subtotal_cents,
+                        i.tax_cents,
+                        i.total_cents,
+                        i.paid_at,
+                        i.payment_note
+                    FROM invoices AS i
+                    LEFT JOIN projects AS p ON p.id = i.project_id
+                    WHERE i.project_id = ?
+                    ORDER BY i.issue_date DESC, i.invoice_number COLLATE NOCASE;
+                    """,
+                    (project_id,),
+                ).fetchall()
+        return rows
+
+    def _validate_invoice_field(self, field: str) -> str:
+        if field not in self._INVOICE_COLUMN_ALLOWLIST:
+            raise ValueError(f"Invalid invoice field name: {field!r}")
+        return field
+
+    def get_invoice_field_by_id(self, invoice_id: int, field: str) -> None:
+        field = self._validate_invoice_field(field)
+
+        with self.conn:
+            row = self.conn.execute(
+                f"SELECT {field} FROM invoices WHERE id = ?",  # nosec B608
+                (invoice_id,),
+            ).fetchone()
+        return row
+
+    def set_invoice_field_by_id(
+        self, invoice_id: int, field: str, value: str | None = None
+    ) -> None:
+        field = self._validate_invoice_field(field)
+
+        with self.conn:
+            self.conn.execute(
+                f"UPDATE invoices SET {field} = ? WHERE id = ?",  # nosec B608
+                (
+                    value,
+                    invoice_id,
+                ),
+            )
+
+    def update_invoice_number(self, invoice_id: int, invoice_number: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE invoices SET invoice_number = ? WHERE id = ?",
+                (invoice_number, invoice_id),
+            )
+
+    def set_invoice_document(self, invoice_id: int, document_id: int) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE invoices SET document_id = ? WHERE id = ?",
+                (document_id, invoice_id),
+            )
+
+    def time_logs_for_range(
+        self,
+        project_id: int,
+        start_date_iso: str,
+        end_date_iso: str,
+    ) -> list[TimeLogRow]:
+        """
+        Return raw time log rows for a project/date range.
+
+        Shape matches time_log_for_date: TimeLogRow.
+        """
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT
+                t.id,
+                t.page_date,
+                t.project_id,
+                p.name AS project_name,
+                t.activity_id,
+                a.name AS activity_name,
+                t.minutes,
+                t.note,
+                t.created_at AS created_at
+            FROM time_log t
+            JOIN projects  p ON p.id = t.project_id
+            JOIN activities a ON a.id = t.activity_id
+            WHERE t.project_id = ?
+              AND t.page_date BETWEEN ? AND ?
+            ORDER BY t.page_date, LOWER(a.name), t.id;
+            """,
+            (project_id, start_date_iso, end_date_iso),
+        ).fetchall()
+
+        result: list[TimeLogRow] = []
+        for r in rows:
+            result.append(
+                (
+                    r["id"],
+                    r["page_date"],
+                    r["project_id"],
+                    r["project_name"],
+                    r["activity_id"],
+                    r["activity_name"],
+                    r["minutes"],
+                    r["note"],
+                    r["created_at"],
+                )
+            )
+        return result

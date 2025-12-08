@@ -632,5 +632,5 @@ def test_heatmap_month_label_continuation(qtbot, fresh_db):
     # Force a repaint to execute paintEvent
     heatmap.repaint()
 
-    # The month continuation logic (line 175) should prevent duplicate labels
+    # The month continuation logic should prevent duplicate labels
     # We can't easily test the visual output, but we ensure no crash

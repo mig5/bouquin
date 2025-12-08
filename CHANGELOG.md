@@ -1,3 +1,8 @@
+# 0.7.0
+
+ * New Invoicing feature! This is tied to time logging and (optionally) documents and reminders features.
+ * Add 'Last week' to Time Report dialog range option
+
 # 0.6.4
 
  * Time reports: Fix report 'group by' logic to not show ambiguous 'note' data.

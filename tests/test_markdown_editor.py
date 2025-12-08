@@ -1928,7 +1928,7 @@ def test_editor_delete_operations(qtbot, app):
 
 
 def test_markdown_highlighter_dark_theme(qtbot, app):
-    """Test markdown highlighter with dark theme - covers lines 74-75"""
+    """Test markdown highlighter with dark theme"""
     # Create theme manager with dark theme
     themes = ThemeManager(app, ThemeConfig(theme=Theme.DARK))
 
@@ -2293,7 +2293,7 @@ def test_highlighter_code_block_with_language(editor, qtbot):
     # Force rehighlight
     editor.highlighter.rehighlight()
 
-    # Verify syntax highlighting was applied (lines 186-193)
+    # Verify syntax highlighting was applied
     # We can't easily verify the exact formatting, but we ensure no crash
 
 
@@ -2305,13 +2305,10 @@ def test_highlighter_bold_italic_overlap_detection(editor, qtbot):
     # Force rehighlight
     editor.highlighter.rehighlight()
 
-    # The overlap detection (lines 252, 264) should prevent issues
-
 
 def test_highlighter_italic_edge_cases(editor, qtbot):
     """Test italic formatting edge cases."""
     # Test edge case: avoiding stealing markers that are part of double
-    # This tests lines 267-270
     editor.setPlainText("**not italic* text**")
 
     # Force rehighlight

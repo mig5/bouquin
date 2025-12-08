@@ -44,7 +44,6 @@ def editor(app, qtbot):
     return ed
 
 
-# Test for line 215: document is None guard
 def test_update_code_block_backgrounds_with_no_document(app, qtbot):
     """Test _update_code_block_row_backgrounds when document is None."""
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -60,7 +59,6 @@ def test_update_code_block_backgrounds_with_no_document(app, qtbot):
     editor._update_code_block_row_backgrounds()
 
 
-# Test for lines 295, 309, 313-319, 324, 326, 334: _find_code_block_bounds edge cases
 def test_find_code_block_bounds_invalid_block(editor):
     """Test _find_code_block_bounds with invalid block."""
     editor.setPlainText("some text")
@@ -124,7 +122,6 @@ def test_find_code_block_bounds_no_opening_fence(editor):
     assert result is None
 
 
-# Test for lines 356, 413, 417-418, 428-434: code block editing edge cases
 def test_edit_code_block_checks_document(app, qtbot):
     """Test _edit_code_block when editor has no document."""
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -249,7 +246,6 @@ def test_edit_code_block_language_change(editor, qtbot, monkeypatch):
     assert lang == "javascript"
 
 
-# Test for lines 443-490: _delete_code_block
 def test_delete_code_block_no_bounds(editor):
     """Test _delete_code_block when bounds can't be found."""
     editor.setPlainText("not a code block")
@@ -307,7 +303,6 @@ def test_delete_code_block_with_text_after(editor):
     assert "text after" in new_text
 
 
-# Test for line 496: _apply_line_spacing with no document
 def test_apply_line_spacing_no_document(app):
     """Test _apply_line_spacing when document is None."""
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -319,7 +314,6 @@ def test_apply_line_spacing_no_document(app):
     editor._apply_line_spacing(125.0)
 
 
-# Test for line 517: _apply_code_block_spacing
 def test_apply_code_block_spacing(editor):
     """Test _apply_code_block_spacing applies correct spacing."""
     editor.setPlainText("```\nline1\nline2\n```")
@@ -334,7 +328,6 @@ def test_apply_code_block_spacing(editor):
         assert block.isValid()
 
 
-# Test for line 604: to_markdown with metadata
 def test_to_markdown_with_code_metadata(editor):
     """Test to_markdown includes code block metadata."""
     editor.setPlainText("```python\ncode\n```")
@@ -348,7 +341,6 @@ def test_to_markdown_with_code_metadata(editor):
     assert "code-langs" in md or "code" in md
 
 
-# Test for line 648: from_markdown without _code_metadata attribute
 def test_from_markdown_creates_code_metadata(app):
     """Test from_markdown creates _code_metadata if missing."""
     themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
@@ -364,7 +356,6 @@ def test_from_markdown_creates_code_metadata(app):
     assert hasattr(editor, "_code_metadata")
 
 
-# Test for lines 718-736: image embedding with original size
 def test_embed_images_preserves_original_size(editor, tmp_path):
     """Test that embedded images preserve their original dimensions."""
     # Create a test image
@@ -387,7 +378,6 @@ def test_embed_images_preserves_original_size(editor, tmp_path):
     assert doc is not None
 
 
-# Test for lines 782, 791, 813-834: _maybe_trim_list_prefix_from_line_selection
 def test_trim_list_prefix_no_selection(editor):
     """Test _maybe_trim_list_prefix_from_line_selection with no selection."""
     editor.setPlainText("- item")
@@ -447,7 +437,6 @@ def test_trim_list_prefix_during_adjustment(editor):
     editor._adjusting_selection = False
 
 
-# Test for lines 848, 860-866: _detect_list_type
 def test_detect_list_type_checkbox_checked(editor):
     """Test _detect_list_type with checked checkbox."""
     list_type, prefix = editor._detect_list_type(
@@ -478,7 +467,6 @@ def test_detect_list_type_not_a_list(editor):
     assert prefix == ""
 
 
-# Test for lines 876, 884-886: list prefix length calculation
 def test_list_prefix_length_numbered(editor):
     """Test _list_prefix_length_for_block with numbered list."""
     editor.setPlainText("123. item")
@@ -489,7 +477,6 @@ def test_list_prefix_length_numbered(editor):
     assert length > 0
 
 
-# Test for lines 948-949: keyPressEvent with Ctrl+Home
 def test_key_press_ctrl_home(editor, qtbot):
     """Test Ctrl+Home key combination."""
     editor.setPlainText("line1\nline2\nline3")
@@ -504,7 +491,6 @@ def test_key_press_ctrl_home(editor, qtbot):
     assert editor.textCursor().position() == 0
 
 
-# Test for lines 957-960: keyPressEvent with Ctrl+Left
 def test_key_press_ctrl_left(editor, qtbot):
     """Test Ctrl+Left key combination."""
     editor.setPlainText("word1 word2 word3")
@@ -518,7 +504,6 @@ def test_key_press_ctrl_left(editor, qtbot):
     # Should move left by word
 
 
-# Test for lines 984-988, 1044: Home key in list
 def test_key_press_home_in_list(editor, qtbot):
     """Test Home key in list item."""
     editor.setPlainText("- item text")
@@ -534,7 +519,6 @@ def test_key_press_home_in_list(editor, qtbot):
     assert pos > 0
 
 
-# Test for lines 1067-1073: Left key in list prefix
 def test_key_press_left_in_list_prefix(editor, qtbot):
     """Test Left key when in list prefix region."""
     editor.setPlainText("- item")
@@ -549,7 +533,6 @@ def test_key_press_left_in_list_prefix(editor, qtbot):
     # Should snap to after prefix
 
 
-# Test for lines 1088, 1095-1104: Up/Down in code blocks
 def test_key_press_up_in_code_block(editor, qtbot):
     """Test Up key inside code block."""
     editor.setPlainText("```\ncode line 1\ncode line 2\n```")
@@ -579,7 +562,6 @@ def test_key_press_down_in_list_item(editor, qtbot):
     # Should snap to after prefix on next line
 
 
-# Test for lines 1127-1130, 1134-1137: Enter key with markers
 def test_key_press_enter_after_markers(editor, qtbot):
     """Test Enter key after style markers."""
     editor.setPlainText("text **")
@@ -593,7 +575,6 @@ def test_key_press_enter_after_markers(editor, qtbot):
     # Should handle markers
 
 
-# Test for lines 1146-1164: Enter on fence line
 def test_key_press_enter_on_closing_fence(editor, qtbot):
     """Test Enter key on closing fence line."""
     editor.setPlainText("```\ncode\n```")
@@ -608,7 +589,6 @@ def test_key_press_enter_on_closing_fence(editor, qtbot):
     # Should create new line after fence
 
 
-# Test for lines 1185-1189: Backspace in empty checkbox
 def test_key_press_backspace_empty_checkbox(editor, qtbot):
     """Test Backspace in empty checkbox item."""
     editor.setPlainText(f"{editor._CHECK_UNCHECKED_DISPLAY} ")
@@ -622,7 +602,6 @@ def test_key_press_backspace_empty_checkbox(editor, qtbot):
     # Should remove checkbox
 
 
-# Test for lines 1205, 1215-1221: Backspace in numbered list
 def test_key_press_backspace_numbered_list(editor, qtbot):
     """Test Backspace at start of numbered list item."""
     editor.setPlainText("1. ")
@@ -634,7 +613,6 @@ def test_key_press_backspace_numbered_list(editor, qtbot):
     editor.keyPressEvent(event)
 
 
-# Test for lines 1228, 1232, 1238-1242: Tab/Shift+Tab in lists
 def test_key_press_tab_in_bullet_list(editor, qtbot):
     """Test Tab key in bullet list."""
     editor.setPlainText("- item")
@@ -672,7 +650,6 @@ def test_key_press_tab_in_checkbox(editor, qtbot):
     editor.keyPressEvent(event)
 
 
-# Test for lines 1282-1283: Auto-pairing skip
 def test_apply_weight_to_selection(editor, qtbot):
     """Test apply_weight makes text bold."""
     editor.setPlainText("text to bold")
@@ -712,7 +689,6 @@ def test_apply_strikethrough_to_selection(editor, qtbot):
     assert "~~" in md
 
 
-# Test for line 1358: apply_code - it opens a dialog, not just wraps in backticks
 def test_apply_code_on_selection(editor, qtbot):
     """Test apply_code with selected text."""
     editor.setPlainText("some code")
@@ -728,7 +704,6 @@ def test_apply_code_on_selection(editor, qtbot):
     # May contain code block elements depending on dialog behavior
 
 
-# Test for line 1386: toggle_numbers
 def test_toggle_numbers_on_plain_text(editor, qtbot):
     """Test toggle_numbers converts text to numbered list."""
     editor.setPlainText("item 1")
@@ -742,7 +717,6 @@ def test_toggle_numbers_on_plain_text(editor, qtbot):
     assert "1." in text
 
 
-# Test for lines 1402-1407: toggle_bullets
 def test_toggle_bullets_on_plain_text(editor, qtbot):
     """Test toggle_bullets converts text to bullet list."""
     editor.setPlainText("item 1")
@@ -771,7 +745,6 @@ def test_toggle_bullets_removes_bullets(editor, qtbot):
     assert text.strip() == "item 1"
 
 
-# Test for line 1429: toggle_checkboxes
 def test_toggle_checkboxes_on_bullets(editor, qtbot):
     """Test toggle_checkboxes converts bullets to checkboxes."""
     editor.setPlainText(f"{editor._BULLET_DISPLAY} item 1")
@@ -786,7 +759,6 @@ def test_toggle_checkboxes_on_bullets(editor, qtbot):
     assert editor._CHECK_UNCHECKED_DISPLAY in text
 
 
-# Test for line 1452: apply_heading
 def test_apply_heading_various_levels(editor, qtbot):
     """Test apply_heading with different levels."""
     test_cases = [
@@ -809,7 +781,6 @@ def test_apply_heading_various_levels(editor, qtbot):
             assert text.startswith(expected_marker)
 
 
-# Test for lines 1501-1505: insert_image_from_path
 def test_insert_image_from_path_invalid_extension(editor, tmp_path):
     """Test insert_image_from_path with invalid extension."""
     invalid_file = tmp_path / "file.txt"
@@ -827,7 +798,6 @@ def test_insert_image_from_path_nonexistent(editor, tmp_path):
     editor.insert_image_from_path(nonexistent)
 
 
-# Test for lines 1578-1579: mousePressEvent checkbox toggle
 def test_mouse_press_toggle_unchecked_to_checked(editor, qtbot):
     """Test clicking checkbox toggles it from unchecked to checked."""
     editor.setPlainText(f"{editor._CHECK_UNCHECKED_DISPLAY} task")
@@ -872,7 +842,6 @@ def test_mouse_press_toggle_checked_to_unchecked(editor, qtbot):
     assert editor._CHECK_UNCHECKED_DISPLAY in text
 
 
-# Test for line 1602: mouseDoubleClickEvent
 def test_mouse_double_click_suppression(editor, qtbot):
     """Test double-click suppression for checkboxes."""
     editor.setPlainText(f"{editor._CHECK_UNCHECKED_DISPLAY} task")
@@ -895,7 +864,6 @@ def test_mouse_double_click_suppression(editor, qtbot):
     assert not editor._suppress_next_checkbox_double_click
 
 
-# Test for lines 1692-1738: Context menu (lines 1670 was the image loading, not link handling)
 def test_context_menu_in_code_block(editor, qtbot):
     """Test context menu when in code block."""
     editor.setPlainText("```python\ncode\n```")
@@ -915,7 +883,6 @@ def test_context_menu_in_code_block(editor, qtbot):
     # Note: actual menu exec is blocked in tests, but we verify it doesn't crash
 
 
-# Test for lines 1742-1757: _set_code_block_language
 def test_set_code_block_language(editor, qtbot):
     """Test _set_code_block_language sets metadata."""
     editor.setPlainText("```\ncode\n```")
@@ -929,7 +896,6 @@ def test_set_code_block_language(editor, qtbot):
     assert lang == "python"
 
 
-# Test for lines 1770-1783: get_current_line_task_text
 def test_get_current_line_task_text_strips_prefixes(editor, qtbot):
     """Test get_current_line_task_text removes list/checkbox prefixes."""
     test_cases = [

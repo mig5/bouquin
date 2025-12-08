@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlcipher3.dbapi2 import IntegrityError
 from typing import Optional
 
-from PySide6.QtCore import Qt, QDate, QUrl
+from PySide6.QtCore import Qt, QDate, QUrl, Signal
 from PySide6.QtGui import QPainter, QColor, QImage, QTextDocument, QPageLayout
 from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import (
@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
 )
 
 from .db import DBManager
+from .settings import load_db_config
 from .theme import ThemeManager
 from . import strings
 
@@ -53,6 +54,8 @@ class TimeLogWidget(QFrame):
     Shown in the left sidebar above the Tags widget.
     """
 
+    remindersChanged = Signal()
+
     def __init__(
         self,
         db: DBManager,
@@ -61,6 +64,7 @@ class TimeLogWidget(QFrame):
     ):
         super().__init__(parent)
         self._db = db
+        self.cfg = load_db_config()
         self._themes = themes
         self._current_date: Optional[str] = None
 
@@ -82,6 +86,15 @@ class TimeLogWidget(QFrame):
         self.log_btn.setAutoRaise(True)
         self.log_btn.clicked.connect(self._open_dialog_log_only)
 
+        self.report_btn = QToolButton()
+        self.report_btn.setText("📈")
+        self.report_btn.setAutoRaise(True)
+        self.report_btn.clicked.connect(self._on_run_report)
+        if self.cfg.invoicing:
+            self.report_btn.setToolTip(strings._("reporting_and_invoicing"))
+        else:
+            self.report_btn.setToolTip(strings._("reporting"))
+
         self.open_btn = QToolButton()
         self.open_btn.setIcon(
             self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
@@ -95,6 +108,7 @@ class TimeLogWidget(QFrame):
         header.addWidget(self.toggle_btn)
         header.addStretch(1)
         header.addWidget(self.log_btn)
+        header.addWidget(self.report_btn)
         header.addWidget(self.open_btn)
 
         # Body: simple summary label for the day
@@ -148,6 +162,14 @@ class TimeLogWidget(QFrame):
         self._pomodoro_widget = None
 
     # ----- internals ---------------------------------------------------
+
+    def _on_run_report(self) -> None:
+        dlg = TimeReportDialog(self._db, self)
+
+        # Bubble the remindersChanged signal further up
+        dlg.remindersChanged.connect(self.remindersChanged.emit)
+
+        dlg.exec()
 
     def _on_toggle(self, checked: bool) -> None:
         self.body.setVisible(checked)
@@ -247,6 +269,7 @@ class TimeLogDialog(QDialog):
         self._themes = themes
         self._date_iso = date_iso
         self._current_entry_id: Optional[int] = None
+        self.cfg = load_db_config()
         # Guard flag used when repopulating the table so we don’t treat
         # programmatic item changes as user edits.
         self._reloading_entries: bool = False
@@ -320,13 +343,9 @@ class TimeLogDialog(QDialog):
         self.delete_btn.clicked.connect(self._on_delete_entry)
         self.delete_btn.setEnabled(False)
 
-        self.report_btn = QPushButton("&" + strings._("run_report"))
-        self.report_btn.clicked.connect(self._on_run_report)
-
         btn_row.addStretch(1)
         btn_row.addWidget(self.add_update_btn)
         btn_row.addWidget(self.delete_btn)
-        btn_row.addWidget(self.report_btn)
         root.addLayout(btn_row)
 
         # --- Table of entries for this date
@@ -355,12 +374,19 @@ class TimeLogDialog(QDialog):
         self.table.itemChanged.connect(self._on_table_item_changed)
         root.addWidget(self.table, 1)
 
-        # --- Total time and Close button
+        # --- Total time, Reporting and Close button
         close_row = QHBoxLayout()
         self.total_label = QLabel(
             strings._("time_log_total_hours").format(hours=self.total_hours)
         )
+        if self.cfg.invoicing:
+            self.report_btn = QPushButton("&" + strings._("reporting_and_invoicing"))
+        else:
+            self.report_btn = QPushButton("&" + strings._("reporting"))
+        self.report_btn.clicked.connect(self._on_run_report)
+
         close_row.addWidget(self.total_label)
+        close_row.addWidget(self.report_btn)
         close_row.addStretch(1)
         close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
@@ -981,9 +1007,12 @@ class TimeReportDialog(QDialog):
     Shows decimal hours per time period.
     """
 
+    remindersChanged = Signal()
+
     def __init__(self, db: DBManager, parent=None):
         super().__init__(parent)
         self._db = db
+        self.cfg = load_db_config()
 
         # state for last run
         self._last_rows: list[tuple[str, str, str, str, int]] = []
@@ -992,6 +1021,7 @@ class TimeReportDialog(QDialog):
         self._last_start: str = ""
         self._last_end: str = ""
         self._last_gran_label: str = ""
+        self._last_time_logs: list = []
 
         self.setWindowTitle(strings._("time_log_report"))
         self.resize(600, 400)
@@ -999,9 +1029,20 @@ class TimeReportDialog(QDialog):
         root = QVBoxLayout(self)
 
         form = QFormLayout()
+
+        self.invoice_btn = QPushButton(strings._("create_invoice"))
+        self.invoice_btn.clicked.connect(self._on_create_invoice)
+
+        self.manage_invoices_btn = QPushButton(strings._("manage_invoices"))
+        self.manage_invoices_btn.clicked.connect(self._on_manage_invoices)
+
         # Project
         self.project_combo = QComboBox()
         self.project_combo.addItem(strings._("all_projects"), None)
+        self.project_combo.currentIndexChanged.connect(
+            self._update_invoice_button_state
+        )
+        self._update_invoice_button_state()
         for proj_id, name in self._db.list_projects():
             self.project_combo.addItem(name, proj_id)
         form.addRow(strings._("project"), self.project_combo)
@@ -1013,6 +1054,7 @@ class TimeReportDialog(QDialog):
         self.range_preset = QComboBox()
         self.range_preset.addItem(strings._("custom_range"), "custom")
         self.range_preset.addItem(strings._("today"), "today")
+        self.range_preset.addItem(strings._("last_week"), "last_week")
         self.range_preset.addItem(strings._("this_week"), "this_week")
         self.range_preset.addItem(strings._("this_month"), "this_month")
         self.range_preset.addItem(strings._("this_year"), "this_year")
@@ -1061,6 +1103,10 @@ class TimeReportDialog(QDialog):
         run_row.addWidget(run_btn)
         run_row.addWidget(export_btn)
         run_row.addWidget(pdf_btn)
+        # Only show invoicing if the feature is enabled
+        if getattr(self._db.cfg, "invoicing", False):
+            run_row.addWidget(self.invoice_btn)
+            run_row.addWidget(self.manage_invoices_btn)
         root.addLayout(run_row)
 
         # Table
@@ -1146,6 +1192,14 @@ class TimeReportDialog(QDialog):
             start = today.addDays(1 - today.dayOfWeek())
             end = today
 
+        elif preset == "last_week":
+            # Compute Monday–Sunday of the previous week (Monday-based weeks)
+            # 1. Monday of this week:
+            start_of_this_week = today.addDays(1 - today.dayOfWeek())
+            # 2. Last week is 7 days before that:
+            start = start_of_this_week.addDays(-7)  # last week's Monday
+            end = start_of_this_week.addDays(-1)  # last week's Sunday
+
         elif preset == "this_month":
             start = QDate(today.year(), today.month(), 1)
             end = today
@@ -1187,11 +1241,13 @@ class TimeReportDialog(QDialog):
         if proj_data is None:
             # All projects
             self._last_all_projects = True
+            self._last_time_logs = []
             self._last_project_name = strings._("all_projects")
             rows_for_table = self._db.time_report_all(start, end, gran)
         else:
             self._last_all_projects = False
             proj_id = int(proj_data)
+            self._last_time_logs = self._db.time_logs_for_range(proj_id, start, end)
             project_name = self.project_combo.currentText()
             self._last_project_name = project_name
 
@@ -1525,3 +1581,55 @@ class TimeReportDialog(QDialog):
                 strings._("export_pdf_error_title"),
                 strings._("export_pdf_error_message").format(error=str(exc)),
             )
+
+    def _update_invoice_button_state(self) -> None:
+        data = self.project_combo.currentData()
+        if data is not None:
+            self.invoice_btn.show()
+        else:
+            self.invoice_btn.hide()
+
+    def _on_manage_invoices(self) -> None:
+        from .invoices import InvoicesDialog
+
+        dlg = InvoicesDialog(self._db, parent=self)
+
+        # When the dialog says "reminders changed", forward that outward
+        dlg.remindersChanged.connect(self.remindersChanged.emit)
+
+        dlg.exec()
+
+    def _on_create_invoice(self) -> None:
+        idx = self.project_combo.currentIndex()
+        if idx < 0:
+            return
+
+        project_id_data = self.project_combo.itemData(idx)
+        if project_id_data is None:
+            # Currently invoices are per-project, not cross-project
+            QMessageBox.information(
+                self,
+                strings._("invoice_project_required_title"),
+                strings._("invoice_project_required_message"),
+            )
+            return
+
+        proj_id = int(project_id_data)
+
+        # Ensure we have a recent run to base this on
+        if not self._last_time_logs:
+            QMessageBox.information(
+                self,
+                strings._("invoice_need_report_title"),
+                strings._("invoice_need_report_message"),
+            )
+            return
+
+        start = self.from_date.date().toString("yyyy-MM-dd")
+        end = self.to_date.date().toString("yyyy-MM-dd")
+
+        from .invoices import InvoiceDialog
+
+        dlg = InvoiceDialog(self._db, proj_id, start, end, self._last_time_logs, self)
+        dlg.remindersChanged.connect(self.remindersChanged.emit)
+        dlg.exec()
