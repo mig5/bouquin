@@ -496,7 +496,7 @@ class MainWindow(QMainWindow):
         idx = self._tab_index_for_date(date)
         if idx != -1:
             self.tab_widget.setCurrentIndex(idx)
-            # keep calendar selection in sync (don’t trigger load)
+            # keep calendar selection in sync (don't trigger load)
             from PySide6.QtCore import QSignalBlocker
 
             with QSignalBlocker(self.calendar):
@@ -519,7 +519,7 @@ class MainWindow(QMainWindow):
 
         editor = MarkdownEditor(self.themes)
 
-        # Apply user’s preferred font size
+        # Apply user's preferred font size
         self._apply_font_size(editor)
 
         # Set up the editor's event connections

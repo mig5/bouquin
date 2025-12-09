@@ -382,7 +382,7 @@ class MarkdownEditor(QTextEdit):
             cursor.removeSelectedText()
             cursor.insertText("\n" + new_text + "\n")
         else:
-            # Empty block – keep one blank line inside the fences
+            # Empty block - keep one blank line inside the fences
             cursor.removeSelectedText()
             cursor.insertText("\n\n")
         cursor.endEditBlock()
@@ -789,7 +789,7 @@ class MarkdownEditor(QTextEdit):
         """
         # When the user is actively dragging with the mouse, we *do* want the
         # checkbox/bullet to be part of the selection (for deleting whole rows).
-        # So don’t rewrite the selection in that case.
+        # So don't rewrite the selection in that case.
         if getattr(self, "_mouse_drag_selecting", False):
             return
 
@@ -863,7 +863,7 @@ class MarkdownEditor(QTextEdit):
         ):
             return ("checkbox", f"{self._CHECK_UNCHECKED_DISPLAY} ")
 
-        # Bullet list – Unicode bullet
+        # Bullet list - Unicode bullet
         if line.startswith(f"{self._BULLET_DISPLAY} "):
             return ("bullet", f"{self._BULLET_DISPLAY} ")
 
@@ -1055,7 +1055,7 @@ class MarkdownEditor(QTextEdit):
         # of list prefixes (checkboxes / bullets / numbers).
         if event.key() in (Qt.Key.Key_Home, Qt.Key.Key_Left):
             # Let Ctrl+Home / Ctrl+Left keep their usual meaning (start of
-            # document / word-left) – we don't interfere with those.
+            # document / word-left) - we don't interfere with those.
             if event.modifiers() & Qt.ControlModifier:
                 pass
             else:
@@ -1367,7 +1367,7 @@ class MarkdownEditor(QTextEdit):
         cursor = self.cursorForPosition(event.pos())
         block = cursor.block()
 
-        # If we’re on or inside a code block, open the editor instead
+        # If we're on or inside a code block, open the editor instead
         if self._is_inside_code_block(block) or block.text().strip().startswith("```"):
             # Only swallow the double-click if we actually opened a dialog.
             if not self._edit_code_block(block):

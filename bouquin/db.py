@@ -1301,7 +1301,7 @@ class DBManager:
         cur = self.conn.cursor()
 
         if granularity == "none":
-            # No grouping – one row per time_log record
+            # No grouping - one row per time_log record
             rows = cur.execute(
                 """
                 SELECT

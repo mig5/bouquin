@@ -246,7 +246,7 @@ class SettingsDialog(QDialog):
             self.company_payment_details_edit,
         )
 
-        # Logo picker – store bytes on self._logo_bytes
+        # Logo picker - store bytes on self._logo_bytes
         self._logo_bytes = logo_bytes
         logo_row = QHBoxLayout()
         self.logo_label = QLabel(strings._("invoice_company_logo_not_set"))

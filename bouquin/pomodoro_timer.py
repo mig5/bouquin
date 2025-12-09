@@ -133,7 +133,7 @@ class PomodoroManager:
         if hasattr(time_log_widget, "show_pomodoro_widget"):
             time_log_widget.show_pomodoro_widget(self._active_timer)
         else:
-            # Fallback – just attach it as a child widget
+            # Fallback - just attach it as a child widget
             self._active_timer.setParent(time_log_widget)
             self._active_timer.show()
 

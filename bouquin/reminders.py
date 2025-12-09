@@ -484,7 +484,7 @@ class UpcomingRemindersWidget(QFrame):
             offset = (target_dow - first.dayOfWeek() + 7) % 7
             candidate = first.addDays(offset + anchor_n * 7)
 
-            # If that nth weekday doesn’t exist this month (e.g. 5th Monday), skip
+            # If that nth weekday doesn't exist this month (e.g. 5th Monday), skip
             if candidate.month() != date.month():
                 return False
 

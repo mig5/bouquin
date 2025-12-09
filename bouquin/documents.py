@@ -112,7 +112,7 @@ class TodaysDocumentsWidget(QFrame):
             if project_name:
                 extra_parts.append(project_name)
             if extra_parts:
-                label = f"{file_name} – " + " · ".join(extra_parts)
+                label = f"{file_name} - " + " · ".join(extra_parts)
 
             item = QListWidgetItem(label)
             item.setData(

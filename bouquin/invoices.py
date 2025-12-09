@@ -418,7 +418,7 @@ class InvoiceDialog(QDialog):
 
                 hours = minutes / 60.0
 
-                # Hours – editable via spin box (override allowed)
+                # Hours - editable via spin box (override allowed)
                 hours_spin = QDoubleSpinBox()
                 hours_spin.setRange(0, 24)
                 hours_spin.setDecimals(2)
@@ -457,7 +457,7 @@ class InvoiceDialog(QDialog):
                 descr_parts = [date_str, activity]
                 if note:
                     descr_parts.append(note)
-                descr = " – ".join(descr_parts)
+                descr = " - ".join(descr_parts)
 
                 hours_widget = self.table.cellWidget(r, self.COL_HOURS)
                 hours = (
@@ -567,10 +567,10 @@ class InvoiceDialog(QDialog):
 
         details = self._db.get_client_by_company(text)
         if not details:
-            # New client – leave other fields as-is
+            # New client - leave other fields as-is
             return
 
-        # We don't touch the company combo text – user already chose/typed it.
+        # We don't touch the company combo text - user already chose/typed it.
         client_name, client_company, client_address, client_email = details
         if client_name:
             self.client_name_edit.setText(client_name)
@@ -609,7 +609,7 @@ class InvoiceDialog(QDialog):
             else InvoiceDetailMode.SUMMARY
         )
 
-        # Build line items + collect time_log_ids
+        # Build line items & collect time_log_ids
         if detail_mode == InvoiceDetailMode.DETAILED:
             items = self._detail_line_items()
             time_log_ids: list[int] = []
@@ -631,7 +631,7 @@ class InvoiceDialog(QDialog):
             )
             return
 
-        # Rate + tax info
+        # Rate & tax info
         rate_cents = int(round(self.rate_spin.value() * 100))
         currency = self.currency_edit.text().strip()
         tax_label = self.tax_label_edit.text().strip() or None
@@ -715,7 +715,7 @@ class InvoiceDialog(QDialog):
 
         doc = QTextDocument()
 
-        # 🔹 Load company profile *before* building HTML
+        # Load company profile before building HTML
         profile = self._db.get_company_profile()
         self._company_profile = None
         if profile:
@@ -1178,7 +1178,7 @@ class InvoicesDialog(QDialog):
                     row_idx, self.COL_TAX_RATE, QTableWidgetItem(tax_rate_text)
                 )
 
-                # Column 7–9: amounts (cents → dollars)
+                # Column 7-9: amounts (cents → dollars)
                 self.table.setItem(
                     row_idx,
                     self.COL_SUBTOTAL,
@@ -1441,7 +1441,7 @@ class InvoicesDialog(QDialog):
 
             self._db.set_invoice_field_by_id(inv_id, field, cents)
 
-            # Normalize formatting in the table
+            # Normalise formatting in the table
             self._reloading_invoices = True
             try:
                 item.setText(f"{cents / 100.0:.2f}")

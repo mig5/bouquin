@@ -270,7 +270,7 @@ class TimeLogDialog(QDialog):
         self._date_iso = date_iso
         self._current_entry_id: Optional[int] = None
         self.cfg = load_db_config()
-        # Guard flag used when repopulating the table so we don’t treat
+        # Guard flag used when repopulating the table so we don't treat
         # programmatic item changes as user edits.
         self._reloading_entries: bool = False
 
@@ -620,7 +620,7 @@ class TimeLogDialog(QDialog):
         hours_item = self.table.item(row, 3)
 
         if proj_item is None or act_item is None or hours_item is None:
-            # Incomplete row – nothing to do.
+            # Incomplete row - nothing to do.
             return
 
         # Recover the entry id from the hidden UserRole on the project cell
@@ -829,7 +829,7 @@ class TimeCodeManagerDialog(QDialog):
         try:
             self._db.add_project(name)
         except ValueError:
-            # Empty / invalid name – nothing to do, but be defensive
+            # Empty / invalid name - nothing to do, but be defensive
             QMessageBox.warning(
                 self,
                 strings._("invalid_project_title"),
@@ -1193,7 +1193,7 @@ class TimeReportDialog(QDialog):
             end = today
 
         elif preset == "last_week":
-            # Compute Monday–Sunday of the previous week (Monday-based weeks)
+            # Compute Monday-Sunday of the previous week (Monday-based weeks)
             # 1. Monday of this week:
             start_of_this_week = today.addDays(1 - today.dayOfWeek())
             # 2. Last week is 7 days before that:
@@ -1208,7 +1208,7 @@ class TimeReportDialog(QDialog):
             start = QDate(today.year(), 1, 1)
             end = today
 
-        else:  # "custom" – leave fields as user-set
+        else:  # "custom" - leave fields as user-set
             return
 
         # Update date edits without triggering anything else
@@ -1284,7 +1284,7 @@ class TimeReportDialog(QDialog):
                 # no note column
                 self.table.setItem(i, 3, QTableWidgetItem(f"{hrs:.2f}"))
 
-        # Summary label – include per-project totals when in "all projects" mode
+        # Summary label - include per-project totals when in "all projects" mode
         total_hours = self._last_total_minutes / 60.0
         if self._last_all_projects:
             per_project_bits = [

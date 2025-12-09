@@ -216,7 +216,7 @@ class DateHeatmap(QWidget):
         col = int((x - self._margin_left) // cell_span)  # week index
         row = int((y - self._margin_top) // cell_span)  # dow (0..6)
 
-        # Only 7 rows (Mon–Sun)
+        # Only 7 rows (Mon-Sun)
         if not (0 <= row < 7):
             return
 
