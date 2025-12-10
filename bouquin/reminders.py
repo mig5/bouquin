@@ -107,7 +107,7 @@ class ReminderDialog(QDialog):
 
         # Recurrence type
         self.type_combo = QComboBox()
-        self.type_combo.addItem(strings._("once_today"), ReminderType.ONCE)
+        self.type_combo.addItem(strings._("once"), ReminderType.ONCE)
         self.type_combo.addItem(strings._("every_day"), ReminderType.DAILY)
         self.type_combo.addItem(strings._("every_weekday"), ReminderType.WEEKDAYS)
         self.type_combo.addItem(strings._("every_week"), ReminderType.WEEKLY)

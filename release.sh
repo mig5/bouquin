@@ -3,7 +3,7 @@
 set -eo pipefail
 
 # Clean caches etc
-/home/user/venv-guardutils/bin/filedust -y .
+filedust -y .
 
 # Publish to Pypi
 poetry build

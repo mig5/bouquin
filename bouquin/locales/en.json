@@ -306,7 +306,7 @@
     "reminder": "Reminder",
     "reminders": "Reminders",
     "time": "Time",
-    "once_today": "Once (today)",
+    "once": "Once",
     "every_day": "Every day",
     "every_weekday": "Every weekday (Mon-Fri)",
     "every_week": "Every week",
