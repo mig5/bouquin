@@ -1354,7 +1354,7 @@ class MainWindow(QMainWindow):
         else:
             date_iso = self._current_date_iso()
 
-        dlg = HistoryDialog(self.db, date_iso, self)
+        dlg = HistoryDialog(self.db, date_iso, self, themes=self.themes)
         if dlg.exec() == QDialog.Accepted:
             # refresh editor + calendar (head pointer may have changed)
             self._load_selected_date(date_iso)

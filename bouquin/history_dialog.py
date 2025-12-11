@@ -5,11 +5,14 @@ import html as _html
 import re
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import QDate, Qt, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCalendarWidget,
     QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -20,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import strings
+from .theme import ThemeManager
 
 
 def _markdown_to_text(s: str) -> str:
@@ -73,15 +77,28 @@ def _colored_unified_diff_html(old_md: str, new_md: str) -> str:
 class HistoryDialog(QDialog):
     """Show versions for a date, preview, diff, and allow revert."""
 
-    def __init__(self, db, date_iso: str, parent=None):
+    def __init__(
+        self, db, date_iso: str, parent=None, themes: ThemeManager | None = None
+    ):
         super().__init__(parent)
         self.setWindowTitle(f"{strings._('history')} — {date_iso}")
         self._db = db
         self._date = date_iso
+        self._themes = themes
         self._versions = []  # list[dict] from DB
         self._current_id = None  # id of current
 
         root = QVBoxLayout(self)
+
+        # --- Top: date label + change-date button
+        date_row = QHBoxLayout()
+        self.date_label = QLabel(strings._("date_label").format(date=date_iso))
+        date_row.addWidget(self.date_label)
+        date_row.addStretch(1)
+        self.change_date_btn = QPushButton(strings._("change_date"))
+        self.change_date_btn.clicked.connect(self._on_change_date_clicked)
+        date_row.addWidget(self.change_date_btn)
+        root.addLayout(date_row)
 
         # Top: list of versions
         top = QHBoxLayout()
@@ -118,6 +135,53 @@ class HistoryDialog(QDialog):
         row.addWidget(self.btn_close)
         root.addLayout(row)
 
+        self._load_versions()
+
+    @Slot()
+    def _on_change_date_clicked(self) -> None:
+        """Let the user choose a different date and reload entries."""
+
+        # Start from current dialog date; fall back to today if invalid
+        current_qdate = QDate.fromString(self._date, Qt.ISODate)
+        if not current_qdate.isValid():
+            current_qdate = QDate.currentDate()
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(strings._("select_date_title"))
+
+        layout = QVBoxLayout(dlg)
+
+        calendar = QCalendarWidget(dlg)
+        calendar.setSelectedDate(current_qdate)
+        layout.addWidget(calendar)
+        # Apply the same theming as the main sidebar calendar
+        if self._themes is not None:
+            self._themes.register_calendar(calendar)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=dlg
+        )
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        new_qdate = calendar.selectedDate()
+        new_iso = new_qdate.toString(Qt.ISODate)
+        if new_iso == self._date:
+            # No change
+            return
+
+        # Update state
+        self._date = new_iso
+
+        # Update window title and header label
+        self.setWindowTitle(strings._("for").format(date=new_iso))
+        self.date_label.setText(strings._("date_label").format(date=new_iso))
+
+        # Reload entries for the newly selected date
         self._load_versions()
 
     # --- Data/UX helpers ---

@@ -2,6 +2,7 @@
 
  * New Invoicing feature! This is tied to time logging and (optionally) documents and reminders features.
  * Add 'Last week' to Time Report dialog range option
+ * Add 'Change Date' button to the History Dialog (same as the one used in Time log dialogs)
 
 # 0.6.4
 

@@ -277,7 +277,7 @@ class TimeLogDialog(QDialog):
 
         self.close_after_add = close_after_add
 
-        self.setWindowTitle(strings._("time_log_for").format(date=date_iso))
+        self.setWindowTitle(strings._("for").format(date=date_iso))
         self.resize(900, 600)
 
         root = QVBoxLayout(self)
@@ -285,12 +285,12 @@ class TimeLogDialog(QDialog):
         # --- Top: date label + change-date button
         date_row = QHBoxLayout()
 
-        self.date_label = QLabel(strings._("time_log_date_label").format(date=date_iso))
+        self.date_label = QLabel(strings._("date_label").format(date=date_iso))
         date_row.addWidget(self.date_label)
 
         date_row.addStretch(1)
 
-        self.change_date_btn = QPushButton(strings._("time_log_change_date"))
+        self.change_date_btn = QPushButton(strings._("change_date"))
         self.change_date_btn.clicked.connect(self._on_change_date_clicked)
         date_row.addWidget(self.change_date_btn)
 
@@ -477,7 +477,7 @@ class TimeLogDialog(QDialog):
             current_qdate = QDate.currentDate()
 
         dlg = QDialog(self)
-        dlg.setWindowTitle(strings._("time_log_select_date_title"))
+        dlg.setWindowTitle(strings._("select_date_title"))
 
         layout = QVBoxLayout(dlg)
 
@@ -508,8 +508,8 @@ class TimeLogDialog(QDialog):
         self._date_iso = new_iso
 
         # Update window title and header label
-        self.setWindowTitle(strings._("time_log_for").format(date=new_iso))
-        self.date_label.setText(strings._("time_log_date_label").format(date=new_iso))
+        self.setWindowTitle(strings._("for").format(date=new_iso))
+        self.date_label.setText(strings._("date_label").format(date=new_iso))
 
         # Reload entries for the newly selected date
         self._reload_entries()
