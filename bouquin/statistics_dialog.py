@@ -3,25 +3,24 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Dict
 
-from PySide6.QtCore import Qt, QSize, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QBrush
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
-    QVBoxLayout,
     QFormLayout,
-    QLabel,
     QGroupBox,
     QHBoxLayout,
-    QComboBox,
+    QLabel,
     QScrollArea,
-    QWidget,
     QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
 from . import strings
 from .db import DBManager
 from .settings import load_db_config
-
 
 # ---------- Activity heatmap ----------
 

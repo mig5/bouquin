@@ -4,30 +4,30 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from PySide6.QtCore import Qt, QDate, QTime, QDateTime, QTimer, Slot, Signal
+from PySide6.QtCore import QDate, QDateTime, Qt, QTime, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QLineEdit,
+    QAbstractItemView,
     QComboBox,
-    QTimeEdit,
-    QPushButton,
+    QDateEdit,
+    QDialog,
+    QFormLayout,
     QFrame,
-    QWidget,
-    QToolButton,
+    QHBoxLayout,
+    QHeaderView,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QStyle,
-    QSizePolicy,
     QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QSpinBox,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
-    QAbstractItemView,
-    QHeaderView,
-    QSpinBox,
-    QDateEdit,
+    QTimeEdit,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from . import strings
@@ -566,8 +566,8 @@ class UpcomingRemindersWidget(QFrame):
         if not selected_items:
             return
 
-        from PySide6.QtWidgets import QMenu
         from PySide6.QtGui import QAction
+        from PySide6.QtWidgets import QMenu
 
         menu = QMenu(self)
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QEvent
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
 from . import strings
 from .theme import ThemeManager

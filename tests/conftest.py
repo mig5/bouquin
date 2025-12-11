@@ -106,7 +106,7 @@ def freeze_qt_time(monkeypatch):
     QTime.currentTime().addSecs(3600) is still the same calendar day.
     """
     import bouquin.main_window as _mwmod
-    from PySide6.QtCore import QDate, QTime, QDateTime
+    from PySide6.QtCore import QDate, QDateTime, QTime
 
     today = QDate.currentDate()
     fixed_time = QTime(12, 0)

@@ -14,7 +14,7 @@ from PySide6.QtGui import (
     QTextDocument,
 )
 
-from .theme import ThemeManager, Theme
+from .theme import Theme, ThemeManager
 
 
 class MarkdownHighlighter(QSyntaxHighlighter):

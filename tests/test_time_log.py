@@ -1,24 +1,18 @@
-import pytest
 from datetime import date, timedelta
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtWidgets import (
-    QMessageBox,
-    QInputDialog,
-    QFileDialog,
-    QDialog,
-)
-from sqlcipher3.dbapi2 import IntegrityError
+from unittest.mock import MagicMock, patch
 
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
+import bouquin.strings as strings
+import pytest
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
 from bouquin.time_log import (
-    TimeLogWidget,
-    TimeLogDialog,
     TimeCodeManagerDialog,
+    TimeLogDialog,
+    TimeLogWidget,
     TimeReportDialog,
 )
-import bouquin.strings as strings
-
-from unittest.mock import patch, MagicMock
+from PySide6.QtCore import QDate, Qt
+from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
+from sqlcipher3.dbapi2 import IntegrityError
 
 
 @pytest.fixture

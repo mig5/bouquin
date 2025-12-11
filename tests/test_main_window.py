@@ -1,22 +1,19 @@
-import pytest
 import importlib.metadata
-
 from datetime import date, timedelta
 from pathlib import Path
-
-import bouquin.main_window as mwmod
-from bouquin.main_window import MainWindow
-from bouquin.theme import Theme, ThemeConfig, ThemeManager
-from bouquin.settings import get_settings
-from bouquin.key_prompt import KeyPrompt
-from bouquin.db import DBConfig, DBManager
-from PySide6.QtCore import QEvent, QDate, QTimer, Qt, QPoint, QRect
-from PySide6.QtWidgets import QTableView, QApplication, QWidget, QMessageBox, QDialog
-from PySide6.QtGui import QMouseEvent, QKeyEvent, QTextCursor, QCloseEvent
-
 from unittest.mock import Mock, patch
 
+import bouquin.main_window as mwmod
 import bouquin.version_check as version_check
+import pytest
+from bouquin.db import DBConfig, DBManager
+from bouquin.key_prompt import KeyPrompt
+from bouquin.main_window import MainWindow
+from bouquin.settings import get_settings
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
+from PySide6.QtCore import QDate, QEvent, QPoint, QRect, Qt, QTimer
+from PySide6.QtGui import QCloseEvent, QKeyEvent, QMouseEvent, QTextCursor
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QTableView, QWidget
 
 
 def test_main_window_loads_and_saves(qtbot, app, tmp_db_cfg, fresh_db):

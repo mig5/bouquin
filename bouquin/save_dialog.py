@@ -3,13 +3,7 @@ from __future__ import annotations
 import datetime
 
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QLabel,
-    QLineEdit,
-    QDialogButtonBox,
-)
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QLineEdit, QVBoxLayout
 
 from . import strings
 

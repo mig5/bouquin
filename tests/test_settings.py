@@ -1,9 +1,5 @@
-from bouquin.settings import (
-    get_settings,
-    load_db_config,
-    save_db_config,
-)
 from bouquin.db import DBConfig
+from bouquin.settings import get_settings, load_db_config, save_db_config
 
 
 def _clear_db_settings():

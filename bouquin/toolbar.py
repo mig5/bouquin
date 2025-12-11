@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QAction, QKeySequence, QFont, QFontDatabase, QActionGroup
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction, QActionGroup, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import QToolBar
 
 from . import strings

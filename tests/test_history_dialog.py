@@ -1,7 +1,6 @@
-from PySide6.QtWidgets import QWidget, QMessageBox, QApplication
-from PySide6.QtCore import Qt, QTimer
-
 from bouquin.history_dialog import HistoryDialog
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
 
 def test_history_dialog_lists_and_revert(qtbot, fresh_db):

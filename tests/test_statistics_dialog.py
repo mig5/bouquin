@@ -1,13 +1,11 @@
 import datetime as _dt
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 
 from bouquin import strings
-
-from PySide6.QtCore import Qt, QPoint, QDate
-from PySide6.QtWidgets import QLabel, QWidget
-from PySide6.QtTest import QTest
-
 from bouquin.statistics_dialog import DateHeatmap, StatisticsDialog
+from PySide6.QtCore import QDate, QPoint, Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QLabel, QWidget
 
 
 class FakeStatsDB:

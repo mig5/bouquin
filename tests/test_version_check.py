@@ -1,9 +1,10 @@
-import pytest
-from unittest.mock import Mock, patch
 import subprocess
+from unittest.mock import Mock, patch
+
+import pytest
 from bouquin.version_check import VersionChecker
-from PySide6.QtWidgets import QMessageBox, QWidget
 from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 
 def test_version_checker_init(app):

@@ -1,13 +1,11 @@
-from PySide6.QtWidgets import QPushButton
 from bouquin import strings
-
-from PySide6.QtCore import QRect, QSize
-from PySide6.QtGui import QPaintEvent, QFont
-
 from bouquin.code_block_editor_dialog import (
     CodeBlockEditorDialog,
     CodeEditorWithLineNumbers,
 )
+from PySide6.QtCore import QRect, QSize
+from PySide6.QtGui import QFont, QPaintEvent
+from PySide6.QtWidgets import QPushButton
 
 
 def _find_button_by_text(widget, text):

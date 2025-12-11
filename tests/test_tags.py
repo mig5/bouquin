@@ -1,23 +1,20 @@
+import bouquin.strings as strings
 import pytest
-
-from PySide6.QtCore import Qt, QPoint, QEvent, QDate
-from PySide6.QtGui import QMouseEvent, QColor
+from bouquin.db import DBManager
+from bouquin.flow_layout import FlowLayout
+from bouquin.strings import load_strings
+from bouquin.tag_browser import TagBrowserDialog
+from bouquin.tags_widget import PageTagsWidget, TagChip
+from PySide6.QtCore import QDate, QEvent, QPoint, Qt
+from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
-    QMessageBox,
-    QInputDialog,
     QColorDialog,
     QDialog,
+    QInputDialog,
+    QMessageBox,
 )
-from bouquin.db import DBManager
-from bouquin.strings import load_strings
-from bouquin.tags_widget import PageTagsWidget, TagChip
-from bouquin.tag_browser import TagBrowserDialog
-from bouquin.flow_layout import FlowLayout
 from sqlcipher3.dbapi2 import IntegrityError
-
-import bouquin.strings as strings
-
 
 # ============================================================================
 # DB Layer Tag Tests
@@ -1649,7 +1646,7 @@ def test_default_tag_colour_none(fresh_db):
 
 def test_flow_layout_take_at_invalid_index(app):
     """Test FlowLayout.takeAt with out-of-bounds index"""
-    from PySide6.QtWidgets import QWidget, QLabel
+    from PySide6.QtWidgets import QLabel, QWidget
 
     widget = QWidget()
     layout = FlowLayout(widget)
@@ -1673,7 +1670,7 @@ def test_flow_layout_take_at_invalid_index(app):
 
 def test_flow_layout_take_at_boundary(app):
     """Test FlowLayout.takeAt at exact boundary"""
-    from PySide6.QtWidgets import QWidget, QLabel
+    from PySide6.QtWidgets import QLabel, QWidget
 
     widget = QWidget()
     layout = FlowLayout(widget)

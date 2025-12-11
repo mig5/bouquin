@@ -1,10 +1,10 @@
-from unittest.mock import patch
-from pathlib import Path
 import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 from PySide6.QtCore import QUrl
-from PySide6.QtWidgets import QMessageBox, QWidget
 from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 
 def test_open_document_from_db_success(qtbot, app, fresh_db):

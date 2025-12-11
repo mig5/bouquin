@@ -2,38 +2,36 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QFrame,
+    QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
+    QFrame,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
-    QFormLayout,
-    QHBoxLayout,
-    QVBoxLayout,
+    QMessageBox,
     QPushButton,
-    QDialogButtonBox,
     QRadioButton,
     QSizePolicy,
     QSpinBox,
-    QMessageBox,
-    QWidget,
     QTabWidget,
     QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QPalette
-
-
-from .db import DBConfig, DBManager
-from .settings import load_db_config, save_db_config
-from .theme import Theme
-from .key_prompt import KeyPrompt
 
 from . import strings
+from .db import DBConfig, DBManager
+from .key_prompt import KeyPrompt
+from .settings import load_db_config, save_db_config
+from .theme import Theme
 
 
 class SettingsDialog(QDialog):

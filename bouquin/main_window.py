@@ -2,21 +2,21 @@ from __future__ import annotations
 
 import datetime
 import os
-import sys
 import re
-
+import sys
 from pathlib import Path
+
 from PySide6.QtCore import (
     QDate,
-    QTimer,
-    Qt,
-    QSettings,
-    Slot,
-    QUrl,
-    QEvent,
-    QSignalBlocker,
     QDateTime,
+    QEvent,
+    QSettings,
+    QSignalBlocker,
+    Qt,
     QTime,
+    QTimer,
+    QUrl,
+    Slot,
 )
 from PySide6.QtGui import (
     QAction,
@@ -31,23 +31,24 @@ from PySide6.QtGui import (
     QTextListFormat,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QCalendarWidget,
     QDialog,
     QFileDialog,
+    QLabel,
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPushButton,
     QSizePolicy,
     QSplitter,
     QTableView,
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QLabel,
-    QPushButton,
-    QApplication,
 )
 
+from . import strings
 from .bug_report_dialog import BugReportDialog
 from .db import DBManager
 from .documents import DocumentsDialog, TodaysDocumentsWidget
@@ -60,10 +61,9 @@ from .pomodoro_timer import PomodoroManager
 from .reminders import UpcomingRemindersWidget
 from .save_dialog import SaveDialog
 from .search import Search
-from .settings import APP_ORG, APP_NAME, load_db_config, save_db_config
+from .settings import APP_NAME, APP_ORG, load_db_config, save_db_config
 from .settings_dialog import SettingsDialog
 from .statistics_dialog import StatisticsDialog
-from . import strings
 from .tags_widget import PageTagsWidget
 from .theme import ThemeManager
 from .time_log import TimeLogWidget

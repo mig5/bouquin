@@ -5,32 +5,32 @@ from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QComboBox,
-    QLineEdit,
-    QTableWidget,
-    QTableWidgetItem,
     QAbstractItemView,
-    QHeaderView,
-    QPushButton,
+    QComboBox,
+    QDialog,
     QFileDialog,
-    QMessageBox,
-    QWidget,
+    QFormLayout,
     QFrame,
-    QToolButton,
+    QHBoxLayout,
+    QHeaderView,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
+    QPushButton,
     QSizePolicy,
     QStyle,
+    QTableWidget,
+    QTableWidgetItem,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
+from . import strings
 from .db import DBManager, DocumentRow
 from .settings import load_db_config
 from .time_log import TimeCodeManagerDialog
-from . import strings
 
 
 class TodaysDocumentsWidget(QFrame):

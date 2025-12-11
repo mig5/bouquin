@@ -1,5 +1,5 @@
-from importlib.resources import files
 import json
+from importlib.resources import files
 
 # Get list of locales
 root = files("bouquin") / "locales"

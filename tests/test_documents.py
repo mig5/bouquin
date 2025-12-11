@@ -1,13 +1,12 @@
-from unittest.mock import patch, MagicMock
-from pathlib import Path
 import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from bouquin.db import DBConfig
-from bouquin.documents import TodaysDocumentsWidget, DocumentsDialog
+from bouquin.documents import DocumentsDialog, TodaysDocumentsWidget
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtWidgets import QMessageBox, QDialog, QFileDialog
 from PySide6.QtGui import QDesktopServices
-
+from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 # =============================================================================
 # TodaysDocumentsWidget Tests

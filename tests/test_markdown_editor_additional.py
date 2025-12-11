@@ -4,18 +4,17 @@ These tests should be added to test_markdown_editor.py.
 """
 
 import pytest
-from PySide6.QtCore import Qt, QPoint
+from bouquin.markdown_editor import MarkdownEditor
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import (
-    QImage,
     QColor,
+    QImage,
     QKeyEvent,
+    QMouseEvent,
     QTextCursor,
     QTextDocument,
-    QMouseEvent,
 )
-
-from bouquin.markdown_editor import MarkdownEditor
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
 
 
 def text(editor) -> str:
@@ -145,8 +144,8 @@ def test_edit_code_block_checks_document(app, qtbot):
 
 def test_edit_code_block_dialog_cancelled(editor, qtbot, monkeypatch):
     """Test _edit_code_block when dialog is cancelled."""
-    from PySide6.QtWidgets import QDialog
     import bouquin.markdown_editor as markdown_editor
+    from PySide6.QtWidgets import QDialog
 
     class CancelledDialog:
         def __init__(self, code, language, parent=None, allow_delete=False):
@@ -175,8 +174,8 @@ def test_edit_code_block_dialog_cancelled(editor, qtbot, monkeypatch):
 
 def test_edit_code_block_with_delete(editor, qtbot, monkeypatch):
     """Test _edit_code_block when user deletes the block."""
-    from PySide6.QtWidgets import QDialog
     import bouquin.markdown_editor as markdown_editor
+    from PySide6.QtWidgets import QDialog
 
     class DeleteDialog:
         def __init__(self, code, language, parent=None, allow_delete=False):
@@ -214,8 +213,8 @@ def test_edit_code_block_with_delete(editor, qtbot, monkeypatch):
 
 def test_edit_code_block_language_change(editor, qtbot, monkeypatch):
     """Test _edit_code_block with language change."""
-    from PySide6.QtWidgets import QDialog
     import bouquin.markdown_editor as markdown_editor
+    from PySide6.QtWidgets import QDialog
 
     class LanguageChangeDialog:
         def __init__(self, code, language, parent=None, allow_delete=False):

@@ -2,50 +2,49 @@ from __future__ import annotations
 
 import csv
 import html
-
 from collections import defaultdict
 from datetime import datetime
-from sqlcipher3.dbapi2 import IntegrityError
 from typing import Optional
 
-from PySide6.QtCore import Qt, QDate, QUrl, Signal
-from PySide6.QtGui import QPainter, QColor, QImage, QTextDocument, QPageLayout
+from PySide6.QtCore import QDate, Qt, QUrl, Signal
+from PySide6.QtGui import QColor, QImage, QPageLayout, QPainter, QTextDocument
 from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCalendarWidget,
+    QComboBox,
+    QCompleter,
+    QDateEdit,
     QDialog,
     QDialogButtonBox,
-    QFrame,
-    QVBoxLayout,
-    QHBoxLayout,
-    QWidget,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
-    QLabel,
-    QComboBox,
-    QLineEdit,
-    QDoubleSpinBox,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QAbstractItemView,
+    QFrame,
+    QHBoxLayout,
     QHeaderView,
-    QTabWidget,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QDateEdit,
     QMessageBox,
-    QCompleter,
-    QToolButton,
+    QPushButton,
     QSizePolicy,
     QStyle,
-    QInputDialog,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
+from sqlcipher3.dbapi2 import IntegrityError
 
+from . import strings
 from .db import DBManager
 from .settings import load_db_config
 from .theme import ThemeManager
-from . import strings
 
 
 class TimeLogWidget(QFrame):

@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-import difflib, re, html as _html
+import difflib
+import html as _html
+import re
 from datetime import datetime
+
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QDialog,
-    QVBoxLayout,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QMessageBox,
-    QTextBrowser,
+    QPushButton,
     QTabWidget,
-    QAbstractItemView,
+    QTextBrowser,
+    QVBoxLayout,
 )
 
 from . import strings

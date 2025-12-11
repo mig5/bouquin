@@ -1,8 +1,9 @@
 from unittest.mock import Mock, patch
-from bouquin.pomodoro_timer import PomodoroTimer, PomodoroManager
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QToolBar, QLabel
+
+from bouquin.pomodoro_timer import PomodoroManager, PomodoroTimer
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
 from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QLabel, QToolBar, QVBoxLayout, QWidget
 
 
 class DummyTimeLogWidget(QWidget):

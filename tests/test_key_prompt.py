@@ -1,5 +1,4 @@
 from bouquin.key_prompt import KeyPrompt
-
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QFileDialog, QLineEdit
 

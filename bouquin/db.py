@@ -5,16 +5,15 @@ import datetime as _dt
 import hashlib
 import html
 import json
-import markdown
 import mimetypes
 import re
-
 from dataclasses import dataclass
 from pathlib import Path
-from sqlcipher3 import dbapi2 as sqlite
-from sqlcipher3 import Binary
-from typing import List, Sequence, Tuple, Dict
+from typing import Dict, List, Sequence, Tuple
 
+import markdown
+from sqlcipher3 import Binary
+from sqlcipher3 import dbapi2 as sqlite
 
 from . import strings
 

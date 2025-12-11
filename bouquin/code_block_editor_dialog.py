@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, QRect, Qt
-from PySide6.QtGui import QPainter, QPalette, QColor, QFont, QFontMetrics
-
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
 from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QPlainTextEdit,
-    QDialogButtonBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QLabel,
+    QPlainTextEdit,
+    QVBoxLayout,
     QWidget,
 )
 

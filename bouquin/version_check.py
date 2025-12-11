@@ -5,23 +5,17 @@ import os
 import re
 import subprocess  # nosec
 import tempfile
+from importlib.resources import files
 from pathlib import Path
 
 import requests
-from importlib.resources import files
 from PySide6.QtCore import QStandardPaths, Qt
-from PySide6.QtWidgets import (
-    QApplication,
-    QMessageBox,
-    QWidget,
-    QProgressDialog,
-)
-from PySide6.QtGui import QPixmap, QImage, QPainter, QGuiApplication
+from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog, QWidget
 
-from .settings import APP_NAME
 from . import strings
-
+from .settings import APP_NAME
 
 # Where to fetch the latest version string from
 VERSION_URL = "https://mig5.net/bouquin/version.txt"

@@ -1,19 +1,17 @@
-import pytest
 from datetime import date, timedelta
 
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtWidgets import QMessageBox
-
+import pytest
 from bouquin.invoices import (
-    InvoiceDetailMode,
-    InvoiceLineItem,
-    _invoice_due_reminder_text,
-    InvoiceDialog,
-    InvoicesDialog,
     _INVOICE_REMINDER_TIME,
+    InvoiceDetailMode,
+    InvoiceDialog,
+    InvoiceLineItem,
+    InvoicesDialog,
+    _invoice_due_reminder_text,
 )
 from bouquin.reminders import Reminder, ReminderType
-
+from PySide6.QtCore import QDate, Qt
+from PySide6.QtWidgets import QMessageBox
 
 # ============================================================================
 # Tests for InvoiceDetailMode enum

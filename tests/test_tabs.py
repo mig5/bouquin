@@ -1,12 +1,11 @@
 import types
-from PySide6.QtWidgets import QFileDialog
-from PySide6.QtGui import QTextCursor
 
-
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
-from bouquin.settings import get_settings
-from bouquin.main_window import MainWindow
 from bouquin.history_dialog import HistoryDialog
+from bouquin.main_window import MainWindow
+from bouquin.settings import get_settings
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
+from PySide6.QtGui import QTextCursor
+from PySide6.QtWidgets import QFileDialog
 
 
 def test_tabs_open_and_deduplicate(qtbot, app, tmp_db_cfg, fresh_db):

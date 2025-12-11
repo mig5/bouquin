@@ -1,5 +1,5 @@
-from bouquin.code_highlighter import CodeHighlighter, CodeBlockMetadata
-from PySide6.QtGui import QTextCharFormat, QFont
+from bouquin.code_highlighter import CodeBlockMetadata, CodeHighlighter
+from PySide6.QtGui import QFont, QTextCharFormat
 
 
 def test_get_language_patterns_python(app):

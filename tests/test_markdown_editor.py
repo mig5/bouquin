@@ -1,21 +1,20 @@
 import base64
+
 import pytest
-
-from PySide6.QtCore import Qt, QPoint, QMimeData, QUrl
-from PySide6.QtGui import (
-    QImage,
-    QColor,
-    QKeyEvent,
-    QTextCursor,
-    QTextDocument,
-    QFont,
-    QTextCharFormat,
-)
-from PySide6.QtWidgets import QApplication, QTextEdit
-
 from bouquin.markdown_editor import MarkdownEditor
 from bouquin.markdown_highlighter import MarkdownHighlighter
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
+from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QImage,
+    QKeyEvent,
+    QTextCharFormat,
+    QTextCursor,
+    QTextDocument,
+)
+from PySide6.QtWidgets import QApplication, QTextEdit
 
 
 def _today():

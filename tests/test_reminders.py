@@ -1,17 +1,16 @@
-import pytest
-
-from unittest.mock import patch, MagicMock
-from bouquin.reminders import (
-    Reminder,
-    ReminderType,
-    ReminderDialog,
-    UpcomingRemindersWidget,
-    ManageRemindersDialog,
-)
-from PySide6.QtCore import QDateTime, QDate, QTime
-from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
-
 from datetime import date, timedelta
+from unittest.mock import MagicMock, patch
+
+import pytest
+from bouquin.reminders import (
+    ManageRemindersDialog,
+    Reminder,
+    ReminderDialog,
+    ReminderType,
+    UpcomingRemindersWidget,
+)
+from PySide6.QtCore import QDate, QDateTime, QTime
+from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
 
 @pytest.fixture
@@ -851,9 +850,9 @@ def test_edit_reminder_dialog(qtbot, fresh_db):
 def test_upcoming_reminders_context_menu_shows(
     qtbot, app, fresh_db, freeze_reminders_time, monkeypatch
 ):
-    from PySide6 import QtWidgets, QtGui
-    from PySide6.QtCore import QPoint
     from bouquin.reminders import Reminder, ReminderType, UpcomingRemindersWidget
+    from PySide6 import QtGui, QtWidgets
+    from PySide6.QtCore import QPoint
 
     # Add a future reminder for today
     r = Reminder(
@@ -909,9 +908,9 @@ def test_upcoming_reminders_context_menu_shows(
 def test_upcoming_reminders_delete_selected_dedupes(
     qtbot, app, fresh_db, freeze_reminders_time, monkeypatch
 ):
-    from PySide6.QtWidgets import QMessageBox
-    from PySide6.QtCore import QItemSelectionModel
     from bouquin.reminders import Reminder, ReminderType, UpcomingRemindersWidget
+    from PySide6.QtCore import QItemSelectionModel
+    from PySide6.QtWidgets import QMessageBox
 
     r = Reminder(
         id=None,

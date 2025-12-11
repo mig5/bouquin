@@ -4,16 +4,16 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCompleter,
     QFrame,
     QHBoxLayout,
-    QVBoxLayout,
-    QWidget,
-    QToolButton,
     QLabel,
     QLineEdit,
     QSizePolicy,
     QStyle,
-    QCompleter,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from . import strings

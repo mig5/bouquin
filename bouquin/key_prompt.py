@@ -4,13 +4,13 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QDialog,
-    QVBoxLayout,
+    QDialogButtonBox,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QDialogButtonBox,
-    QFileDialog,
+    QVBoxLayout,
 )
 
 from . import strings

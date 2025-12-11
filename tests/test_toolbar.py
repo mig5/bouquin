@@ -1,8 +1,8 @@
 import pytest
-from PySide6.QtWidgets import QWidget
 from bouquin.markdown_editor import MarkdownEditor
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
 from bouquin.toolbar import ToolBar
+from PySide6.QtWidgets import QWidget
 
 
 @pytest.fixture

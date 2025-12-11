@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import (
-    QShortcut,
-    QTextCursor,
-    QTextCharFormat,
-    QTextDocument,
-)
+from PySide6.QtGui import QShortcut, QTextCharFormat, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (
-    QWidget,
-    QHBoxLayout,
-    QLineEdit,
-    QLabel,
-    QPushButton,
     QCheckBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
     QTextEdit,
+    QWidget,
 )
 
 from . import strings

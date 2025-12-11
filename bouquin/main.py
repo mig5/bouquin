@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QIcon
 
-from .settings import APP_NAME, APP_ORG, get_settings
-from .main_window import MainWindow
-from .theme import Theme, ThemeConfig, ThemeManager
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication
+
 from . import strings
+from .main_window import MainWindow
+from .settings import APP_NAME, APP_ORG, get_settings
+from .theme import Theme, ThemeConfig, ThemeManager
 
 
 def main():

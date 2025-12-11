@@ -6,12 +6,12 @@ from typing import Iterable, Tuple
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QSizePolicy,
-    QHBoxLayout,
     QVBoxLayout,
     QWidget,
 )

@@ -6,10 +6,10 @@ from typing import Optional
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QFrame,
-    QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 

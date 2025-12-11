@@ -5,28 +5,28 @@ import re
 from pathlib import Path
 from typing import Optional, Tuple
 
+from PySide6.QtCore import QRect, Qt, QTimer, QUrl
 from PySide6.QtGui import (
+    QDesktopServices,
     QFont,
     QFontDatabase,
     QFontMetrics,
     QImage,
     QMouseEvent,
     QTextBlock,
+    QTextBlockFormat,
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
     QTextFormat,
-    QTextBlockFormat,
     QTextImageFormat,
-    QDesktopServices,
 )
-from PySide6.QtCore import Qt, QRect, QTimer, QUrl
 from PySide6.QtWidgets import QDialog, QTextEdit
 
-from .theme import ThemeManager
-from .markdown_highlighter import MarkdownHighlighter
-from .code_block_editor_dialog import CodeBlockEditorDialog
 from . import strings
+from .code_block_editor_dialog import CodeBlockEditorDialog
+from .markdown_highlighter import MarkdownHighlighter
+from .theme import ThemeManager
 
 
 class MarkdownEditor(QTextEdit):

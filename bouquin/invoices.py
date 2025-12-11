@@ -2,44 +2,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from sqlcipher3 import dbapi2 as sqlite3
 
-from PySide6.QtCore import Qt, QDate, QUrl, Signal
-from PySide6.QtGui import (
-    QImage,
-    QTextDocument,
-    QPageLayout,
-    QDesktopServices,
-)
+from PySide6.QtCore import QDate, Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QImage, QPageLayout, QTextDocument
 from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QLabel,
-    QLineEdit,
+    QAbstractItemView,
+    QButtonGroup,
+    QCheckBox,
     QComboBox,
     QDateEdit,
-    QCheckBox,
-    QTextEdit,
-    QTableWidget,
-    QTableWidgetItem,
-    QAbstractItemView,
-    QHeaderView,
-    QPushButton,
-    QRadioButton,
-    QButtonGroup,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
     QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
     QWidget,
 )
+from sqlcipher3 import dbapi2 as sqlite3
 
+from . import strings
 from .db import DBManager, TimeLogRow
 from .reminders import Reminder, ReminderType
 from .settings import load_db_config
-from . import strings
 
 
 class InvoiceDetailMode(str, Enum):

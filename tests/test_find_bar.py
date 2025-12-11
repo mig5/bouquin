@@ -1,10 +1,9 @@
 import pytest
-
+from bouquin.find_bar import FindBar
+from bouquin.markdown_editor import MarkdownEditor
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QTextEdit, QWidget
-from bouquin.markdown_editor import MarkdownEditor
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
-from bouquin.find_bar import FindBar
 
 
 @pytest.fixture

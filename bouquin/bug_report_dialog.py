@@ -3,18 +3,16 @@ from __future__ import annotations
 import importlib.metadata
 
 import requests
-
 from PySide6.QtWidgets import (
     QDialog,
-    QVBoxLayout,
-    QLabel,
-    QTextEdit,
     QDialogButtonBox,
+    QLabel,
     QMessageBox,
+    QTextEdit,
+    QVBoxLayout,
 )
 
 from . import strings
-
 
 BUG_REPORT_HOST = "https://nr.mig5.net"
 ROUTE = "forms/bouquin/bugs"

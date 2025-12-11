@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-from typing import Optional, Dict
+from typing import Dict, Optional
 
-from PySide6.QtGui import QColor, QTextCharFormat, QFont
+from PySide6.QtGui import QColor, QFont, QTextCharFormat
 
 
 class CodeHighlighter:

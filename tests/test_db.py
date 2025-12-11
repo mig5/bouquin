@@ -1,9 +1,11 @@
-import pytest
-import json, csv
+import csv
 import datetime as dt
-from sqlcipher3 import dbapi2 as sqlite
-from bouquin.db import DBManager
+import json
 from datetime import date, timedelta
+
+import pytest
+from bouquin.db import DBManager
+from sqlcipher3 import dbapi2 as sqlite
 
 
 def _today():

@@ -1,22 +1,22 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QColorDialog,
     QDialog,
-    QVBoxLayout,
     QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QMessageBox,
+    QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
-    QPushButton,
-    QLabel,
-    QColorDialog,
-    QMessageBox,
-    QInputDialog,
+    QVBoxLayout,
 )
+from sqlcipher3.dbapi2 import IntegrityError
 
+from . import strings
 from .db import DBManager
 from .settings import load_db_config
-from . import strings
-from sqlcipher3.dbapi2 import IntegrityError
 
 
 class TagBrowserDialog(QDialog):

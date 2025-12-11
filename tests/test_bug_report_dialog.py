@@ -1,8 +1,8 @@
 import bouquin.bug_report_dialog as bugmod
-from bouquin.bug_report_dialog import BugReportDialog
 from bouquin import strings
-from PySide6.QtWidgets import QMessageBox
+from bouquin.bug_report_dialog import BugReportDialog
 from PySide6.QtGui import QTextCursor
+from PySide6.QtWidgets import QMessageBox
 
 
 def test_bug_report_truncates_text_to_max_chars(qtbot):

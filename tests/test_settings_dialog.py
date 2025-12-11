@@ -1,11 +1,11 @@
-from bouquin.db import DBManager, DBConfig
-from bouquin.key_prompt import KeyPrompt
 import bouquin.settings_dialog as sd
-from bouquin.settings_dialog import SettingsDialog
-from bouquin.theme import ThemeManager, ThemeConfig, Theme
+from bouquin.db import DBConfig, DBManager
+from bouquin.key_prompt import KeyPrompt
 from bouquin.settings import get_settings
+from bouquin.settings_dialog import SettingsDialog
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QMessageBox, QWidget, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QWidget
 
 
 def test_settings_dialog_config_roundtrip(qtbot, tmp_db_cfg, fresh_db):

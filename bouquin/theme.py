@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
-from PySide6.QtGui import QPalette, QColor, QGuiApplication, QTextCharFormat
-from PySide6.QtWidgets import QApplication, QCalendarWidget, QWidget
-from PySide6.QtCore import QObject, Signal, Qt
 from weakref import WeakSet
+
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtGui import QColor, QGuiApplication, QPalette, QTextCharFormat
+from PySide6.QtWidgets import QApplication, QCalendarWidget, QWidget
 
 
 class Theme(Enum):

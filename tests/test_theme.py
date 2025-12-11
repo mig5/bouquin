@@ -1,7 +1,6 @@
+from bouquin.theme import Theme, ThemeConfig, ThemeManager
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QCalendarWidget, QWidget
-
-from bouquin.theme import Theme, ThemeConfig, ThemeManager
 
 
 def test_theme_manager_apply_light_and_dark(app):
