@@ -46,7 +46,7 @@ def load_db_config() -> DBConfig:
     time_log = s.value("ui/time_log", True, type=bool)
     reminders = s.value("ui/reminders", True, type=bool)
     documents = s.value("ui/documents", True, type=bool)
-    invoicing = s.value("ui/invoicing", True, type=bool)
+    invoicing = s.value("ui/invoicing", False, type=bool)
     locale = s.value("ui/locale", "en", type=str)
     font_size = s.value("ui/font_size", 11, type=int)
     return DBConfig(
