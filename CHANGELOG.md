@@ -1,6 +1,7 @@
 # 0.7.1
 
  * Reduce the scope for toggling a checkbox on/off when not clicking precisely on it (must be to the left of the first letter)
+ * Moving unchecked TODO items to the next weekday now brings across the header that was above it, if present
 
 # 0.7.0
 

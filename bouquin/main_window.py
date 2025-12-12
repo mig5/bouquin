@@ -878,7 +878,74 @@ class MainWindow(QMainWindow):
         target_date = self._rollover_target_date(today)
         target_iso = target_date.toString("yyyy-MM-dd")
 
-        all_unchecked: list[str] = []
+        # Regexes for markdown headings and checkboxes
+        heading_re = re.compile(r"^\s{0,3}(#+)\s+(.*)$")
+        unchecked_re = re.compile(r"^\s*-\s*\[[\s☐]\]\s+")
+
+        def _normalize_heading(text: str) -> str:
+            """
+            Strip trailing closing hashes and whitespace, e.g.
+            "## Foo ###" -> "Foo"
+            """
+            text = text.strip()
+            text = re.sub(r"\s+#+\s*$", "", text)
+            return text.strip()
+
+        def _insert_todos_under_heading(
+            target_lines: list[str],
+            heading_level: int,
+            heading_text: str,
+            todos: list[str],
+        ) -> list[str]:
+            """Ensure a heading exists and append todos to the end of its section."""
+            normalized = _normalize_heading(heading_text)
+
+            # 1) Find existing heading with same text (any level)
+            start_idx = None
+            effective_level = None
+            for idx, line in enumerate(target_lines):
+                m = heading_re.match(line)
+                if not m:
+                    continue
+                level = len(m.group(1))
+                text = _normalize_heading(m.group(2))
+                if text == normalized:
+                    start_idx = idx
+                    effective_level = level
+                    break
+
+            # 2) If not found, create a new heading at the end
+            if start_idx is None:
+                if target_lines and target_lines[-1].strip():
+                    target_lines.append("")  # blank line before new heading
+                target_lines.append(f"{'#' * heading_level} {heading_text}")
+                start_idx = len(target_lines) - 1
+                effective_level = heading_level
+
+            # 3) Find the end of this heading's section
+            end_idx = len(target_lines)
+            for i in range(start_idx + 1, len(target_lines)):
+                m = heading_re.match(target_lines[i])
+                if m and len(m.group(1)) <= effective_level:
+                    end_idx = i
+                    break
+
+            # 4) Insert before any trailing blank lines in the section
+            insert_at = end_idx
+            while (
+                insert_at > start_idx + 1 and target_lines[insert_at - 1].strip() == ""
+            ):
+                insert_at -= 1
+
+            for todo in todos:
+                target_lines.insert(insert_at, todo)
+                insert_at += 1
+
+            return target_lines
+
+        # Collect moved todos as (heading_info, item_text)
+        # heading_info is either None or (level, heading_text)
+        moved_items: list[tuple[tuple[int, str] | None, str]] = []
         any_moved = False
 
         # Look back N days (yesterday = 1, up to `days_back`)
@@ -892,14 +959,24 @@ class MainWindow(QMainWindow):
             lines = text.split("\n")
             remaining_lines: list[str] = []
             moved_from_this_day = False
+            current_heading: tuple[int, str] | None = None
 
             for line in lines:
+                # Track the last seen heading (# / ## / ###)
+                m_head = heading_re.match(line)
+                if m_head:
+                    level = len(m_head.group(1))
+                    heading_text = _normalize_heading(m_head.group(2))
+                    if level <= 3:
+                        current_heading = (level, heading_text)
+                    # Keep headings in the original day
+                    remaining_lines.append(line)
+                    continue
+
                 # Unchecked markdown checkboxes: "- [ ] " or "- [☐] "
-                if re.match(r"^\s*-\s*\[\s*\]\s+", line) or re.match(
-                    r"^\s*-\s*\[☐\]\s+", line
-                ):
-                    item_text = re.sub(r"^\s*-\s*\[[\s☐]\]\s+", "", line)
-                    all_unchecked.append(f"- [ ] {item_text}")
+                if unchecked_re.match(line):
+                    item_text = unchecked_re.sub("", line)
+                    moved_items.append((current_heading, item_text))
                     moved_from_this_day = True
                     any_moved = True
                 else:
@@ -917,9 +994,45 @@ class MainWindow(QMainWindow):
         if not any_moved:
             return False
 
-        # Append everything we collected to the *target* date
-        unchecked_str = "\n".join(all_unchecked) + "\n"
-        self._load_selected_date(target_iso, unchecked_str)
+        # --- Merge all moved items into the *target* date ---
+
+        target_text = self.db.get_entry(target_iso) or ""
+        target_lines = target_text.split("\n") if target_text else []
+
+        by_heading: dict[tuple[int, str], list[str]] = {}
+        plain_items: list[str] = []
+
+        for heading_info, item_text in moved_items:
+            todo_line = f"- [ ] {item_text}"
+            if heading_info is None:
+                # No heading above this checkbox in the source: behave as before
+                plain_items.append(todo_line)
+            else:
+                by_heading.setdefault(heading_info, []).append(todo_line)
+
+        # First insert all items that have headings
+        for (level, heading_text), todos in by_heading.items():
+            target_lines = _insert_todos_under_heading(
+                target_lines, level, heading_text, todos
+            )
+
+        # Then append all items without headings at the end, like before
+        if plain_items:
+            if target_lines and target_lines[-1].strip():
+                target_lines.append("")  # one blank line before the "unsectioned" todos
+            target_lines.extend(plain_items)
+
+        new_target_text = "\n".join(target_lines)
+        if not new_target_text.endswith("\n"):
+            new_target_text += "\n"
+
+        # Save the updated target date and load it into the editor
+        self.db.save_new_version(
+            target_iso,
+            new_target_text,
+            strings._("unchecked_checkbox_items_moved_to_next_day"),
+        )
+        self._load_selected_date(target_iso)
         return True
 
     def _on_date_changed(self):
