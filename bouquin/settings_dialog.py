@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTabWidget,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -44,7 +45,7 @@ class SettingsDialog(QDialog):
 
         self.current_settings = load_db_config()
 
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(600)
         self.setSizeGripEnabled(True)
 
         # --- Tabs ----------------------------------------------------------
@@ -189,10 +190,65 @@ class SettingsDialog(QDialog):
             self.invoicing.setEnabled(False)
         self.time_log.toggled.connect(self._on_time_log_toggled)
 
+        # --- Reminders feature + webhook options -------------------------
         self.reminders = QCheckBox(strings._("enable_reminders_feature"))
         self.reminders.setChecked(self.current_settings.reminders)
+        self.reminders.toggled.connect(self._on_reminders_toggled)
         self.reminders.setCursor(Qt.PointingHandCursor)
         features_layout.addWidget(self.reminders)
+
+        # Container for reminder-specific options, indented under the checkbox
+        self.reminders_options_container = QWidget()
+        reminders_options_layout = QVBoxLayout(self.reminders_options_container)
+        reminders_options_layout.setContentsMargins(24, 0, 0, 0)
+        reminders_options_layout.setSpacing(4)
+
+        self.reminders_options_toggle = QToolButton()
+        self.reminders_options_toggle.setText(
+            strings._("reminders_webhook_section_title")
+        )
+        self.reminders_options_toggle.setCheckable(True)
+        self.reminders_options_toggle.setChecked(False)
+        self.reminders_options_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.reminders_options_toggle.setArrowType(Qt.RightArrow)
+        self.reminders_options_toggle.clicked.connect(
+            self._on_reminders_options_toggled
+        )
+
+        toggle_row = QHBoxLayout()
+        toggle_row.addWidget(self.reminders_options_toggle)
+        toggle_row.addStretch()
+        reminders_options_layout.addLayout(toggle_row)
+
+        # Actual options (labels + QLineEdits)
+        self.reminders_options_widget = QWidget()
+        options_form = QFormLayout(self.reminders_options_widget)
+        options_form.setContentsMargins(0, 0, 0, 0)
+        options_form.setSpacing(4)
+
+        self.reminders_webhook_url = QLineEdit(
+            self.current_settings.reminders_webhook_url or ""
+        )
+        self.reminders_webhook_secret = QLineEdit(
+            self.current_settings.reminders_webhook_secret or ""
+        )
+        self.reminders_webhook_secret.setEchoMode(QLineEdit.Password)
+
+        options_form.addRow(
+            strings._("reminders_webhook_url_label") + ":",
+            self.reminders_webhook_url,
+        )
+        options_form.addRow(
+            strings._("reminders_webhook_secret_label") + ":",
+            self.reminders_webhook_secret,
+        )
+
+        reminders_options_layout.addWidget(self.reminders_options_widget)
+
+        features_layout.addWidget(self.reminders_options_container)
+
+        self.reminders_options_container.setVisible(self.reminders.isChecked())
+        self.reminders_options_widget.setVisible(False)
 
         self.documents = QCheckBox(strings._("enable_documents_feature"))
         self.documents.setChecked(self.current_settings.documents)
@@ -388,6 +444,9 @@ class SettingsDialog(QDialog):
             tags=self.tags.isChecked(),
             time_log=self.time_log.isChecked(),
             reminders=self.reminders.isChecked(),
+            reminders_webhook_url=self.reminders_webhook_url.text().strip() or None,
+            reminders_webhook_secret=self.reminders_webhook_secret.text().strip()
+            or None,
             documents=self.documents.isChecked(),
             invoicing=(
                 self.invoicing.isChecked() if self.time_log.isChecked() else False
@@ -413,6 +472,30 @@ class SettingsDialog(QDialog):
 
         self.parent().themes.set(selected_theme)
         self.accept()
+
+    def _on_reminders_options_toggled(self, checked: bool) -> None:
+        """
+        Expand/collapse the advanced reminders options (webhook URL/secret).
+        """
+        if checked:
+            self.reminders_options_toggle.setArrowType(Qt.DownArrow)
+            self.reminders_options_widget.show()
+        else:
+            self.reminders_options_toggle.setArrowType(Qt.RightArrow)
+            self.reminders_options_widget.hide()
+
+    def _on_reminders_toggled(self, checked: bool) -> None:
+        """
+        Conditionally show reminder webhook options depending
+        on if the reminders feature is toggled on or off.
+        """
+        if hasattr(self, "reminders_options_container"):
+            self.reminders_options_container.setVisible(checked)
+
+        # When turning reminders off, also collapse the section
+        if not checked and hasattr(self, "reminders_options_toggle"):
+            self.reminders_options_toggle.setChecked(False)
+            self._on_reminders_options_toggled(False)
 
     def _on_time_log_toggled(self, checked: bool) -> None:
         """

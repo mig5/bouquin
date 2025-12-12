@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from PySide6.QtCore import QDate, QDateTime, Qt, QTime, QTimer, Signal, Slot
+from PySide6.QtCore import QDate, QDateTime, Qt, QTime, QTimer, Signal, Slot, QObject
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -32,6 +32,9 @@ from PySide6.QtWidgets import (
 
 from . import strings
 from .db import DBManager
+from .settings import load_db_config
+
+import requests
 
 
 class ReminderType(Enum):
@@ -332,42 +335,35 @@ class UpcomingRemindersWidget(QFrame):
         main.addWidget(self.body)
 
         # Timer to check and fire reminders
-        # Start by syncing to the next minute boundary
-        self._check_timer = QTimer(self)
-        self._check_timer.timeout.connect(self._check_reminders)
+        #
+        # We tick once per second, but only hit the DB when the clock is
+        # exactly on a :00 second. That way a reminder for HH:MM fires at
+        # HH:MM:00, independent of when it was created.
+        self._tick_timer = QTimer(self)
+        self._tick_timer.setInterval(1000)  # 1 second
+        self._tick_timer.timeout.connect(self._on_tick)
+        self._tick_timer.start()
 
-        # Calculate milliseconds until next minute (HH:MM:00)
+        # Also check once on startup so we don't miss reminders that
+        # should have fired a moment ago when the app wasn't running.
+        QTimer.singleShot(0, self._check_reminders)
+
+    def _on_tick(self) -> None:
+        """Called every second; run reminder check only on exact minute boundaries."""
         now = QDateTime.currentDateTime()
-        current_second = now.time().second()
-        current_msec = now.time().msec()
-
-        # Milliseconds until next minute
-        ms_until_next_minute = (60 - current_second) * 1000 - current_msec
-
-        # Start with a single-shot to sync to the minute
-        self._sync_timer = QTimer(self)
-        self._sync_timer.setSingleShot(True)
-        self._sync_timer.timeout.connect(self._start_regular_timer)
-        self._sync_timer.start(ms_until_next_minute)
-
-        # Also check immediately in case there are pending reminders
-        QTimer.singleShot(1000, self._check_reminders)
+        if now.time().second() == 0:
+            # Only do the heavier DB work once per minute, at HH:MM:00,
+            # so reminders are aligned to the clock and not to when they
+            # were created.
+            self._check_reminders(now)
 
     def __del__(self):
         """Cleanup timers when widget is destroyed."""
         try:
-            if hasattr(self, "_check_timer") and self._check_timer:
-                self._check_timer.stop()
-            if hasattr(self, "_sync_timer") and self._sync_timer:
-                self._sync_timer.stop()
-        except:
+            if hasattr(self, "_tick_timer") and self._tick_timer:
+                self._tick_timer.stop()
+        except Exception:
             pass  # Ignore any cleanup errors
-
-    def _start_regular_timer(self):
-        """Start the regular check timer after initial sync."""
-        # Now we're at a minute boundary, check and start regular timer
-        self._check_reminders()
-        self._check_timer.start(60000)  # Check every minute
 
     def _on_toggle(self, checked: bool):
         """Toggle visibility of reminder list."""
@@ -492,21 +488,28 @@ class UpcomingRemindersWidget(QFrame):
 
         return False
 
-    def _check_reminders(self):
-        """Check if any reminders should fire now."""
+    def _check_reminders(self, now: QDateTime | None = None):
+        """
+        Check and trigger due reminders.
+
+        This uses absolute clock time, so a reminder for HH:MM will fire
+        when the system clock reaches HH:MM:00, independent of when the
+        reminder was created.
+        """
         # Guard: Check if database connection is valid
         if not self._db or not hasattr(self._db, "conn") or self._db.conn is None:
             return
 
-        now = QDateTime.currentDateTime()
-        today = QDate.currentDate()
+        if now is None:
+            now = QDateTime.currentDateTime()
 
-        # Round current time to the minute (set seconds to 0)
-        current_minute = QDateTime(
-            today, QTime(now.time().hour(), now.time().minute(), 0)
-        )
-
+        today = now.date()
         reminders = self._db.get_all_reminders()
+
+        # Small grace window (in seconds) so we still fire reminders if
+        # the app was just opened or the event loop was briefly busy.
+        GRACE_WINDOW_SECS = 120  # 2 minutes
+
         for reminder in reminders:
             if not reminder.active:
                 continue
@@ -514,28 +517,35 @@ class UpcomingRemindersWidget(QFrame):
             if not self._should_fire_on_date(reminder, today):
                 continue
 
-            # Parse time
+            # Parse time: stored as "HH:MM", we treat that as HH:MM:00
             hour, minute = map(int, reminder.time_str.split(":"))
             target = QDateTime(today, QTime(hour, minute, 0))
 
-            # Fire if we've passed the target minute (within last 2 minutes to catch missed ones)
-            seconds_diff = current_minute.secsTo(target)
-            if -120 <= seconds_diff <= 0:
-                # Check if we haven't already fired this one
+            # Skip if this reminder is still in the future
+            if now < target:
+                continue
+
+            # How long ago should this reminder have fired?
+            seconds_late = target.secsTo(now)  # target -> now
+
+            if 0 <= seconds_late <= GRACE_WINDOW_SECS:
+                # Check if we haven't already fired this occurrence
                 if not hasattr(self, "_fired_reminders"):
                     self._fired_reminders = {}
 
                 reminder_key = (reminder.id, target.toString())
 
-                # Only fire once per reminder per target time
-                if reminder_key not in self._fired_reminders:
-                    self._fired_reminders[reminder_key] = current_minute
-                    self.reminderTriggered.emit(reminder.text)
+                if reminder_key in self._fired_reminders:
+                    continue
 
-                    # For ONCE reminders, deactivate after firing
-                    if reminder.reminder_type == ReminderType.ONCE:
-                        self._db.update_reminder_active(reminder.id, False)
-                        self.refresh()  # Refresh the list to show deactivated reminder
+                # Mark as fired and emit
+                self._fired_reminders[reminder_key] = now
+                self.reminderTriggered.emit(reminder.text)
+
+                # For ONCE reminders, deactivate after firing
+                if reminder.reminder_type == ReminderType.ONCE:
+                    self._db.update_reminder_active(reminder.id, False)
+                    self.refresh()  # Refresh the list to show deactivated reminder
 
     @Slot()
     def _add_reminder(self):
@@ -834,3 +844,33 @@ class ManageRemindersDialog(QDialog):
         if reply == QMessageBox.Yes:
             self._db.delete_reminder(reminder.id)
             self._load_reminders()
+
+
+class ReminderWebHook:
+    def __init__(self, text):
+        self.text = text
+        self.cfg = load_db_config()
+
+    def _send(self):
+        payload: dict[str, str] = {
+            "reminder": self.text,
+        }
+
+        url = self.cfg.reminders_webhook_url
+        secret = self.cfg.reminders_webhook_secret
+
+        _headers = {}
+        if secret:
+            _headers["X-Bouquin-Secret"] = secret
+
+        if url:
+            try:
+                resp = requests.post(
+                    url,
+                    json=payload,
+                    timeout=10,
+                    headers=_headers,
+                )
+            except Exception:
+                # We did our best
+                pass

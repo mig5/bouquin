@@ -58,7 +58,7 @@ from .key_prompt import KeyPrompt
 from .lock_overlay import LockOverlay
 from .markdown_editor import MarkdownEditor
 from .pomodoro_timer import PomodoroManager
-from .reminders import UpcomingRemindersWidget
+from .reminders import UpcomingRemindersWidget, ReminderWebHook
 from .save_dialog import SaveDialog
 from .search import Search
 from .settings import APP_NAME, APP_ORG, load_db_config, save_db_config
@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         self.tags.tagAdded.connect(self._on_tag_added)
 
         self.upcoming_reminders = UpcomingRemindersWidget(self.db)
+        self.upcoming_reminders.reminderTriggered.connect(self._send_reminder_webhook)
         self.upcoming_reminders.reminderTriggered.connect(self._show_flashing_reminder)
 
         # When invoices change reminders (e.g. invoice paid), refresh the Reminders widget
@@ -1335,6 +1336,11 @@ class MainWindow(QMainWindow):
             # Turned off -> cancel any running timer and remove the widget
             self.pomodoro_manager.cancel_timer()
 
+    def _send_reminder_webhook(self, text: str):
+        if self.cfg.reminders and self.cfg.reminders_webhook_url:
+            reminder_webhook = ReminderWebHook(text)
+            reminder_webhook._send()
+
     def _show_flashing_reminder(self, text: str):
         """
         Show a small flashing dialog and request attention from the OS.
@@ -1563,6 +1569,12 @@ class MainWindow(QMainWindow):
         self.cfg.tags = getattr(new_cfg, "tags", self.cfg.tags)
         self.cfg.time_log = getattr(new_cfg, "time_log", self.cfg.time_log)
         self.cfg.reminders = getattr(new_cfg, "reminders", self.cfg.reminders)
+        self.cfg.reminders_webhook_url = getattr(
+            new_cfg, "reminders_webhook_url", self.cfg.reminders_webhook_url
+        )
+        self.cfg.reminders_webhook_secret = getattr(
+            new_cfg, "reminders_webhook_secret", self.cfg.reminders_webhook_secret
+        )
         self.cfg.documents = getattr(new_cfg, "documents", self.cfg.documents)
         self.cfg.invoicing = getattr(new_cfg, "invoicing", self.cfg.invoicing)
         self.cfg.locale = getattr(new_cfg, "locale", self.cfg.locale)
