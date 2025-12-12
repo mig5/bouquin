@@ -1,3 +1,7 @@
+# 0.7.2
+
+ * Fix Manage Reminders dialog (the actions column was missing, to edit/delete reminders)
+
 # 0.7.1
 
  * Reduce the scope for toggling a checkbox on/off when not clicking precisely on it (must be to the left of the first letter)
