@@ -706,7 +706,7 @@ class ManageRemindersDialog(QDialog):
 
         # Reminder list table
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
             [
                 strings._("text"),
