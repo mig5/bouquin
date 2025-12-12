@@ -1317,15 +1317,43 @@ class MarkdownEditor(QTextEdit):
                 if icon:
                     # absolute document position of the icon
                     doc_pos = block.position() + i
-                    r = char_rect_at(doc_pos, icon)
+                    r_icon = char_rect_at(doc_pos, icon)
 
-                    # ---------- Relax the hit area here ----------
-                    # Expand the clickable area horizontally so you don't have to
-                    # land exactly on the glyph. This makes the "checkbox zone"
-                    # roughly 3× the glyph width, centered on it.
-                    pad = r.width()  # one glyph width on each side
-                    hit_rect = r.adjusted(-pad, 0, pad, 0)
-                    # ---------------------------------------------
+                    # --- Find where the first non-space "real text" starts ---
+                    first_idx = i + len(icon) + 1  # skip icon + trailing space
+                    while first_idx < len(text) and text[first_idx].isspace():
+                        first_idx += 1
+
+                    # Start with some padding around the icon itself
+                    left_pad = r_icon.width() // 2
+                    right_pad = r_icon.width() // 2
+
+                    hit_left = r_icon.left() - left_pad
+
+                    # If there's actual text after the checkbox, clamp the
+                    # clickable area so it stops *before* the first letter.
+                    if first_idx < len(text):
+                        first_doc_pos = block.position() + first_idx
+                        c_first = QTextCursor(self.document())
+                        c_first.setPosition(first_doc_pos)
+                        first_x = self.cursorRect(c_first).x()
+
+                        expanded_right = r_icon.right() + right_pad
+                        hit_right = min(expanded_right, first_x)
+                    else:
+                        # No text after the checkbox on this line
+                        hit_right = r_icon.right() + right_pad
+
+                    # Make sure the rect is at least 1px wide
+                    if hit_right <= hit_left:
+                        hit_right = r_icon.right()
+
+                    hit_rect = QRect(
+                        hit_left,
+                        r_icon.top(),
+                        max(1, hit_right - hit_left),
+                        r_icon.height(),
+                    )
 
                     if hit_rect.contains(pt):
                         # Build the replacement: swap ☐ <-> ☑ (keep trailing space)
@@ -1339,7 +1367,9 @@ class MarkdownEditor(QTextEdit):
                         edit.setPosition(doc_pos)
                         # icon + space
                         edit.movePosition(
-                            QTextCursor.Right, QTextCursor.KeepAnchor, len(icon) + 1
+                            QTextCursor.Right,
+                            QTextCursor.KeepAnchor,
+                            len(icon) + 1,
                         )
                         edit.insertText(f"{new_icon} ")
                         edit.endEditBlock()

@@ -1,3 +1,7 @@
+# 0.7.1
+
+ * Reduce the scope for toggling a checkbox on/off when not clicking precisely on it (must be to the left of the first letter)
+
 # 0.7.0
 
  * New Invoicing feature! This is tied to time logging and (optionally) documents and reminders features.
