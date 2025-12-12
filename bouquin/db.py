@@ -95,6 +95,8 @@ class DBConfig:
     tags: bool = True
     time_log: bool = True
     reminders: bool = True
+    reminders_webhook_url: str = (None,)
+    reminders_webhook_secret: str = (None,)
     documents: bool = True
     invoicing: bool = False
     locale: str = "en"
@@ -971,7 +973,7 @@ class DBManager:
 
         # 2 & 3) total revisions + page with most revisions + per-date counts
         total_revisions = 0
-        page_most_revisions = None
+        page_most_revisions: str | None = None
         page_most_revisions_count = 0
         revisions_by_date: Dict[_dt.date, int] = {}
 
@@ -1008,7 +1010,6 @@ class DBManager:
             words_by_date[d] = wc
 
         # tags + page with most tags
-
         rows = cur.execute("SELECT COUNT(*) AS total_unique FROM tags;").fetchall()
         unique_tags = int(rows[0]["total_unique"]) if rows else 0
 
@@ -1029,6 +1030,119 @@ class DBManager:
             page_most_tags = None
             page_most_tags_count = 0
 
+        # 5) Time logging stats (minutes / hours)
+        time_minutes_by_date: Dict[_dt.date, int] = {}
+        total_time_minutes = 0
+        day_most_time: str | None = None
+        day_most_time_minutes = 0
+
+        try:
+            rows = cur.execute(
+                """
+                SELECT page_date, SUM(minutes) AS total_minutes
+                FROM time_log
+                GROUP BY page_date
+                ORDER BY page_date;
+                """
+            ).fetchall()
+        except Exception:
+            rows = []
+
+        for r in rows:
+            date_iso = r["page_date"]
+            if not date_iso:
+                continue
+            m = int(r["total_minutes"] or 0)
+            total_time_minutes += m
+            if m > day_most_time_minutes:
+                day_most_time_minutes = m
+                day_most_time = date_iso
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+            except Exception:  # nosec B112
+                continue
+            time_minutes_by_date[d] = m
+
+        # Project with most logged time
+        project_most_minutes_name: str | None = None
+        project_most_minutes = 0
+
+        try:
+            rows = cur.execute(
+                """
+                SELECT p.name AS project_name,
+                       SUM(t.minutes) AS total_minutes
+                FROM time_log t
+                JOIN projects p ON p.id = t.project_id
+                GROUP BY t.project_id, p.name
+                ORDER BY total_minutes DESC, LOWER(project_name) ASC
+                LIMIT 1;
+                """
+            ).fetchall()
+        except Exception:
+            rows = []
+
+        if rows:
+            project_most_minutes_name = rows[0]["project_name"]
+            project_most_minutes = int(rows[0]["total_minutes"] or 0)
+
+        # Activity with most logged time
+        activity_most_minutes_name: str | None = None
+        activity_most_minutes = 0
+
+        try:
+            rows = cur.execute(
+                """
+                SELECT a.name AS activity_name,
+                       SUM(t.minutes) AS total_minutes
+                FROM time_log t
+                JOIN activities a ON a.id = t.activity_id
+                GROUP BY t.activity_id, a.name
+                ORDER BY total_minutes DESC, LOWER(activity_name) ASC
+                LIMIT 1;
+                """
+            ).fetchall()
+        except Exception:
+            rows = []
+
+        if rows:
+            activity_most_minutes_name = rows[0]["activity_name"]
+            activity_most_minutes = int(rows[0]["total_minutes"] or 0)
+
+        # 6) Reminder stats
+        reminders_by_date: Dict[_dt.date, int] = {}
+        total_reminders = 0
+        day_most_reminders: str | None = None
+        day_most_reminders_count = 0
+
+        try:
+            rows = cur.execute(
+                """
+                SELECT substr(created_at, 1, 10) AS date_iso,
+                       COUNT(*)                    AS c
+                FROM reminders
+                GROUP BY date_iso
+                ORDER BY date_iso;
+                """
+            ).fetchall()
+        except Exception:
+            rows = []
+
+        for r in rows:
+            date_iso = r["date_iso"]
+            if not date_iso:
+                continue
+            c = int(r["c"] or 0)
+            total_reminders += c
+            if c > day_most_reminders_count:
+                day_most_reminders_count = c
+                day_most_reminders = date_iso
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+            except Exception:  # nosec B112
+                continue
+            reminders_by_date[d] = c
+
         return (
             pages_with_content,
             total_revisions,
@@ -1040,6 +1154,18 @@ class DBManager:
             page_most_tags,
             page_most_tags_count,
             revisions_by_date,
+            time_minutes_by_date,
+            total_time_minutes,
+            day_most_time,
+            day_most_time_minutes,
+            project_most_minutes_name,
+            project_most_minutes,
+            activity_most_minutes_name,
+            activity_most_minutes,
+            reminders_by_date,
+            total_reminders,
+            day_most_reminders,
+            day_most_reminders_count,
         )
 
     # -------- Time logging: projects & activities ---------------------

@@ -373,7 +373,7 @@ def test_db_gather_stats_empty_database(fresh_db):
     """Test gather_stats on empty database."""
     stats = fresh_db.gather_stats()
 
-    assert len(stats) == 10
+    assert len(stats) == 22
     (
         pages_with_content,
         total_revisions,
@@ -385,6 +385,18 @@ def test_db_gather_stats_empty_database(fresh_db):
         page_most_tags,
         page_most_tags_count,
         revisions_by_date,
+        time_minutes_by_date,
+        total_time_minutes,
+        day_most_time,
+        day_most_time_minutes,
+        project_most_minutes_name,
+        project_most_minutes,
+        activity_most_minutes_name,
+        activity_most_minutes,
+        reminders_by_date,
+        total_reminders,
+        day_most_reminders,
+        day_most_reminders_count,
     ) = stats
 
     assert pages_with_content == 0
@@ -421,6 +433,7 @@ def test_db_gather_stats_with_content(fresh_db):
         page_most_tags,
         page_most_tags_count,
         revisions_by_date,
+        *_rest,
     ) = stats
 
     assert pages_with_content == 2
@@ -437,7 +450,7 @@ def test_db_gather_stats_word_counting(fresh_db):
     fresh_db.save_new_version("2024-01-01", "one two three four five", "test")
 
     stats = fresh_db.gather_stats()
-    _, _, _, _, words_by_date, total_words, _, _, _, _ = stats
+    _, _, _, _, words_by_date, total_words, _, _, _, *_rest = stats
 
     assert total_words == 5
 
@@ -463,7 +476,7 @@ def test_db_gather_stats_with_tags(fresh_db):
     fresh_db.set_tags_for_page("2024-01-02", ["tag1"])  # Page 2 has 1 tag
 
     stats = fresh_db.gather_stats()
-    _, _, _, _, _, _, unique_tags, page_most_tags, page_most_tags_count, _ = stats
+    _, _, _, _, _, _, unique_tags, page_most_tags, page_most_tags_count, *_rest = stats
 
     assert unique_tags == 3
     assert page_most_tags == "2024-01-01"
@@ -479,7 +492,7 @@ def test_db_gather_stats_revisions_by_date(fresh_db):
     fresh_db.save_new_version("2024-01-02", "Fourth", "v1")
 
     stats = fresh_db.gather_stats()
-    _, _, _, _, _, _, _, _, _, revisions_by_date = stats
+    _, _, _, _, _, _, _, _, _, revisions_by_date, *_rest = stats
 
     assert date(2024, 1, 1) in revisions_by_date
     assert revisions_by_date[date(2024, 1, 1)] == 3
@@ -494,7 +507,7 @@ def test_db_gather_stats_handles_malformed_dates(fresh_db):
     fresh_db.save_new_version("2024-01-15", "Test", "v1")
 
     stats = fresh_db.gather_stats()
-    _, _, _, _, _, _, _, _, _, revisions_by_date = stats
+    _, _, _, _, _, _, _, _, _, revisions_by_date, *_rest = stats
 
     # Should have parsed the date correctly
     assert date(2024, 1, 15) in revisions_by_date
@@ -507,7 +520,7 @@ def test_db_gather_stats_current_version_only(fresh_db):
     fresh_db.save_new_version("2024-01-01", "one two three four five", "v2")
 
     stats = fresh_db.gather_stats()
-    _, _, _, _, words_by_date, total_words, _, _, _, _ = stats
+    _, _, _, _, words_by_date, total_words, _, _, _, *_rest = stats
 
     # Should count words from current version (5 words), not old version
     assert total_words == 5
@@ -519,7 +532,7 @@ def test_db_gather_stats_no_tags(fresh_db):
     fresh_db.save_new_version("2024-01-01", "No tags here", "test")
 
     stats = fresh_db.gather_stats()
-    _, _, _, _, _, _, unique_tags, page_most_tags, page_most_tags_count, _ = stats
+    _, _, _, _, _, _, unique_tags, page_most_tags, page_most_tags_count, *_rest = stats
 
     assert unique_tags == 0
     assert page_most_tags is None

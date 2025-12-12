@@ -248,8 +248,9 @@ class StatisticsDialog(QDialog):
         self._db = db
 
         self.setWindowTitle(strings._("statistics"))
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(400)
+        self.setMinimumWidth(650)
+        self.setMinimumHeight(650)
+
         root = QVBoxLayout(self)
 
         (
@@ -263,12 +264,23 @@ class StatisticsDialog(QDialog):
             page_most_tags,
             page_most_tags_count,
             revisions_by_date,
+            time_minutes_by_date,
+            total_time_minutes,
+            day_most_time,
+            day_most_time_minutes,
+            project_most_minutes_name,
+            project_most_minutes,
+            activity_most_minutes_name,
+            activity_most_minutes,
+            reminders_by_date,
+            total_reminders,
+            day_most_reminders,
+            day_most_reminders_count,
         ) = self._gather_stats()
 
-        # Optional: per-date document counts for the heatmap.
-        # This uses project_documents.uploaded_at aggregated by day, if the
-        # Documents feature is enabled.
         self.cfg = load_db_config()
+
+        # Optional: per-date document counts for the heatmap.
         documents_by_date: Dict[_dt.date, int] = {}
         total_documents = 0
         date_most_documents: _dt.date | None = None
@@ -280,76 +292,184 @@ class StatisticsDialog(QDialog):
             except Exception:
                 documents_by_date = {}
 
-        if documents_by_date:
-            total_documents = sum(documents_by_date.values())
-            # Choose the date with the highest count, tie-breaking by earliest date.
-            date_most_documents, date_most_documents_count = sorted(
-                documents_by_date.items(),
-                key=lambda item: (-item[1], item[0]),
-            )[0]
+            if documents_by_date:
+                total_documents = sum(documents_by_date.values())
+                # Choose the date with the highest count, tie-breaking by earliest date.
+                date_most_documents, date_most_documents_count = sorted(
+                    documents_by_date.items(),
+                    key=lambda item: (-item[1], item[0]),
+                )[0]
 
-        # for the heatmap
+        # For the heatmap
         self._documents_by_date = documents_by_date
+        self._time_by_date = time_minutes_by_date
+        self._reminders_by_date = reminders_by_date
+        self._words_by_date = words_by_date
+        self._revisions_by_date = revisions_by_date
 
-        # --- Numeric summary at the top ----------------------------------
-        form = QFormLayout()
-        root.addLayout(form)
+        # ------------------------------------------------------------------
+        # Feature groups
+        # ------------------------------------------------------------------
 
-        form.addRow(
+        # --- Pages / words / revisions -----------------------------------
+        pages_group = QGroupBox(strings._("stats_group_pages"))
+        pages_form = QFormLayout(pages_group)
+
+        pages_form.addRow(
             strings._("stats_pages_with_content"),
             QLabel(str(pages_with_content)),
         )
-        form.addRow(
+        pages_form.addRow(
             strings._("stats_total_revisions"),
             QLabel(str(total_revisions)),
         )
 
         if page_most_revisions:
-            form.addRow(
+            pages_form.addRow(
                 strings._("stats_page_most_revisions"),
                 QLabel(f"{page_most_revisions} ({page_most_revisions_count})"),
             )
         else:
-            form.addRow(strings._("stats_page_most_revisions"), QLabel("—"))
+            pages_form.addRow(
+                strings._("stats_page_most_revisions"),
+                QLabel("—"),
+            )
 
-        form.addRow(
+        pages_form.addRow(
             strings._("stats_total_words"),
             QLabel(str(total_words)),
         )
 
-        # Tags
+        root.addWidget(pages_group)
+
+        # --- Tags ---------------------------------------------------------
         if self.cfg.tags:
-            form.addRow(
+            tags_group = QGroupBox(strings._("stats_group_tags"))
+            tags_form = QFormLayout(tags_group)
+
+            tags_form.addRow(
                 strings._("stats_unique_tags"),
                 QLabel(str(unique_tags)),
             )
 
             if page_most_tags:
-                form.addRow(
+                tags_form.addRow(
                     strings._("stats_page_most_tags"),
                     QLabel(f"{page_most_tags} ({page_most_tags_count})"),
                 )
             else:
-                form.addRow(strings._("stats_page_most_tags"), QLabel("—"))
+                tags_form.addRow(
+                    strings._("stats_page_most_tags"),
+                    QLabel("—"),
+                )
 
-        # Documents
-        if date_most_documents:
-            form.addRow(
+            root.addWidget(tags_group)
+
+        # --- Documents ----------------------------------------------------
+        if self.cfg.documents:
+            docs_group = QGroupBox(strings._("stats_group_documents"))
+            docs_form = QFormLayout(docs_group)
+
+            docs_form.addRow(
                 strings._("stats_total_documents"),
                 QLabel(str(total_documents)),
             )
 
-            doc_most_label = (
-                f"{date_most_documents.isoformat()} ({date_most_documents_count})"
-            )
+            if date_most_documents:
+                doc_most_label = (
+                    f"{date_most_documents.isoformat()} ({date_most_documents_count})"
+                )
+            else:
+                doc_most_label = "—"
 
-            form.addRow(
+            docs_form.addRow(
                 strings._("stats_date_most_documents"),
                 QLabel(doc_most_label),
             )
 
-        # --- Heatmap with switcher ---------------------------------------
-        if words_by_date or revisions_by_date or documents_by_date:
+            root.addWidget(docs_group)
+
+        # --- Time logging -------------------------------------------------
+        if self.cfg.time_log:
+            time_group = QGroupBox(strings._("stats_group_time_logging"))
+            time_form = QFormLayout(time_group)
+
+            total_hours = total_time_minutes / 60.0 if total_time_minutes else 0.0
+            time_form.addRow(
+                strings._("stats_time_total_hours"),
+                QLabel(f"{total_hours:.2f}h"),
+            )
+
+            if day_most_time:
+                day_hours = (
+                    day_most_time_minutes / 60.0 if day_most_time_minutes else 0.0
+                )
+                day_label = f"{day_most_time} ({day_hours:.2f}h)"
+            else:
+                day_label = "—"
+            time_form.addRow(
+                strings._("stats_time_day_most_hours"),
+                QLabel(day_label),
+            )
+
+            if project_most_minutes_name:
+                proj_hours = (
+                    project_most_minutes / 60.0 if project_most_minutes else 0.0
+                )
+                proj_label = f"{project_most_minutes_name} ({proj_hours:.2f}h)"
+            else:
+                proj_label = "—"
+            time_form.addRow(
+                strings._("stats_time_project_most_hours"),
+                QLabel(proj_label),
+            )
+
+            if activity_most_minutes_name:
+                act_hours = (
+                    activity_most_minutes / 60.0 if activity_most_minutes else 0.0
+                )
+                act_label = f"{activity_most_minutes_name} ({act_hours:.2f}h)"
+            else:
+                act_label = "—"
+            time_form.addRow(
+                strings._("stats_time_activity_most_hours"),
+                QLabel(act_label),
+            )
+
+            root.addWidget(time_group)
+
+        # --- Reminders ----------------------------------------------------
+        if self.cfg.reminders:
+            rem_group = QGroupBox(strings._("stats_group_reminders"))
+            rem_form = QFormLayout(rem_group)
+
+            rem_form.addRow(
+                strings._("stats_total_reminders"),
+                QLabel(str(total_reminders)),
+            )
+
+            if day_most_reminders:
+                rem_label = f"{day_most_reminders} ({day_most_reminders_count})"
+            else:
+                rem_label = "—"
+
+            rem_form.addRow(
+                strings._("stats_date_most_reminders"),
+                QLabel(rem_label),
+            )
+
+            root.addWidget(rem_group)
+
+        # ------------------------------------------------------------------
+        # Heatmap with metric switcher
+        # ------------------------------------------------------------------
+        if (
+            words_by_date
+            or revisions_by_date
+            or documents_by_date
+            or time_minutes_by_date
+            or reminders_by_date
+        ):
             group = QGroupBox(strings._("stats_activity_heatmap"))
             group_layout = QVBoxLayout(group)
 
@@ -358,18 +478,30 @@ class StatisticsDialog(QDialog):
             combo_row.addWidget(QLabel(strings._("stats_heatmap_metric")))
             self.metric_combo = QComboBox()
             self.metric_combo.addItem(strings._("stats_metric_words"), "words")
-            self.metric_combo.addItem(strings._("stats_metric_revisions"), "revisions")
+            self.metric_combo.addItem(
+                strings._("stats_metric_revisions"),
+                "revisions",
+            )
             if documents_by_date:
                 self.metric_combo.addItem(
-                    strings._("stats_metric_documents"), "documents"
+                    strings._("stats_metric_documents"),
+                    "documents",
+                )
+            if self.cfg.time_log and time_minutes_by_date:
+                self.metric_combo.addItem(
+                    strings._("stats_metric_hours"),
+                    "hours",
+                )
+            if self.cfg.reminders and reminders_by_date:
+                self.metric_combo.addItem(
+                    strings._("stats_metric_reminders"),
+                    "reminders",
                 )
             combo_row.addWidget(self.metric_combo)
             combo_row.addStretch(1)
             group_layout.addLayout(combo_row)
 
             self._heatmap = DateHeatmap()
-            self._words_by_date = words_by_date
-            self._revisions_by_date = revisions_by_date
 
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
@@ -386,6 +518,8 @@ class StatisticsDialog(QDialog):
         else:
             root.addWidget(QLabel(strings._("stats_no_data")))
 
+        self.resize(self.sizeHint().width(), self.sizeHint().height())
+
     # ---------- internal helpers ----------
 
     def _apply_metric(self, metric: str) -> None:
@@ -393,6 +527,10 @@ class StatisticsDialog(QDialog):
             self._heatmap.set_data(self._revisions_by_date)
         elif metric == "documents":
             self._heatmap.set_data(self._documents_by_date)
+        elif metric == "hours":
+            self._heatmap.set_data(self._time_by_date)
+        elif metric == "reminders":
+            self._heatmap.set_data(self._reminders_by_date)
         else:
             self._heatmap.set_data(self._words_by_date)
 

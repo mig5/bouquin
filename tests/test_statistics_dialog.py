@@ -14,6 +14,7 @@ class FakeStatsDB:
     def __init__(self):
         d1 = _dt.date(2024, 1, 1)
         d2 = _dt.date(2024, 1, 2)
+
         self.stats = (
             2,  # pages_with_content
             5,  # total_revisions
@@ -25,7 +26,20 @@ class FakeStatsDB:
             "2024-01-02",  # page_most_tags
             2,  # page_most_tags_count
             {d1: 1, d2: 2},  # revisions_by_date
+            {d1: 60, d2: 120},  # time_minutes_by_date
+            180,  # total_time_minutes
+            "2024-01-02",  # day_most_time
+            120,  # day_most_time_minutes
+            "Project A",  # project_most_minutes_name
+            120,  # project_most_minutes
+            "Activity A",  # activity_most_minutes_name
+            120,  # activity_most_minutes
+            {d1: 1, d2: 3},  # reminders_by_date
+            4,  # total_reminders
+            "2024-01-02",  # day_most_reminders
+            3,  # day_most_reminders_count
         )
+
         self.called = False
 
     def gather_stats(self):
@@ -57,7 +71,7 @@ def test_statistics_dialog_populates_fields_and_heatmap(qtbot):
 
     # Heatmap is created and uses "words" by default
     words_by_date = db.stats[4]
-    revisions_by_date = db.stats[-1]
+    revisions_by_date = db.stats[9]
 
     assert hasattr(dlg, "_heatmap")
     assert dlg._heatmap._data == words_by_date
@@ -80,13 +94,25 @@ class EmptyStatsDB:
             0,  # pages_with_content
             0,  # total_revisions
             None,  # page_most_revisions
-            0,
+            0,  # page_most_revisions_count
             {},  # words_by_date
             0,  # total_words
             0,  # unique_tags
             None,  # page_most_tags
-            0,
+            0,  # page_most_tags_count
             {},  # revisions_by_date
+            {},  # time_minutes_by_date
+            0,  # total_time_minutes
+            None,  # day_most_time
+            0,  # day_most_time_minutes
+            None,  # project_most_minutes_name
+            0,  # project_most_minutes
+            None,  # activity_most_minutes_name
+            0,  # activity_most_minutes
+            {},  # reminders_by_date
+            0,  # total_reminders
+            None,  # day_most_reminders
+            0,  # day_most_reminders_count
         )
 
 

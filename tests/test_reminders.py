@@ -414,17 +414,6 @@ def test_upcoming_reminders_widget_check_reminders_no_db(qtbot, app):
     widget._check_reminders()
 
 
-def test_upcoming_reminders_widget_start_regular_timer(qtbot, app, fresh_db):
-    """Test starting the regular check timer."""
-    widget = UpcomingRemindersWidget(fresh_db)
-    qtbot.addWidget(widget)
-
-    widget._start_regular_timer()
-
-    # Timer should be running
-    assert widget._check_timer.isActive()
-
-
 def test_manage_reminders_dialog_init(qtbot, app, fresh_db):
     """Test ManageRemindersDialog initialization."""
     dialog = ManageRemindersDialog(fresh_db)
@@ -586,7 +575,7 @@ def test_manage_reminders_dialog_weekly_reminder_display(qtbot, app, fresh_db):
     qtbot.addWidget(dialog)
 
     # Check that the type column shows the day
-    type_item = dialog.table.item(0, 2)
+    type_item = dialog.table.item(0, 3)
     assert "Wed" in type_item.text()
 
 

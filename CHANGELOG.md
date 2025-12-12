@@ -5,6 +5,7 @@
  * Invoicing should not be enabled by default
  * Fix Reminders to fire right on the minute after adding them during runtime
  * It is now possible to set up Webhooks for Reminders! A URL and a secret value (sent as X-Bouquin-Header) can be set in the Settings.
+ * Improvements to StatisticsDialog: it now shows statistics about logged time, reminders, etc. Sections are grouped for better readability
 
 # 0.7.0
 

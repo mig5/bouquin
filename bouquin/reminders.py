@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from PySide6.QtCore import QDate, QDateTime, Qt, QTime, QTimer, Signal, Slot, QObject
+from PySide6.QtCore import QDate, QDateTime, Qt, QTime, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -710,6 +710,7 @@ class ManageRemindersDialog(QDialog):
         self.table.setHorizontalHeaderLabels(
             [
                 strings._("text"),
+                strings._("date"),
                 strings._("time"),
                 strings._("type"),
                 strings._("active"),
@@ -755,12 +756,24 @@ class ManageRemindersDialog(QDialog):
             text_item.setData(Qt.UserRole, reminder)
             self.table.setItem(row, 0, text_item)
 
+            # Date
+            date_display = ""
+            if reminder.reminder_type == ReminderType.ONCE and reminder.date_iso:
+                d = QDate.fromString(reminder.date_iso, "yyyy-MM-dd")
+                if d.isValid():
+                    date_display = d.toString("yyyy-MM-dd")
+                else:
+                    date_display = reminder.date_iso
+
+            date_item = QTableWidgetItem(date_display)
+            self.table.setItem(row, 1, date_item)
+
             # Time
             time_item = QTableWidgetItem(reminder.time_str)
-            self.table.setItem(row, 1, time_item)
+            self.table.setItem(row, 2, time_item)
 
             # Type
-            type_str = {
+            base_type_strs = {
                 ReminderType.ONCE: "Once",
                 ReminderType.DAILY: "Daily",
                 ReminderType.WEEKDAYS: "Weekdays",
@@ -768,35 +781,63 @@ class ManageRemindersDialog(QDialog):
                 ReminderType.FORTNIGHTLY: "Fortnightly",
                 ReminderType.MONTHLY_DATE: "Monthly (date)",
                 ReminderType.MONTHLY_NTH_WEEKDAY: "Monthly (nth weekday)",
-            }.get(reminder.reminder_type, "Unknown")
+            }
+            type_str = base_type_strs.get(reminder.reminder_type, "Unknown")
 
-            # Add day-of-week annotation where it makes sense
-            if (
-                reminder.reminder_type
-                in (
-                    ReminderType.WEEKLY,
-                    ReminderType.FORTNIGHTLY,
-                    ReminderType.MONTHLY_NTH_WEEKDAY,
-                )
-                and reminder.weekday is not None
-            ):
-                days = [
-                    strings._("monday_short"),
-                    strings._("tuesday_short"),
-                    strings._("wednesday_short"),
-                    strings._("thursday_short"),
-                    strings._("friday_short"),
-                    strings._("saturday_short"),
-                    strings._("sunday_short"),
-                ]
-                type_str += f" ({days[reminder.weekday]})"
+            # Short day names we can reuse
+            days_short = [
+                strings._("monday_short"),
+                strings._("tuesday_short"),
+                strings._("wednesday_short"),
+                strings._("thursday_short"),
+                strings._("friday_short"),
+                strings._("saturday_short"),
+                strings._("sunday_short"),
+            ]
+
+            if reminder.reminder_type == ReminderType.MONTHLY_NTH_WEEKDAY:
+                # Show something like: Monthly (3rd Mon)
+                day_name = ""
+                if reminder.weekday is not None and 0 <= reminder.weekday < len(
+                    days_short
+                ):
+                    day_name = days_short[reminder.weekday]
+
+                nth_label = ""
+                if reminder.date_iso:
+                    anchor = QDate.fromString(reminder.date_iso, "yyyy-MM-dd")
+                    if anchor.isValid():
+                        nth_index = (anchor.day() - 1) // 7  # 0-based (0..4)
+                        ordinals = ["1st", "2nd", "3rd", "4th", "5th"]
+                        if 0 <= nth_index < len(ordinals):
+                            nth_label = ordinals[nth_index]
+
+                parts = []
+                if nth_label:
+                    parts.append(nth_label)
+                if day_name:
+                    parts.append(day_name)
+
+                if parts:
+                    type_str = f"Monthly ({' '.join(parts)})"
+                # else: fall back to the generic "Monthly (nth weekday)"
+
+            else:
+                # For weekly / fortnightly types, still append the day name
+                if (
+                    reminder.reminder_type
+                    in (ReminderType.WEEKLY, ReminderType.FORTNIGHTLY)
+                    and reminder.weekday is not None
+                    and 0 <= reminder.weekday < len(days_short)
+                ):
+                    type_str += f" ({days_short[reminder.weekday]})"
 
             type_item = QTableWidgetItem(type_str)
-            self.table.setItem(row, 2, type_item)
+            self.table.setItem(row, 3, type_item)
 
             # Active
             active_item = QTableWidgetItem("✓" if reminder.active else "✗")
-            self.table.setItem(row, 3, active_item)
+            self.table.setItem(row, 4, active_item)
 
             # Actions
             actions_widget = QWidget()
@@ -813,7 +854,7 @@ class ManageRemindersDialog(QDialog):
             )
             actions_layout.addWidget(delete_btn)
 
-            self.table.setCellWidget(row, 4, actions_widget)
+            self.table.setCellWidget(row, 5, actions_widget)
 
     def _add_reminder(self):
         """Add a new reminder."""
@@ -865,7 +906,7 @@ class ReminderWebHook:
 
         if url:
             try:
-                resp = requests.post(
+                requests.post(
                     url,
                     json=payload,
                     timeout=10,
