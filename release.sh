@@ -21,11 +21,14 @@ if [[ -z "${VERSION}" ]]; then
   exit 1
 fi
 
+set +e
 sed -i s/version.*$/version\ =\ \"${VERSION}\"/g pyproject.toml
 
 git add pyproject.toml
 git commit -m "Bump to ${VERSION}"
 git push origin main
+
+set -e
 
 # Clean caches etc
 filedust -y .
