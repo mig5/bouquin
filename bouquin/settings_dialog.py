@@ -169,6 +169,25 @@ class SettingsDialog(QDialog):
         self.move_todos.setCursor(Qt.PointingHandCursor)
         features_layout.addWidget(self.move_todos)
 
+        # Optional: allow moving to the very next day even if it is a weekend.
+        self.move_todos_include_weekends = QCheckBox(
+            strings._("move_todos_include_weekends")
+        )
+        self.move_todos_include_weekends.setChecked(
+            getattr(self.current_settings, "move_todos_include_weekends", False)
+        )
+        self.move_todos_include_weekends.setCursor(Qt.PointingHandCursor)
+        self.move_todos_include_weekends.setEnabled(self.move_todos.isChecked())
+
+        move_todos_opts = QWidget()
+        move_todos_opts_layout = QVBoxLayout(move_todos_opts)
+        move_todos_opts_layout.setContentsMargins(24, 0, 0, 0)
+        move_todos_opts_layout.setSpacing(4)
+        move_todos_opts_layout.addWidget(self.move_todos_include_weekends)
+        features_layout.addWidget(move_todos_opts)
+
+        self.move_todos.toggled.connect(self.move_todos_include_weekends.setEnabled)
+
         self.tags = QCheckBox(strings._("enable_tags_feature"))
         self.tags.setChecked(self.current_settings.tags)
         self.tags.setCursor(Qt.PointingHandCursor)
@@ -441,6 +460,7 @@ class SettingsDialog(QDialog):
             idle_minutes=self.idle_spin.value(),
             theme=selected_theme.value,
             move_todos=self.move_todos.isChecked(),
+            move_todos_include_weekends=self.move_todos_include_weekends.isChecked(),
             tags=self.tags.isChecked(),
             time_log=self.time_log.isChecked(),
             reminders=self.reminders.isChecked(),

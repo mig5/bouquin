@@ -1083,6 +1083,7 @@ class TimeReportDialog(QDialog):
         self.granularity.addItem(strings._("by_day"), "day")
         self.granularity.addItem(strings._("by_week"), "week")
         self.granularity.addItem(strings._("by_month"), "month")
+        self.granularity.addItem(strings._("by_activity"), "activity")
         form.addRow(strings._("group_by"), self.granularity)
 
         root.addLayout(form)
@@ -1161,6 +1162,20 @@ class TimeReportDialog(QDialog):
             header.setSectionResizeMode(2, QHeaderView.Stretch)
             header.setSectionResizeMode(3, QHeaderView.Stretch)
             header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        elif granularity == "activity":
+            # Grouped by activity only: no time period, no note column
+            self.table.setColumnCount(3)
+            self.table.setHorizontalHeaderLabels(
+                [
+                    strings._("project"),
+                    strings._("activity"),
+                    strings._("hours"),
+                ]
+            )
+            header = self.table.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         else:
             # Grouped: no note column
             self.table.setColumnCount(4)
@@ -1272,16 +1287,21 @@ class TimeReportDialog(QDialog):
             rows_for_table
         ):
             hrs = minutes / 60.0
-            self.table.setItem(i, 0, QTableWidgetItem(project))
-            self.table.setItem(i, 1, QTableWidgetItem(time_period))
-            self.table.setItem(i, 2, QTableWidgetItem(activity_name))
-
-            if self._last_gran == "none":
-                self.table.setItem(i, 3, QTableWidgetItem(note or ""))
-                self.table.setItem(i, 4, QTableWidgetItem(f"{hrs:.2f}"))
+            if self._last_gran == "activity":
+                self.table.setItem(i, 0, QTableWidgetItem(project))
+                self.table.setItem(i, 1, QTableWidgetItem(activity_name))
+                self.table.setItem(i, 2, QTableWidgetItem(f"{hrs:.2f}"))
             else:
-                # no note column
-                self.table.setItem(i, 3, QTableWidgetItem(f"{hrs:.2f}"))
+                self.table.setItem(i, 0, QTableWidgetItem(project))
+                self.table.setItem(i, 1, QTableWidgetItem(time_period))
+                self.table.setItem(i, 2, QTableWidgetItem(activity_name))
+
+                if self._last_gran == "none":
+                    self.table.setItem(i, 3, QTableWidgetItem(note or ""))
+                    self.table.setItem(i, 4, QTableWidgetItem(f"{hrs:.2f}"))
+                else:
+                    # no note column
+                    self.table.setItem(i, 3, QTableWidgetItem(f"{hrs:.2f}"))
 
         # Summary label - include per-project totals when in "all projects" mode
         total_hours = self._last_total_minutes / 60.0
@@ -1325,14 +1345,15 @@ class TimeReportDialog(QDialog):
             with open(filename, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
 
-                show_note = getattr(self, "_last_gran", "day") == "none"
+                gran = getattr(self, "_last_gran", "day")
+                show_note = gran == "none"
+                show_period = gran != "activity"
 
                 # Header
-                header = [
-                    strings._("project"),
-                    strings._("time_period"),
-                    strings._("activity"),
-                ]
+                header: list[str] = [strings._("project")]
+                if show_period:
+                    header.append(strings._("time_period"))
+                header.append(strings._("activity"))
                 if show_note:
                     header.append(strings._("note"))
                 header.append(strings._("hours"))
@@ -1347,16 +1368,22 @@ class TimeReportDialog(QDialog):
                     minutes,
                 ) in self._last_rows:
                     hours = minutes / 60.0
-                    row = [project, time_period, activity_name]
+                    row: list[str] = [project]
+                    if show_period:
+                        row.append(time_period)
+                    row.append(activity_name)
                     if show_note:
-                        row.append(note)
+                        row.append(note or "")
                     row.append(f"{hours:.2f}")
                     writer.writerow(row)
 
                 # Blank line + total
                 total_hours = self._last_total_minutes / 60.0
                 writer.writerow([])
-                writer.writerow([strings._("total"), "", f"{total_hours:.2f}"])
+                total_row = [""] * len(header)
+                total_row[0] = strings._("total")
+                total_row[-1] = f"{total_hours:.2f}"
+                writer.writerow(total_row)
         except OSError as exc:
             QMessageBox.warning(
                 self,
@@ -1384,17 +1411,20 @@ class TimeReportDialog(QDialog):
         if not filename.endswith(".pdf"):
             filename = f"{filename}.pdf"
 
-        # ---------- Build chart image (hours per period) ----------
-        per_period_minutes: dict[str, int] = defaultdict(int)
-        for _project, period, _activity, note, minutes in self._last_rows:
-            per_period_minutes[period] += minutes
+        # ---------- Build chart image ----------
+        # Default: hours per time period. If grouped by activity: hours per activity.
+        gran = getattr(self, "_last_gran", "day")
+        per_bucket_minutes: dict[str, int] = defaultdict(int)
+        for _project, period, activity, _note, minutes in self._last_rows:
+            bucket = activity if gran == "activity" else period
+            per_bucket_minutes[bucket] += minutes
 
-        periods = sorted(per_period_minutes.keys())
+        buckets = sorted(per_bucket_minutes.keys())
         chart_w, chart_h = 800, 220
         chart = QImage(chart_w, chart_h, QImage.Format_ARGB32)
         chart.fill(Qt.white)
 
-        if periods:
+        if buckets:
             painter = QPainter(chart)
             try:
                 painter.setRenderHint(QPainter.Antialiasing, True)
@@ -1422,9 +1452,9 @@ class TimeReportDialog(QDialog):
                 # Border
                 painter.drawRect(left, top, width, height)
 
-                max_hours = max(per_period_minutes[p] for p in periods) / 60.0
+                max_hours = max(per_bucket_minutes[p] for p in buckets) / 60.0
                 if max_hours > 0:
-                    n = len(periods)
+                    n = len(buckets)
                     bar_spacing = width / max(1, n)
                     bar_width = bar_spacing * 0.6
 
@@ -1449,8 +1479,8 @@ class TimeReportDialog(QDialog):
                     painter.setBrush(QColor(80, 140, 200))
                     painter.setPen(Qt.NoPen)
 
-                    for i, period in enumerate(periods):
-                        hours = per_period_minutes[period] / 60.0
+                    for i, label in enumerate(buckets):
+                        hours = per_bucket_minutes[label] / 60.0
                         bar_h = int((hours / max_hours) * (height - 10))
                         if bar_h <= 0:
                             continue  # pragma: no cover
@@ -1463,7 +1493,7 @@ class TimeReportDialog(QDialog):
 
                     # X labels after bars, in black
                     painter.setPen(Qt.black)
-                    for i, period in enumerate(periods):
+                    for i, label in enumerate(buckets):
                         x_center = left + bar_spacing * (i + 0.5)
                         x = int(x_center - bar_width / 2)
                         painter.drawText(
@@ -1472,7 +1502,7 @@ class TimeReportDialog(QDialog):
                             int(bar_width),
                             20,
                             Qt.AlignHCenter | Qt.AlignTop,
-                            period,
+                            label,
                         )
             finally:
                 painter.end()
@@ -1481,23 +1511,53 @@ class TimeReportDialog(QDialog):
         project = html.escape(self._last_project_name or "")
         start = html.escape(self._last_start or "")
         end = html.escape(self._last_end or "")
-        gran = html.escape(self._last_gran_label or "")
+        gran_key = getattr(self, "_last_gran", "day")
+        gran_label = html.escape(self._last_gran_label or "")
 
         total_hours = self._last_total_minutes / 60.0
 
-        # Table rows (period, activity, hours)
+        # Table rows
         row_html_parts: list[str] = []
-        for project, period, activity, note, minutes in self._last_rows:
-            hours = minutes / 60.0
-            row_html_parts.append(
+        if gran_key == "activity":
+            for project, _period, activity, _note, minutes in self._last_rows:
+                hours = minutes / 60.0
+                row_html_parts.append(
+                    "<tr>"
+                    f"<td>{html.escape(project)}</td>"
+                    f"<td>{html.escape(activity)}</td>"
+                    f"<td style='text-align:right'>{hours:.2f}</td>"
+                    "</tr>"
+                )
+        else:
+            for project, period, activity, _note, minutes in self._last_rows:
+                hours = minutes / 60.0
+                row_html_parts.append(
+                    "<tr>"
+                    f"<td>{html.escape(project)}</td>"
+                    f"<td>{html.escape(period)}</td>"
+                    f"<td>{html.escape(activity)}</td>"
+                    f"<td style='text-align:right'>{hours:.2f}</td>"
+                    "</tr>"
+                )
+        rows_html = "\n".join(row_html_parts)
+
+        if gran_key == "activity":
+            table_header_html = (
                 "<tr>"
-                f"<td>{html.escape(project)}</td>"
-                f"<td>{html.escape(period)}</td>"
-                f"<td>{html.escape(activity)}</td>"
-                f"<td style='text-align:right'>{hours:.2f}</td>"
+                f"<th>{html.escape(strings._('project'))}</th>"
+                f"<th>{html.escape(strings._('activity'))}</th>"
+                f"<th>{html.escape(strings._('hours'))}</th>"
                 "</tr>"
             )
-        rows_html = "\n".join(row_html_parts)
+        else:
+            table_header_html = (
+                "<tr>"
+                f"<th>{html.escape(strings._('project'))}</th>"
+                f"<th>{html.escape(strings._('time_period'))}</th>"
+                f"<th>{html.escape(strings._('activity'))}</th>"
+                f"<th>{html.escape(strings._('hours'))}</th>"
+                "</tr>"
+            )
 
         html_doc = f"""
 <!DOCTYPE html>
@@ -1544,16 +1604,11 @@ class TimeReportDialog(QDialog):
   <h1>{html.escape(strings._("time_log_report_title").format(project=project))}</h1>
   <p class="meta">
     {html.escape(strings._("time_log_report_meta").format(
-        start=start, end=end, granularity=gran))}
+        start=start, end=end, granularity=gran_label))}
   </p>
   <p><img src="chart" class="chart" /></p>
   <table>
-    <tr>
-      <th>{html.escape(strings._("project"))}</th>
-      <th>{html.escape(strings._("time_period"))}</th>
-      <th>{html.escape(strings._("activity"))}</th>
-      <th>{html.escape(strings._("hours"))}</th>
-    </tr>
+    {table_header_html}
     {rows_html}
   </table>
   <p><b>{html.escape(strings._("time_report_total").format(hours=total_hours))}</b></p>

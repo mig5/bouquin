@@ -42,6 +42,9 @@ def load_db_config() -> DBConfig:
     idle = s.value("ui/idle_minutes", 15, type=int)
     theme = s.value("ui/theme", "system", type=str)
     move_todos = s.value("ui/move_todos", False, type=bool)
+    move_todos_include_weekends = s.value(
+        "ui/move_todos_include_weekends", False, type=bool
+    )
     tags = s.value("ui/tags", True, type=bool)
     time_log = s.value("ui/time_log", True, type=bool)
     reminders = s.value("ui/reminders", True, type=bool)
@@ -57,6 +60,7 @@ def load_db_config() -> DBConfig:
         idle_minutes=idle,
         theme=theme,
         move_todos=move_todos,
+        move_todos_include_weekends=move_todos_include_weekends,
         tags=tags,
         time_log=time_log,
         reminders=reminders,
@@ -76,6 +80,7 @@ def save_db_config(cfg: DBConfig) -> None:
     s.setValue("ui/idle_minutes", str(cfg.idle_minutes))
     s.setValue("ui/theme", str(cfg.theme))
     s.setValue("ui/move_todos", str(cfg.move_todos))
+    s.setValue("ui/move_todos_include_weekends", str(cfg.move_todos_include_weekends))
     s.setValue("ui/tags", str(cfg.tags))
     s.setValue("ui/time_log", str(cfg.time_log))
     s.setValue("ui/reminders", str(cfg.reminders))

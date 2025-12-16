@@ -1,3 +1,8 @@
+# 0.7.3
+
+ * Allow optionally moving unchecked TODOs to the next day (even if it's the weekend) rather than next weekday.
+ * Add 'group by activity' in timesheet/invoice reports, rather than just by time period.
+
 # 0.7.2
 
  * Fix Manage Reminders dialog (the actions column was missing, to edit/delete reminders)

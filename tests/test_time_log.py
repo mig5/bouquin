@@ -1185,7 +1185,7 @@ def test_time_report_dialog_creation(qtbot, fresh_db):
     qtbot.addWidget(dialog)
 
     assert dialog.project_combo.count() == 1
-    assert dialog.granularity.count() == 4
+    assert dialog.granularity.count() == 5
 
 
 def test_time_report_dialog_loads_projects(qtbot, fresh_db):

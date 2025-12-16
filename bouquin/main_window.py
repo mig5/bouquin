@@ -822,9 +822,13 @@ class MainWindow(QMainWindow):
         Given a 'new day' (system date), return the date we should move
         unfinished todos *to*.
 
-        If the new day is Saturday or Sunday, we skip ahead to the next Monday.
-        Otherwise we just return the same day.
+        By default, if the new day is Saturday or Sunday we skip ahead to the
+        next Monday (i.e., "next available weekday"). If the optional setting
+        `move_todos_include_weekends` is enabled, we move to the very next day
+        even if it's a weekend.
         """
+        if getattr(self.cfg, "move_todos_include_weekends", False):
+            return day
         # Qt: Monday=1 ... Sunday=7
         dow = day.dayOfWeek()
         if dow >= 6:  # Saturday (6) or Sunday (7)
@@ -1566,6 +1570,11 @@ class MainWindow(QMainWindow):
         self.cfg.idle_minutes = getattr(new_cfg, "idle_minutes", self.cfg.idle_minutes)
         self.cfg.theme = getattr(new_cfg, "theme", self.cfg.theme)
         self.cfg.move_todos = getattr(new_cfg, "move_todos", self.cfg.move_todos)
+        self.cfg.move_todos_include_weekends = getattr(
+            new_cfg,
+            "move_todos_include_weekends",
+            getattr(self.cfg, "move_todos_include_weekends", False),
+        )
         self.cfg.tags = getattr(new_cfg, "tags", self.cfg.tags)
         self.cfg.time_log = getattr(new_cfg, "time_log", self.cfg.time_log)
         self.cfg.reminders = getattr(new_cfg, "reminders", self.cfg.reminders)

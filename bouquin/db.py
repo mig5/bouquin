@@ -92,6 +92,7 @@ class DBConfig:
     idle_minutes: int = 15  # 0 = never lock
     theme: str = "system"
     move_todos: bool = False
+    move_todos_include_weekends: bool = False
     tags: bool = True
     time_log: bool = True
     reminders: bool = True
@@ -1351,7 +1352,7 @@ class DBManager:
         project_id: int,
         start_date_iso: str,
         end_date_iso: str,
-        granularity: str = "day",  # 'day' | 'week' | 'month' | 'none'
+        granularity: str = "day",  # 'day' | 'week' | 'month' | 'activity' | 'none'
     ) -> list[tuple[str, str, str, int]]:
         """
         Return (time_period, activity_name, total_minutes) tuples between start and end
@@ -1360,7 +1361,8 @@ class DBManager:
           - 'YYYY-MM-DD' for day
           - 'YYYY-WW'    for week
           - 'YYYY-MM'    for month
-        For 'none' granularity,  each individual time log entry becomes a row.
+        For 'activity' granularity, results are grouped by activity only (no time bucket).
+        For 'none' granularity, each individual time log entry becomes a row.
         """
         cur = self.conn.cursor()
 
@@ -1386,6 +1388,26 @@ class DBManager:
                 (r["period"], r["activity_name"], r["note"], r["total_minutes"])
                 for r in rows
             ]
+
+        if granularity == "activity":
+            rows = cur.execute(
+                """
+                SELECT
+                    a.name          AS activity_name,
+                    SUM(t.minutes)  AS total_minutes
+                FROM time_log t
+                JOIN activities a ON a.id = t.activity_id
+                WHERE t.project_id = ?
+                  AND t.page_date BETWEEN ? AND ?
+                GROUP BY activity_name
+                ORDER BY LOWER(activity_name);
+                """,
+                (project_id, start_date_iso, end_date_iso),
+            ).fetchall()
+
+            # period column is unused for activity grouping in the UI, but we keep
+            # the tuple shape consistent.
+            return [("", r["activity_name"], "", r["total_minutes"]) for r in rows]
 
         if granularity == "day":
             bucket_expr = "page_date"
@@ -1417,11 +1439,14 @@ class DBManager:
         self,
         start_date_iso: str,
         end_date_iso: str,
-        granularity: str = "day",  # 'day' | 'week' | 'month' | 'none'
+        granularity: str = "day",  # 'day' | 'week' | 'month' | 'activity' | 'none'
     ) -> list[tuple[str, str, str, str, int]]:
         """
         Return (project_name, time_period, activity_name, note, total_minutes)
-        across *all* projects between start and end, grouped by project + period + activity.
+        across *all* projects between start and end.
+        - For 'day'/'week'/'month', grouped by project + period + activity.
+        - For 'activity', grouped by project + activity.
+        - For 'none', one row per time_log entry.
         """
         cur = self.conn.cursor()
 
@@ -1450,6 +1475,34 @@ class DBManager:
                     r["period"],
                     r["activity_name"],
                     r["note"],
+                    r["total_minutes"],
+                )
+                for r in rows
+            ]
+
+        if granularity == "activity":
+            rows = cur.execute(
+                """
+                SELECT
+                    p.name         AS project_name,
+                    a.name         AS activity_name,
+                    SUM(t.minutes) AS total_minutes
+                FROM time_log t
+                JOIN projects  p ON p.id = t.project_id
+                JOIN activities a ON a.id = t.activity_id
+                WHERE t.page_date BETWEEN ? AND ?
+                GROUP BY p.id, activity_name
+                ORDER BY LOWER(p.name), LOWER(activity_name);
+                """,
+                (start_date_iso, end_date_iso),
+            ).fetchall()
+
+            return [
+                (
+                    r["project_name"],
+                    "",
+                    r["activity_name"],
+                    "",
                     r["total_minutes"],
                 )
                 for r in rows
