@@ -1574,7 +1574,7 @@ def test_markdown_highlighter_special_characters(qtbot, app):
     highlighter = MarkdownHighlighter(doc, theme_manager)
 
     text = """
-Special chars: < > & " ' 
+Special chars: < > & " '
 Escaped: \\* \\_ \\`
 Unicode: 你好 café résumé
 """
