@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
 import markdown
-from sqlcipher3 import Binary
-from sqlcipher3 import dbapi2 as sqlite
+from sqlcipher4 import Binary
+from sqlcipher4 import dbapi2 as sqlite
 
 from . import strings
 

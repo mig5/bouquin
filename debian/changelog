@@ -1,3 +1,9 @@
+bouquin (0.7.5) unstable; urgency=medium
+
+  * Add libxcb-cursor0 dependency
+
+ -- Miguel Jacq <mig@mig5.net>  Sun, 21 Dec 2025 15:30:00 +1100
+
 bouquin (0.7.4) unstable; urgency=medium
 
   * Initial build for Debian

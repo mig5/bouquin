@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 import pytest
 from bouquin.db import DBManager
-from sqlcipher3 import dbapi2 as sqlite
+from sqlcipher4 import dbapi2 as sqlite
 
 
 def _today():

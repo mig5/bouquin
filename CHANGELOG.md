@@ -1,3 +1,7 @@
+# 0.7.5
+
+ * Fix import of sqlcipher4
+
 # 0.7.4
 
  * Depend on my own bouquin-sqlcipher4 package (upgraded to latest SQLCipher 4.12.0)

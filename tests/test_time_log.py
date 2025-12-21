@@ -12,7 +12,7 @@ from bouquin.time_log import (
 )
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
-from sqlcipher3.dbapi2 import IntegrityError
+from sqlcipher4.dbapi2 import IntegrityError
 
 
 @pytest.fixture

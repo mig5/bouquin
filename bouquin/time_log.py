@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from sqlcipher3.dbapi2 import IntegrityError
+from sqlcipher4.dbapi2 import IntegrityError
 
 from . import strings
 from .db import DBManager

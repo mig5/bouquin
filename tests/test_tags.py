@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QMessageBox,
 )
-from sqlcipher3.dbapi2 import IntegrityError
+from sqlcipher4.dbapi2 import IntegrityError
 
 # ============================================================================
 # DB Layer Tag Tests

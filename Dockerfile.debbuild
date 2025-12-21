@@ -33,6 +33,8 @@ RUN set -eux; \
       python3-pyside6.qtprintsupport \
       python3-requests \
       python3-markdown \
+      libxcb-cursor0 \
+      fonts-noto-core \
     ; \
     rm -rf /var/lib/apt/lists/*
 

@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from sqlcipher3 import dbapi2 as sqlite3
+from sqlcipher4 import dbapi2 as sqlite3
 
 from . import strings
 from .db import DBManager, TimeLogRow

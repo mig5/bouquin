@@ -16,7 +16,9 @@ Build-Depends:
  python3-pyside6.qtsvg,
  python3-pyside6.qtprintsupport,
  python3-requests,
- python3-markdown
+ python3-markdown,
+ libxcb-cursor0,
+ fonts-noto-core
 Standards-Version: 4.6.2
 Homepage: https://git.mig5.net/mig5/bouquin
 
@@ -30,6 +32,8 @@ Depends: ${misc:Depends}, ${python3:Depends},
   python3-pyside6.qtprintsupport,
   python3-sqlcipher4,
   python3-requests,
-  python3-markdown
+  python3-markdown,
+  libxcb-cursor0,
+  fonts-noto-core
 Description: A simple, opinionated notebook application written in Python, PyQt and SQLCipher.
  Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher.
