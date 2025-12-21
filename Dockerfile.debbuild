@@ -1,0 +1,84 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE=debian:bookworm
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Build deps
+RUN set -eux; \
+    . /etc/os-release; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl gnupg2 ca-certificates; \
+    mkdir -p /usr/share/keyrings; \
+    curl -fsSL https://mig5.net/static/mig5.asc | gpg --dearmor -o /usr/share/keyrings/mig5.gpg; \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/mig5.gpg] https://apt.mig5.net trixie main" | tee /etc/apt/sources.list.d/mig5.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      devscripts \
+      debhelper \
+      dh-python \
+      python3-all-dev \
+      python3-setuptools \
+      python3-wheel \
+      libssl-dev \
+      rsync \
+      pybuild-plugin-pyproject \
+      python3-poetry-core \
+      python3-sqlcipher4 \
+      python3-pyside6.qtwidgets \
+      python3-pyside6.qtcore \
+      python3-pyside6.qtgui \
+      python3-pyside6.qtsvg \
+      python3-pyside6.qtprintsupport \
+      python3-requests \
+      python3-markdown \
+    ; \
+    rm -rf /var/lib/apt/lists/*
+
+# Build runner script
+RUN set -eux; \
+  cat > /usr/local/bin/build-deb <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SRC="${SRC:-/src}"
+WORKROOT="${WORKROOT:-/work}"
+WORK="${WORKROOT}/src"
+OUT="${OUT:-/out}"
+
+mkdir -p "$WORK" "$OUT"
+
+rsync -a --delete \
+  --exclude '.git' \
+  --exclude '.venv' \
+  --exclude 'dist' \
+  --exclude 'build' \
+  --exclude '__pycache__' \
+  --exclude '.pytest_cache' \
+  --exclude '.mypy_cache' \
+  "${SRC}/" "${WORK}/"
+
+cd "${WORK}"
+if [ -n "${SUITE:-}" ]; then
+  export DEBEMAIL="mig@mig5.net"
+  export DEBFULLNAME="Miguel Jacq"
+
+  dch --distribution "$SUITE" --local "~${SUITE}" "CI build for $SUITE"
+fi
+dpkg-buildpackage -us -uc -b
+
+shopt -s nullglob
+cp -v "${WORKROOT}"/*.deb \
+      "${WORKROOT}"/*.changes \
+      "${WORKROOT}"/*.buildinfo \
+      "${WORKROOT}"/*.dsc \
+      "${WORKROOT}"/*.tar.* \
+      "${OUT}/" || true
+
+echo "Artifacts copied to ${OUT}"
+EOF
+RUN chmod +x /usr/local/bin/build-deb
+
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/build-deb"]

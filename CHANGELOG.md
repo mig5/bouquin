@@ -1,3 +1,8 @@
+# 0.7.4
+
+ * Depend on my own bouquin-sqlcipher4 package (upgraded to latest SQLCipher 4.12.0)
+ * Package a deb for Debian Trixie
+
 # 0.7.3
 
  * Allow optionally moving unchecked TODOs to the next day (even if it's the weekend) rather than next weekday.

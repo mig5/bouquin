@@ -12,8 +12,9 @@ It is designed to treat each day as its own 'page', complete with Markdown rende
 search, reminders and time logging for those of us who need to keep track of not just TODOs, but
 also how long we spent on them.
 
-It uses [SQLCipher bindings](https://pypi.org/project/sqlcipher3-wheels) as a drop-in replacement
-for SQLite3. This means that the underlying database for the notebook is encrypted at rest.
+It uses SQLCipher as a drop-in replacement for SQLite3.
+
+This means that the underlying database for the notebook is encrypted at rest.
 
 To increase security, the SQLCipher key is requested when the app is opened, and is not written
 to disk unless the user configures it to be in the settings.

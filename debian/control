@@ -1,0 +1,35 @@
+Source: bouquin
+Section: office
+Priority: optional
+Maintainer: Miguel Jacq <mig@mig5.net>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-python,
+ pybuild-plugin-pyproject,
+ python3-poetry-core,
+ python3-all,
+ python3-sqlcipher4,
+ python3-pyside6.qtwidgets,
+ python3-pyside6.qtcore,
+ python3-pyside6.qtgui,
+ python3-pyside6.qtsvg,
+ python3-pyside6.qtprintsupport,
+ python3-requests,
+ python3-markdown
+Standards-Version: 4.6.2
+Homepage: https://git.mig5.net/mig5/bouquin
+
+Package: bouquin
+Architecture: amd64
+Depends: ${misc:Depends}, ${python3:Depends},
+  python3-pyside6.qtwidgets,
+  python3-pyside6.qtcore,
+  python3-pyside6.qtgui,
+  python3-pyside6.qtsvg,
+  python3-pyside6.qtprintsupport,
+  python3-sqlcipher4,
+  python3-requests,
+  python3-markdown
+Description: A simple, opinionated notebook application written in Python, PyQt and SQLCipher.
+ Bouquin is a simple, opinionated notebook application written in Python, PyQt and SQLCipher.
