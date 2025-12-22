@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Bouquin
+GenericName=Journal
+Comment=Daily planner with calendar, keyword searching, version control, time logging and document management
+Exec=bouquin
+Icon=bouquin
+Terminal=false
+Type=Application
+Categories=Office;Calendar;
+Keywords=Journal;Diary;Notes;Notebook;
+StartupNotify=true
+X-GNOME-Gettext-Domain=bouquin

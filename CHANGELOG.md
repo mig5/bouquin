@@ -1,3 +1,7 @@
+# 0.7.6
+
+ * Add .desktop file for Debian
+
 # 0.7.5
 
  * Fix import of sqlcipher4

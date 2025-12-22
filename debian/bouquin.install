@@ -1,0 +1,2 @@
+debian/bouquin.desktop usr/share/applications/
+bouquin/icons/bouquin.svg usr/share/icons/hicolor/scalable/apps/
