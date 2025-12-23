@@ -86,9 +86,10 @@ report from within the app, or optionally to check for new versions to upgrade t
 
 ## How to install
 
-Make sure you have `libxcb-cursor0` installed (on Debian-based distributions) or `xcb-util-cursor` (RedHat/Fedora-based distributions).
+Unless you are using the Debian option below:
 
-If downloading from my Forgejo's Releases page, you may wish to verify the GPG signatures with my [GPG key](https://mig5.net/static/mig5.asc).
+ * Make sure you have `libxcb-cursor0` installed (on Debian-based distributions) or `xcb-util-cursor` (RedHat/Fedora-based distributions).
+ * If downloading from my Forgejo's Releases page, you may wish to verify the GPG signatures with my [GPG key](https://mig5.net/static/mig5.asc).
 
 ### Debian 13 ('Trixie')
 
