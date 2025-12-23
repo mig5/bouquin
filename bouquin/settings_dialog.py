@@ -532,7 +532,7 @@ class SettingsDialog(QDialog):
     def _on_choose_logo(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            strings._("company_logo_choose"),
+            strings._("invoice_company_logo_choose"),
             "",
             "Images (*.png *.jpg *.jpeg *.bmp)",
         )
