@@ -1055,6 +1055,7 @@ class TimeReportDialog(QDialog):
         self.range_preset.addItem(strings._("today"), "today")
         self.range_preset.addItem(strings._("last_week"), "last_week")
         self.range_preset.addItem(strings._("this_week"), "this_week")
+        self.range_preset.addItem(strings._("last_month"), "last_month")
         self.range_preset.addItem(strings._("this_month"), "this_month")
         self.range_preset.addItem(strings._("this_year"), "this_year")
         self.range_preset.currentIndexChanged.connect(self._on_range_preset_changed)
@@ -1213,6 +1214,12 @@ class TimeReportDialog(QDialog):
             # 2. Last week is 7 days before that:
             start = start_of_this_week.addDays(-7)  # last week's Monday
             end = start_of_this_week.addDays(-1)  # last week's Sunday
+
+        elif preset == "last_month":
+            # Previous calendar month (full month)
+            start_of_this_month = QDate(today.year(), today.month(), 1)
+            start = start_of_this_month.addMonths(-1)
+            end = start_of_this_month.addDays(-1)
 
         elif preset == "this_month":
             start = QDate(today.year(), today.month(), 1)

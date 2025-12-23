@@ -5,6 +5,7 @@
  * Allow setting a code block on a line that already has text (it will start a newline for the codeblock)
  * Retain indentation when tab is used to indent a line, unless enter is pressed twice or user deletes the indentation
  * Add missing strings (for English and French)
+ * Add 'Last Month' date range for timesheet reports
 
 # 0.7.5
 
