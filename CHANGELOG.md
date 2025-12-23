@@ -1,6 +1,7 @@
 # 0.7.6
 
  * Add .desktop file for Debian
+ * Fix Pomodoro timer rounding so it rounds up to 0.25, but rounds to closest quarter (up or down) for minutes higher than that, instead of always up to next quarter.
 
 # 0.7.5
 

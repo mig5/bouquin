@@ -111,6 +111,25 @@ class PomodoroManager:
         self._parent = parent_window
         self._active_timer: Optional[PomodoroTimer] = None
 
+    @staticmethod
+    def _seconds_to_logged_hours(elapsed_seconds: int) -> float:
+        """Convert elapsed seconds to decimal hours for logging.
+
+        Rules:
+        - For very short runs (< 15 minutes), always round up to 0.25h (15 minutes).
+        - Otherwise, round to the closest 0.25h (15-minute) increment.
+          Halfway cases (e.g., 22.5 minutes) round up.
+        """
+        if elapsed_seconds < 0:
+            elapsed_seconds = 0
+
+        # 15 minutes = 900 seconds
+        if elapsed_seconds < 900:
+            return 0.25
+
+        quarters = int(math.floor((elapsed_seconds / 900.0) + 0.5))
+        return quarters * 0.25
+
     def start_timer_for_line(self, line_text: str, date_iso: str):
         """
         Start a new timer for the given line of text and embed it into the
@@ -156,9 +175,8 @@ class PomodoroManager:
 
     def _on_timer_stopped(self, elapsed_seconds: int, task_text: str, date_iso: str):
         """Handle timer stop - open time log dialog with pre-filled data."""
-        # Convert seconds to decimal hours, rounding up to the nearest 0.25 hour (15 minutes)
-        quarter_hours = math.ceil(elapsed_seconds / 900)
-        hours = quarter_hours * 0.25
+        # Convert seconds to decimal hours, and handle rounding up or down
+        hours = self._seconds_to_logged_hours(elapsed_seconds)
 
         # Ensure minimum of 0.25 hours
         if hours < 0.25:
