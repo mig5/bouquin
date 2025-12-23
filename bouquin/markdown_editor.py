@@ -34,6 +34,22 @@ class MarkdownEditor(QTextEdit):
 
     _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
 
+    # ===== Collapsible sections (editor-only folding) =====
+    # We represent a collapsed region as:
+    #   <indent>▸ collapse
+    #     ... hidden blocks ...
+    #   <indent><!-- bouquin:collapse:end -->
+    #
+    # The end-marker line is always hidden in the editor but preserved in markdown.
+    _COLLAPSE_ARROW_COLLAPSED = "▸"
+    _COLLAPSE_ARROW_EXPANDED = "▾"
+    _COLLAPSE_LABEL_COLLAPSE = "collapse"
+    _COLLAPSE_LABEL_EXPAND = "expand"
+    _COLLAPSE_END_MARKER = "<!-- bouquin:collapse:end -->"
+    # Accept either "collapse" or "expand" in the header text (older files used only "collapse")
+    _COLLAPSE_HEADER_RE = re.compile(r"^([ \t]*)([▸▾])\s+(?:collapse|expand)\s*$")
+    _COLLAPSE_END_RE = re.compile(r"^([ \t]*)<!--\s*bouquin:collapse:end\s*-->\s*$")
+
     def __init__(self, theme_manager: ThemeManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -703,6 +719,9 @@ class MarkdownEditor(QTextEdit):
         # Render any embedded images
         self._render_images()
 
+        # Apply folding for any collapse regions present in the markdown
+        self._refresh_collapse_folding()
+
         self._update_code_block_row_backgrounds()
         QTimer.singleShot(0, self._update_code_block_row_backgrounds)
 
@@ -1328,6 +1347,45 @@ class MarkdownEditor(QTextEdit):
             block = cur.block()
             text = block.text()
 
+            # Click-to-toggle collapse regions: clicking the arrow on a
+            # "▸ collapse" / "▾ collapse" line expands/collapses the section.
+            parsed = self._parse_collapse_header(text)
+            if parsed:
+                indent, _is_collapsed = parsed
+                arrow_idx = len(indent)
+                if arrow_idx < len(text):
+                    arrow = text[arrow_idx]
+                    if arrow in (
+                        self._COLLAPSE_ARROW_COLLAPSED,
+                        self._COLLAPSE_ARROW_EXPANDED,
+                    ):
+                        doc_pos = block.position() + arrow_idx
+                        c_arrow = QTextCursor(self.document())
+                        c_arrow.setPosition(
+                            max(
+                                0,
+                                min(
+                                    doc_pos,
+                                    max(0, self.document().characterCount() - 1),
+                                ),
+                            )
+                        )
+                        r = self.cursorRect(c_arrow)
+
+                        fmt_font = (
+                            c_arrow.charFormat().font()
+                            if c_arrow.charFormat().isValid()
+                            else self.font()
+                        )
+                        fm = QFontMetrics(fmt_font)
+                        w = max(1, fm.horizontalAdvance(arrow))
+
+                        # Make the hit area a bit generous.
+                        hit_rect = QRect(r.x(), r.y(), w + (w // 2), r.height())
+                        if hit_rect.contains(pt):
+                            self._toggle_collapse_at_block(block)
+                            return
+
             # The display tokens, e.g. "☐ " / "☑ " (icon + trailing space)
             unchecked = f"{self._CHECK_UNCHECKED_DISPLAY} "
             checked = f"{self._CHECK_CHECKED_DISPLAY} "
@@ -1789,6 +1847,307 @@ class MarkdownEditor(QTextEdit):
         cursor.insertImage(img_format)
         cursor.insertText("\n")  # Add newline after image
 
+    # ========== Collapse / Expand (folding) ==========
+
+    def _parse_collapse_header(self, line: str) -> Optional[tuple[str, bool]]:
+        # If line is a collapse header, return (indent, is_collapsed)
+        m = self._COLLAPSE_HEADER_RE.match(line)
+        if not m:
+            return None
+        indent = m.group(1)
+        arrow = m.group(2)
+        return (indent, arrow == self._COLLAPSE_ARROW_COLLAPSED)
+
+    def _is_collapse_end_marker(self, line: str) -> bool:
+        return bool(self._COLLAPSE_END_RE.match(line))
+
+    def _set_block_visible(self, block: QTextBlock, visible: bool) -> None:
+        """Hide/show a QTextBlock and nudge layout to update.
+
+        When folding, we set lineCount=0 for hidden blocks (standard Qt recipe).
+        When showing again, we restore a sensible lineCount based on the block's
+        current layout so the document relayout doesn't glitch.
+        """
+        if not block.isValid():
+            return
+        if block.isVisible() == visible:
+            return
+
+        block.setVisible(visible)
+
+        try:
+            if not visible:
+                # Hidden blocks should contribute no height.
+                block.setLineCount(0)  # type: ignore[attr-defined]
+            else:
+                # Restore an accurate lineCount if we can.
+                layout = block.layout()
+                lc = 1
+                try:
+                    lc = int(layout.lineCount()) if layout is not None else 1
+                except Exception:
+                    lc = 1
+                block.setLineCount(max(1, lc))  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        doc = self.document()
+        if doc is not None:
+            doc.markContentsDirty(block.position(), block.length())
+
+    def _find_collapse_end_block(
+        self, header_block: QTextBlock
+    ) -> Optional[QTextBlock]:
+        # Find matching end marker for a header (supports nesting)
+        if not header_block.isValid():
+            return None
+
+        depth = 1
+        b = header_block.next()
+        while b.isValid():
+            line = b.text()
+            if self._COLLAPSE_HEADER_RE.match(line):
+                depth += 1
+            elif self._is_collapse_end_marker(line):
+                depth -= 1
+                if depth == 0:
+                    return b
+            b = b.next()
+        return None
+
+    def _set_collapse_header_state(
+        self, header_block: QTextBlock, collapsed: bool
+    ) -> None:
+        parsed = self._parse_collapse_header(header_block.text())
+        if not parsed:
+            return
+        indent, _ = parsed
+        arrow = (
+            self._COLLAPSE_ARROW_COLLAPSED
+            if collapsed
+            else self._COLLAPSE_ARROW_EXPANDED
+        )
+        label = (
+            self._COLLAPSE_LABEL_EXPAND if collapsed else self._COLLAPSE_LABEL_COLLAPSE
+        )
+        new_line = f"{indent}{arrow} {label}"
+
+        # Replace *only* the text inside this block (not the paragraph separator),
+        # to avoid any chance of the header visually "joining" adjacent lines.
+        doc = self.document()
+        if doc is None:
+            return
+
+        cursor = QTextCursor(doc)
+        cursor.setPosition(header_block.position())
+        cursor.beginEditBlock()
+        cursor.movePosition(
+            QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
+        )
+        cursor.insertText(new_line)
+        cursor.endEditBlock()
+
+    def _toggle_collapse_at_block(self, header_block: QTextBlock) -> None:
+        parsed = self._parse_collapse_header(header_block.text())
+        if not parsed:
+            return
+
+        doc = self.document()
+        if doc is None:
+            return
+
+        block_num = header_block.blockNumber()
+        _, is_collapsed = parsed
+
+        end_block = self._find_collapse_end_block(header_block)
+        if end_block is None:
+            return
+
+        # Flip header arrow
+        self._set_collapse_header_state(header_block, collapsed=not is_collapsed)
+
+        # Refresh folding so nested regions keep their state
+        self._refresh_collapse_folding()
+
+        # Re-resolve the header block after edits/layout changes
+        hb = doc.findBlockByNumber(block_num)
+        pos = hb.position() if hb.isValid() else header_block.position()
+
+        # Keep caret on the header (start of line)
+        c = self.textCursor()
+        c.setPosition(max(0, min(pos, max(0, doc.characterCount() - 1))))
+        self.setTextCursor(c)
+        self.setFocus()
+
+    def _remove_collapse_at_block(self, header_block: QTextBlock) -> None:
+        # Remove a collapse wrapper (keep content, delete header + end marker)
+        end_block = self._find_collapse_end_block(header_block)
+        if end_block is None:
+            return
+
+        doc = self.document()
+        if doc is None:
+            return
+
+        # Ensure content visible
+        b = header_block.next()
+        while b.isValid() and b != end_block:
+            self._set_block_visible(b, True)
+            b = b.next()
+
+        cur = QTextCursor(doc)
+        cur.beginEditBlock()
+
+        # Delete header block
+        cur.setPosition(header_block.position())
+        cur.select(QTextCursor.SelectionType.BlockUnderCursor)
+        cur.removeSelectedText()
+        cur.deleteChar()  # paragraph separator
+
+        # Find and delete the end marker block (scan forward)
+        probe = doc.findBlock(end_block.position())
+        b2 = probe
+        for _ in range(0, 50):
+            if not b2.isValid():
+                break
+            if self._is_collapse_end_marker(b2.text()):
+                cur.setPosition(b2.position())
+                cur.select(QTextCursor.SelectionType.BlockUnderCursor)
+                cur.removeSelectedText()
+                cur.deleteChar()
+                break
+            b2 = b2.next()
+
+        cur.endEditBlock()
+
+        self._refresh_collapse_folding()
+
+    def collapse_selection(self) -> None:
+        # Wrap the current selection in a collapsible region and collapse it
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            return
+
+        doc = self.document()
+        if doc is None:
+            return
+
+        sel_start = min(cursor.selectionStart(), cursor.selectionEnd())
+        sel_end = max(cursor.selectionStart(), cursor.selectionEnd())
+
+        # Defensive clamp (prevents QTextCursor::setPosition out-of-range in edge cases)
+        doc_end = max(0, doc.characterCount() - 1)
+        sel_start = max(0, min(sel_start, doc_end))
+        sel_end = max(0, min(sel_end, doc_end))
+
+        c1 = QTextCursor(doc)
+        c1.setPosition(sel_start)
+        start_block = c1.block()
+
+        c2 = QTextCursor(doc)
+        c2.setPosition(sel_end)
+        end_block = c2.block()
+
+        # If the selection ends exactly at the start of a block, treat the
+        # previous block as the "end" (Qt selections often report the start
+        # of the next block as selectionEnd()).
+        if (
+            sel_end > sel_start
+            and end_block.isValid()
+            and sel_end == end_block.position()
+            and sel_end > 0
+        ):
+            c2.setPosition(sel_end - 1)
+            end_block = c2.block()
+
+        # Expand to whole blocks
+        start_pos = start_block.position()
+        end_pos_raw = end_block.position() + end_block.length()
+        end_pos = min(end_pos_raw, max(0, doc.characterCount() - 1))
+
+        # Inherit indentation from the first selected line (useful inside lists)
+        m = re.match(r"^[ \t]*", start_block.text())
+        indent = m.group(0) if m else ""
+
+        header_line = (
+            f"{indent}{self._COLLAPSE_ARROW_COLLAPSED} {self._COLLAPSE_LABEL_EXPAND}"
+        )
+        end_marker_line = f"{indent}{self._COLLAPSE_END_MARKER}"
+
+        edit = QTextCursor(doc)
+        edit.beginEditBlock()
+
+        # Insert end marker AFTER selection first (keeps start positions stable)
+        edit.setPosition(end_pos)
+
+        # If the computed end position fell off the end of the document (common
+        # when the selection includes the last line without a trailing newline),
+        # ensure the end marker starts on its own line.
+        if end_pos_raw > end_pos and edit.position() > 0:
+            prev = doc.characterAt(edit.position() - 1)
+            if prev not in ("\n", "\u2029"):
+                edit.insertText("\n")
+
+        # Also ensure we are not mid-line (marker should be its own block).
+        if edit.position() > 0:
+            prev = doc.characterAt(edit.position() - 1)
+            if prev not in ("\n", "\u2029"):
+                edit.insertText("\n")
+
+        edit.insertText(end_marker_line + "\n")
+
+        # Insert header BEFORE selection
+        edit.setPosition(start_pos)
+        edit.insertText(header_line + "\n")
+        edit.endEditBlock()
+
+        self._refresh_collapse_folding()
+
+        # Caret on header
+        header_block = doc.findBlock(start_pos)
+        c = self.textCursor()
+        c.setPosition(header_block.position())
+        self.setTextCursor(c)
+        self.setFocus()
+
+    def _refresh_collapse_folding(self) -> None:
+        # Apply folding to all collapse regions based on their arrow state
+        doc = self.document()
+        if doc is None:
+            return
+
+        # Show everything except end markers (always hidden)
+        b = doc.begin()
+        while b.isValid():
+            if self._is_collapse_end_marker(b.text()):
+                self._set_block_visible(b, False)
+            else:
+                self._set_block_visible(b, True)
+            b = b.next()
+
+        # Hide content for any header that is currently collapsed
+        b = doc.begin()
+        while b.isValid():
+            parsed = self._parse_collapse_header(b.text())
+            if parsed and parsed[1] is True:
+                end_block = self._find_collapse_end_block(b)
+                if end_block is None:
+                    b = b.next()
+                    continue
+
+                inner = b.next()
+                while inner.isValid() and inner != end_block:
+                    self._set_block_visible(inner, False)
+                    inner = inner.next()
+
+                self._set_block_visible(end_block, False)
+                b = end_block
+            b = b.next()
+
+        # Force a full relayout after visibility changes (prevents visual jitter)
+        doc.markContentsDirty(0, doc.characterCount())
+        self.viewport().update()
+
     # ========== Context Menu Support ==========
 
     def contextMenuEvent(self, event):
@@ -1830,6 +2189,36 @@ class MarkdownEditor(QTextEdit):
             delete_action.triggered.connect(lambda: self._delete_code_block(block))
             menu.addAction(delete_action)
 
+            menu.addSeparator()
+
+        # Collapse / Expand actions
+        header_parsed = self._parse_collapse_header(block.text())
+        if header_parsed:
+            _indent, is_collapsed = header_parsed
+
+            menu.addSeparator()
+
+            toggle_label = (
+                strings._("expand") if is_collapsed else strings._("collapse")
+            )
+            toggle_action = QAction(toggle_label, self)
+            toggle_action.triggered.connect(
+                lambda checked=False, b=block: self._toggle_collapse_at_block(b)
+            )
+            menu.addAction(toggle_action)
+
+            remove_action = QAction(strings._("remove_collapse"), self)
+            remove_action.triggered.connect(
+                lambda checked=False, b=block: self._remove_collapse_at_block(b)
+            )
+            menu.addAction(remove_action)
+
+            menu.addSeparator()
+
+        if self.textCursor().hasSelection():
+            collapse_sel_action = QAction(strings._("collapse_selection"), self)
+            collapse_sel_action.triggered.connect(self.collapse_selection)
+            menu.addAction(collapse_sel_action)
             menu.addSeparator()
 
         # Add standard context menu actions

@@ -12,6 +12,11 @@ It is designed to treat each day as its own 'page', complete with Markdown rende
 search, reminders and time logging for those of us who need to keep track of not just TODOs, but
 also how long we spent on them.
 
+For those who rely on that time logging for work, there is also an Invoicing feature that can
+generate invoices of that time spent.
+
+There is also support for embedding documents in a file manager.
+
 It uses SQLCipher as a drop-in replacement for SQLite3.
 
 This means that the underlying database for the notebook is encrypted at rest.
@@ -52,16 +57,18 @@ report from within the app, or optionally to check for new versions to upgrade t
 </div>
 
 
-## Some of the features
+## Features
 
  * Data is encrypted at rest
  * Encryption key is prompted for and never stored, unless user chooses to via Settings
  * All changes are version controlled, with ability to view/diff versions, revert or delete revisions
- * Automatic rendering of basic Markdown syntax
  * Tabs are supported - right-click on a date from the calendar to open it in a new tab.
+ * Automatic rendering of basic Markdown syntax
+ * Basic code block editing/highlighting
+ * Ability to collapse/expand sections of text
+ * Ability to increase/decrease font size
  * Images are supported
  * Search all pages, or find text on current page
- * Add and manage tags
  * Automatic periodic saving (or explicitly save)
  * Automatic locking of the app after a period of inactivity (default 15 min)
  * Rekey the database (change the password)
@@ -69,11 +76,12 @@ report from within the app, or optionally to check for new versions to upgrade t
  * Backup the database to encrypted SQLCipher format (which can then be loaded back in to a Bouquin)
  * Dark and light theme support
  * Automatically generate checkboxes when typing 'TODO'
- * It is possible to automatically move unchecked checkboxes from the last 7 days to the next weekday.
+ * It is possible to automatically move unchecked checkboxes from the last 7 days to the next day.
  * English, French and Italian locales provided
- * Ability to set reminder alarms (which will be flashed as the reminder)
- * Ability to log time per day for different projects/activities, pomodoro-style log timer and timesheet reports
+ * Ability to set reminder alarms (which will be flashed as the reminder or can be sent as webhooks/email notifications)
+ * Ability to log time per day for different projects/activities, pomodoro-style log timer, timesheet reports and invoicing of time spent
  * Ability to store and tag documents (tied to Projects, same as the Time Logging system). The documents are stored embedded in the encrypted database.
+ * Add and manage tags on pages and documents
 
 
 ## How to install
@@ -92,7 +100,6 @@ sudo apt update
 sudo apt install bouquin
 ```
 
-
 ### From PyPi/pip
 
  * `pip install bouquin`
@@ -108,13 +115,4 @@ sudo apt install bouquin
  * Run `poetry install` to install dependencies
  * Run `poetry run bouquin` to start the application.
 
-### From the releases page
-
- * Download the whl and run it
-
-## How to run the tests
-
- * Clone the repo
- * Ensure you have poetry installed
- * Run `poetry install --with test`
- * Run `./tests.sh`
+Alternatively, you can download the source code and wheels from Releases as well.

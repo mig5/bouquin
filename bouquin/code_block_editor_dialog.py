@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -32,6 +34,12 @@ class CodeEditorWithLineNumbers(QPlainTextEdit):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # Allow Tab to insert indentation (not move focus between widgets)
+        self.setTabChangesFocus(False)
+
+        # Track whether we just auto-inserted indentation on Enter
+        self._last_enter_was_empty_indent = False
+
         self._line_number_area = _LineNumberArea(self)
 
         self.blockCountChanged.connect(self._update_line_number_area_width)
@@ -139,6 +147,48 @@ class CodeEditorWithLineNumbers(QPlainTextEdit):
             top = bottom
             bottom = top + self.blockBoundingRect(block).height()
             block_number += 1
+
+    def keyPressEvent(self, event):  # type: ignore[override]
+        """Auto-retain indentation on newlines (Tab/space) like the markdown editor.
+
+        Rules:
+        - If the current line is indented, Enter inserts a newline + the same indent.
+        - If the current line contains only indentation, a *second* Enter clears the indent
+          and starts an unindented line (similar to exiting bullets/checkboxes).
+        """
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            cursor = self.textCursor()
+            block_text = cursor.block().text()
+            indent = re.match(r"[ \t]*", block_text).group(0)  # type: ignore[union-attr]
+
+            if indent:
+                rest = block_text[len(indent) :]
+                indent_only = rest.strip() == ""
+
+                if indent_only and self._last_enter_was_empty_indent:
+                    # Second Enter on an indentation-only line: remove that line and
+                    # start a fresh, unindented line.
+                    cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+                    cursor.removeSelectedText()
+                    cursor.insertText("\n")
+                    self.setTextCursor(cursor)
+                    self._last_enter_was_empty_indent = False
+                    return
+
+                # First Enter: keep indentation
+                super().keyPressEvent(event)
+                self.textCursor().insertText(indent)
+                self._last_enter_was_empty_indent = True
+                return
+
+            # No indent -> normal Enter
+            self._last_enter_was_empty_indent = False
+            super().keyPressEvent(event)
+            return
+
+        # Any other key resets the empty-indent-enter flag
+        self._last_enter_was_empty_indent = False
+        super().keyPressEvent(event)
 
 
 class CodeBlockEditorDialog(QDialog):
