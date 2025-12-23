@@ -89,6 +89,12 @@ class MarkdownEditor(QTextEdit):
         # Track current list type for smart enter handling
         self._last_enter_was_empty = False
 
+        # Track "double-enter" behavior for indentation retention.
+        # If we auto-insert indentation on a new line, the next Enter on that
+        # now-empty indented line should remove the indentation and return to
+        # column 0 (similar to how lists exit on a second Enter).
+        self._last_enter_was_empty_indent = False
+
         # Track if we're currently updating text programmatically
         self._updating = False
 
@@ -1128,6 +1134,10 @@ class MarkdownEditor(QTextEdit):
             cursor = self.textCursor()
             current_line = self._get_current_line()
 
+            # Leading indentation (tabs/spaces) on the current line.
+            m_indent = re.match(r"^([ \t]*)", current_line)
+            line_indent = m_indent.group(1) if m_indent else ""
+
             # Check if we're in a code block
             current_block = cursor.block()
             line_text = current_block.text()
@@ -1217,13 +1227,43 @@ class MarkdownEditor(QTextEdit):
                 # Insert newline and continue the list
                 super().keyPressEvent(event)
                 cursor = self.textCursor()
-                cursor.insertText(prefix)
+                # Preserve any leading indentation so nested lists keep their level.
+                cursor.insertText(line_indent + prefix)
+                self._last_enter_was_empty_indent = False
                 return
             else:
+                # Not a list: support indentation retention. If a line starts
+                # with indentation (tabs/spaces), carry that indentation to the
+                # next line. A *second* Enter on an empty indented line resets
+                # back to column 0.
+                if line_indent:
+                    rest = current_line[len(line_indent) :]
+                    indent_only = rest.strip() == ""
+
+                    if indent_only and self._last_enter_was_empty_indent:
+                        # Second Enter on an empty indented line: remove the
+                        # indentation-only line and start a fresh, unindented line.
+                        cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+                        cursor.removeSelectedText()
+                        cursor.insertText("\n")
+                        self._last_enter_was_empty_indent = False
+                        self._last_enter_was_empty = False
+                        return
+
+                    # First Enter (or a non-empty indented line): keep the indent.
+                    super().keyPressEvent(event)
+                    cursor = self.textCursor()
+                    cursor.insertText(line_indent)
+                    self._last_enter_was_empty_indent = True
+                    self._last_enter_was_empty = False
+                    return
+
                 self._last_enter_was_empty = False
+                self._last_enter_was_empty_indent = False
         else:
             # Any other key resets the empty enter flag
             self._last_enter_was_empty = False
+            self._last_enter_was_empty_indent = False
 
         # Default handling
         super().keyPressEvent(event)

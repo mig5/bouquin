@@ -3,6 +3,7 @@
  * Add .desktop file for Debian
  * Fix Pomodoro timer rounding so it rounds up to 0.25, but rounds to closest quarter (up or down) for minutes higher than that, instead of always up to next quarter.
  * Allow setting a code block on a line that already has text (it will start a newline for the codeblock)
+ * Retain indentation when tab is used to indent a line, unless enter is pressed twice or user deletes the indentation
 
 # 0.7.5
 
