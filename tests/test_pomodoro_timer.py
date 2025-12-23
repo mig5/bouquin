@@ -276,7 +276,7 @@ def test_pomodoro_manager_on_timer_stopped_minimum_hours(
 
 
 def test_pomodoro_manager_on_timer_stopped_rounding(qtbot, app, fresh_db, monkeypatch):
-    """Elapsed time should be rounded up to the nearest 0.25 hours."""
+    """Elapsed time should be rounded to a 0.25-hour increment."""
     parent = DummyMainWindow(app)
     qtbot.addWidget(parent)
     qtbot.addWidget(parent.time_log)
@@ -298,6 +298,31 @@ def test_pomodoro_manager_on_timer_stopped_rounding(qtbot, app, fresh_db, monkey
         assert hours_set > 0
         # Should be a multiple of 0.25
         assert hours_set * 4 == int(hours_set * 4)
+
+
+def test_seconds_to_logged_hours_nearest_quarter_rounding():
+    """Seconds -> hours uses nearest-quarter rounding with a 15-min minimum."""
+    # Import the pure conversion helper directly (no Qt required)
+    from bouquin.pomodoro_timer import PomodoroManager
+
+    # <15 minutes always rounds up to 0.25
+    assert PomodoroManager._seconds_to_logged_hours(1) == 0.25
+    assert PomodoroManager._seconds_to_logged_hours(899) == 0.25
+
+    # 15 minutes exact
+    assert PomodoroManager._seconds_to_logged_hours(900) == 0.25
+
+    # Examples from the spec: closest quarter-hour
+    # 33 minutes -> closer to 0.50 than 0.75
+    assert PomodoroManager._seconds_to_logged_hours(33 * 60) == 0.50
+    # 40 minutes -> closer to 0.75 than 0.50
+    assert PomodoroManager._seconds_to_logged_hours(40 * 60) == 0.75
+
+    # Halfway case: 22.5 min is exactly between 0.25 and 0.50 -> round up
+    assert PomodoroManager._seconds_to_logged_hours(int(22.5 * 60)) == 0.50
+
+    # Sanity: 1 hour stays 1.0
+    assert PomodoroManager._seconds_to_logged_hours(60 * 60) == 1.00
 
 
 def test_pomodoro_manager_on_timer_stopped_prefills_note(

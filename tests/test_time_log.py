@@ -1211,6 +1211,26 @@ def test_time_report_dialog_default_date_range(qtbot, fresh_db):
     assert dialog.to_date.date() == today
 
 
+def test_time_report_dialog_last_month_preset_sets_full_previous_month(qtbot, fresh_db):
+    """Selecting 'Last month' sets the date range to the previous calendar month."""
+    strings.load_strings("en")
+    dialog = TimeReportDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    idx = dialog.range_preset.findData("last_month")
+    assert idx != -1
+
+    today = QDate.currentDate()
+    start_of_this_month = QDate(today.year(), today.month(), 1)
+    expected_start = start_of_this_month.addMonths(-1)
+    expected_end = start_of_this_month.addDays(-1)
+
+    dialog.range_preset.setCurrentIndex(idx)
+
+    assert dialog.from_date.date() == expected_start
+    assert dialog.to_date.date() == expected_end
+
+
 def test_time_report_dialog_run_report(qtbot, fresh_db):
     """Run a time report."""
     strings.load_strings("en")

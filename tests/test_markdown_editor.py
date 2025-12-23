@@ -150,6 +150,53 @@ def test_enter_on_nonempty_list_continues(qtbot, editor):
     assert "\n\u2022 " in txt
 
 
+def test_tab_indentation_is_retained_on_newline(editor, qtbot):
+    """Pressing Enter on an indented line should retain the indentation."""
+    qtbot.addWidget(editor)
+    editor.show()
+    editor.setPlainText("\tfoo")
+    editor.moveCursor(QTextCursor.End)
+
+    qtbot.keyPress(editor, Qt.Key_Return)
+    qtbot.wait(0)
+
+    assert editor.toPlainText().endswith("\tfoo\n\t")
+
+
+def test_double_enter_on_empty_indented_line_resets_indent(editor, qtbot):
+    """A second Enter on an indentation-only line should reset to column 0."""
+    qtbot.addWidget(editor)
+    editor.show()
+    editor.setPlainText("\tfoo")
+    editor.moveCursor(QTextCursor.End)
+
+    # First Enter inserts a new indented line
+    qtbot.keyPress(editor, Qt.Key_Return)
+    qtbot.wait(0)
+    assert editor.toPlainText().endswith("\tfoo\n\t")
+
+    # Second Enter on the now-empty indented line removes the indent
+    qtbot.keyPress(editor, Qt.Key_Return)
+    qtbot.wait(0)
+
+    assert editor.toPlainText().endswith("\tfoo\n\n")
+    # Cursor should be on a fresh unindented blank line
+    assert editor.textCursor().block().text() == ""
+
+
+def test_nested_list_continuation_preserves_indentation(editor, qtbot):
+    """Enter on an indented bullet should keep indent + bullet prefix."""
+    qtbot.addWidget(editor)
+    editor.show()
+    editor.from_markdown("\t- item")
+    editor.moveCursor(QTextCursor.End)
+
+    qtbot.keyPress(editor, Qt.Key_Return)
+    qtbot.wait(0)
+
+    assert "\n\t\u2022 " in editor.toPlainText()
+
+
 def test_enter_on_empty_list_marks_empty(qtbot, editor):
     qtbot.addWidget(editor)
     editor.show()
@@ -179,6 +226,116 @@ def test_triple_backtick_triggers_code_dialog_but_no_block_on_empty_code(editor,
     # the dialog with empty code, no fenced code block is inserted.
     assert "```" not in t
     assert t == ""
+
+
+def _find_first_block(doc, predicate):
+    b = doc.begin()
+    while b.isValid():
+        if predicate(b):
+            return b
+        b = b.next()
+    return None
+
+
+def test_collapse_selection_wraps_and_hides_blocks(editor, qtbot):
+    """Collapsing a selection should insert header/end marker and hide content."""
+    qtbot.addWidget(editor)
+    editor.show()
+    editor.setPlainText("a\nb\nc\n")
+    doc = editor.document()
+
+    # Select lines b..c
+    b_block = doc.findBlockByNumber(1)
+    c_block = doc.findBlockByNumber(2)
+    cur = editor.textCursor()
+    cur.setPosition(b_block.position())
+    cur.setPosition(c_block.position() + c_block.length() - 1, QTextCursor.KeepAnchor)
+    editor.setTextCursor(cur)
+
+    editor.collapse_selection()
+    qtbot.wait(0)
+
+    # Header and end marker should exist as their own blocks
+    header = _find_first_block(doc, lambda bl: bl.text().lstrip().startswith("▸"))
+    assert header is not None
+    assert "▸" in header.text() and "expand" in header.text()
+
+    end_marker = _find_first_block(doc, lambda bl: "bouquin:collapse:end" in bl.text())
+    assert end_marker is not None
+
+    # Inner blocks should be hidden; end marker always hidden
+    inner1 = header.next()
+    inner2 = inner1.next()
+    assert inner1.text() == "b"
+    assert inner2.text() == "c"
+    assert inner1.isVisible() is False
+    assert inner2.isVisible() is False
+    assert end_marker.isVisible() is False
+
+
+def test_toggle_collapse_expands_and_updates_header(editor, qtbot):
+    """Toggling a collapse header should reveal hidden blocks and flip label."""
+    qtbot.addWidget(editor)
+    editor.show()
+    editor.setPlainText("a\nb\nc\n")
+    doc = editor.document()
+
+    # Select b..c and collapse
+    b_block = doc.findBlockByNumber(1)
+    c_block = doc.findBlockByNumber(2)
+    cur = editor.textCursor()
+    cur.setPosition(b_block.position(), QTextCursor.MoveMode.MoveAnchor)
+    cur.setPosition(
+        c_block.position() + c_block.length() - 1, QTextCursor.MoveMode.KeepAnchor
+    )
+    editor.setTextCursor(cur)
+    editor.collapse_selection()
+    qtbot.wait(0)
+
+    header = _find_first_block(doc, lambda bl: bl.text().lstrip().startswith("▸"))
+    assert header is not None
+
+    # Toggle to expand
+    editor._toggle_collapse_at_block(header)
+    qtbot.wait(0)
+
+    header2 = doc.findBlock(header.position())
+    assert "▾" in header2.text() and "collapse" in header2.text()
+    assert header2.next().isVisible() is True
+    assert header2.next().next().isVisible() is True
+
+
+def test_collapse_selection_without_trailing_newline_keeps_marker_on_own_line(
+    editor, qtbot
+):
+    """Selections reaching EOF without a trailing newline should still fold correctly."""
+    qtbot.addWidget(editor)
+    editor.show()
+    editor.setPlainText("a\nb\nc")  # no trailing newline
+    doc = editor.document()
+
+    # Bottom-up selection of last two lines (c..b)
+    b_block = doc.findBlockByNumber(1)
+    c_block = doc.findBlockByNumber(2)
+    cur = editor.textCursor()
+    cur.setPosition(c_block.position() + len(c_block.text()))
+    cur.setPosition(b_block.position(), QTextCursor.KeepAnchor)
+    editor.setTextCursor(cur)
+
+    editor.collapse_selection()
+    qtbot.wait(0)
+
+    end_marker = _find_first_block(doc, lambda bl: "bouquin:collapse:end" in bl.text())
+    assert end_marker is not None
+
+    # End marker is its own block, and remains hidden
+    assert end_marker.text().strip() == "<!-- bouquin:collapse:end -->"
+    assert end_marker.isVisible() is False
+
+    # The last content line should be hidden (folded)
+    header = _find_first_block(doc, lambda bl: bl.text().lstrip().startswith("▸"))
+    assert header is not None
+    assert header.next().isVisible() is False
 
 
 def test_down_escapes_from_last_code_line(editor, qtbot):

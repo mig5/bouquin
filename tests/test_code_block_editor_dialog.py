@@ -3,8 +3,8 @@ from bouquin.code_block_editor_dialog import (
     CodeBlockEditorDialog,
     CodeEditorWithLineNumbers,
 )
-from PySide6.QtCore import QRect, QSize
-from PySide6.QtGui import QFont, QPaintEvent
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QFont, QPaintEvent, QTextCursor
 from PySide6.QtWidgets import QPushButton
 
 
@@ -323,3 +323,42 @@ def test_code_editor_viewport_margins(qtbot, app):
     assert margins.top() == 0
     assert margins.right() == 0
     assert margins.bottom() == 0
+
+
+def test_code_editor_retains_indentation_on_enter(qtbot, app):
+    """Pressing Enter on an indented line retains indentation in code editor."""
+    editor = CodeEditorWithLineNumbers()
+    qtbot.addWidget(editor)
+    editor.setPlainText("\tfoo")
+    editor.show()
+
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    qtbot.keyPress(editor, Qt.Key_Return)
+    qtbot.wait(0)
+
+    assert editor.toPlainText().endswith("\tfoo\n\t")
+
+
+def test_code_editor_double_enter_on_empty_indent_resets(qtbot, app):
+    """Second Enter on an indentation-only line clears the indent in code editor."""
+    editor = CodeEditorWithLineNumbers()
+    qtbot.addWidget(editor)
+    editor.setPlainText("\tfoo")
+    editor.show()
+
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.End)
+    editor.setTextCursor(cursor)
+
+    qtbot.keyPress(editor, Qt.Key_Return)
+    qtbot.wait(0)
+    assert editor.toPlainText().endswith("\tfoo\n\t")
+
+    qtbot.keyPress(editor, Qt.Key_Return)
+    qtbot.wait(0)
+
+    assert editor.toPlainText().endswith("\tfoo\n\n")
+    assert editor.textCursor().block().text() == ""
