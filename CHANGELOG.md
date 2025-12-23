@@ -6,6 +6,7 @@
  * Retain indentation when tab is used to indent a line, unless enter is pressed twice or user deletes the indentation
  * Add missing strings (for English and French)
  * Add 'Last Month' date range for timesheet reports
+ * Don't offer to download latest AppImage unless we are running as an AppImage already
 
 # 0.7.5
 

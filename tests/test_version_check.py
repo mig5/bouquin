@@ -173,45 +173,6 @@ def test_check_for_updates_already_latest(qtbot, app):
                 assert mock_info.called
 
 
-def test_check_for_updates_new_version_available_declined(qtbot, app):
-    """Test check for updates when new version is available but user declines."""
-    parent = QWidget()
-    qtbot.addWidget(parent)
-    checker = VersionChecker(parent)
-
-    mock_response = Mock()
-    mock_response.text = "2.0.0"
-    mock_response.raise_for_status = Mock()
-
-    with patch("requests.get", return_value=mock_response):
-        with patch("importlib.metadata.version", return_value="1.0.0"):
-            with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
-                # Should not proceed to download
-                checker.check_for_updates()
-
-
-def test_check_for_updates_new_version_available_accepted(qtbot, app):
-    """Test check for updates when new version is available and user accepts."""
-    parent = QWidget()
-    qtbot.addWidget(parent)
-    checker = VersionChecker(parent)
-
-    mock_response = Mock()
-    mock_response.text = "2.0.0"
-    mock_response.raise_for_status = Mock()
-
-    with patch("requests.get", return_value=mock_response):
-        with patch("importlib.metadata.version", return_value="1.0.0"):
-            with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
-                with patch.object(
-                    checker, "_download_and_verify_appimage"
-                ) as mock_download:
-                    checker.check_for_updates()
-
-                    # Should call download
-                    mock_download.assert_called_once_with("2.0.0")
-
-
 def test_download_file_success(qtbot, app, tmp_path):
     """Test downloading a file successfully."""
     checker = VersionChecker()

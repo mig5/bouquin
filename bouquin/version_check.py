@@ -95,6 +95,9 @@ class VersionChecker:
         """
         return self._parse_version(available) > self._parse_version(current)
 
+    def _running_in_appimage(self) -> bool:
+        return "APPIMAGE" in os.environ
+
     # ---------- Public entrypoint for Help → Version ---------- #
 
     def show_version_dialog(self) -> None:
@@ -114,8 +117,8 @@ class VersionChecker:
         check_button = box.addButton(
             strings._("check_for_updates"), QMessageBox.ActionRole
         )
-        box.addButton(QMessageBox.Close)
 
+        box.addButton(QMessageBox.Close)
         box.exec()
 
         if box.clickedButton() is check_button:
@@ -159,21 +162,32 @@ class VersionChecker:
             return
 
         # Newer version is available
-        reply = QMessageBox.question(
-            self._parent,
-            strings._("update"),
-            (
-                strings._("there_is_a_new_version_available")
-                + available_raw
-                + "\n\n"
-                + strings._("download_the_appimage")
-            ),
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
 
-        self._download_and_verify_appimage(available_raw)
+        if self._running_in_appimage():
+            # If running in an AppImage, offer to download the new AppImage
+            reply = QMessageBox.question(
+                self._parent,
+                strings._("update"),
+                (
+                    strings._("there_is_a_new_version_available")
+                    + available_raw
+                    + "\n\n"
+                    + strings._("download_the_appimage")
+                ),
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            self._download_and_verify_appimage(available_raw)
+        else:
+            # If not running in an AppImage, just report that there's a new version.
+            QMessageBox.information(
+                self._parent,
+                strings._("update"),
+                (strings._("there_is_a_new_version_available") + available_raw),
+            )
+            return
 
     # ---------- Download + verification helpers ---------- #
     def _download_file(
