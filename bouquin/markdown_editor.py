@@ -919,8 +919,10 @@ class MarkdownEditor(QTextEdit):
             before = line[:pos_in_block]
 
             # "before" currently contains whatever's before the *third* backtick.
-            # We trigger only when the line is (whitespace + "``") before the caret.
-            if before.endswith("``") and before.strip() == "``":
+            # Trigger when the user types a *third consecutive* backtick anywhere on the line.
+            # (We require the run immediately before the caret to be exactly two backticks,
+            # so we don't trigger on 4+ backticks.)
+            if before.endswith("``") and (len(before) < 3 or before[-3] != "`"):
                 doc = self.document()
                 if doc is not None:
                     # Remove the two backticks that were already typed
