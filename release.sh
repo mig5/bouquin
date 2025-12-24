@@ -85,14 +85,14 @@ echo "==> Updating RPM repo..."
 mkdir -p "$RPM_REPO"
 cp "${BUILD_OUTPUT}/rpm/"*.rpm "$RPM_REPO/"
 
+for file in `ls -1 "$PWD/dist/rpm"`; do
+  rpmsign --addsign "$PWD/dist/rpm/$file"
+done
+
 createrepo_c "$RPM_REPO"
 
 echo "==> Signing repomd.xml..."
 qubes-gpg-client --local-user "$KEYID" --detach-sign --armor "$RPM_REPO/repodata/repomd.xml" > "$RPM_REPO/repodata/repomd.xml.asc"
-
-for file in `ls -1 "$PWD/dist/rpm"`; do
-  rpmsign --addsign "$PWD/dist/rpm/$file"
-done
 
 echo "==> Syncing repo to server..."
 rsync -aHPvz --exclude=.git --delete "$REPO_ROOT/" "$REMOTE/"
