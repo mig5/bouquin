@@ -83,11 +83,12 @@ KEYID="00AE817C24A10C2540461A9C1D7CDE0234DB458D"
 
 echo "==> Updating RPM repo..."
 mkdir -p "$RPM_REPO"
-cp "${BUILD_OUTPUT}/rpm/"*.rpm "$RPM_REPO/"
 
-for file in `ls -1 "$PWD/dist/rpm"`; do
-  rpmsign --addsign "$PWD/dist/rpm/$file"
+for file in `ls -1 "${BUILD_OUTPUT}/rpm"`; do
+  rpmsign --addsign "${BUILD_OUTPUT}/rpm/$file"
 done
+
+cp "${BUILD_OUTPUT}/rpm/"*.rpm "$RPM_REPO/"
 
 createrepo_c "$RPM_REPO"
 
