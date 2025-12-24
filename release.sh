@@ -73,6 +73,8 @@ done
 sudo apt-get -y install createrepo-c rpm
 docker build -f Dockerfile.rpmbuild -t bouquin-rpm:f42 --progress=plain .
 docker run --rm -v "$PWD":/src -v "$PWD/dist/rpm":/out -v "$HOME/git/bouquin-sqlcipher4/dist/rpm":/deps:ro bouquin-rpm:f42
+sudo chown -R "${USER}" "$PWD/dist"
+
 REPO_ROOT="${HOME}/git/repo_rpm"
 RPM_REPO="${REPO_ROOT}/rpm/x86_64"
 BUILD_OUTPUT="${HOME}/git/bouquin/dist"
@@ -87,6 +89,10 @@ createrepo_c "$RPM_REPO"
 
 echo "==> Signing repomd.xml..."
 qubes-gpg-client --local-user "$KEYID" --detach-sign --armor "$RPM_REPO/repodata/repomd.xml" > "$RPM_REPO/repodata/repomd.xml.asc"
+
+for file in `ls -1 "$PWD/dist/rpm"`; do
+  rpmsign --addsign "$PWD/dist/rpm/$file"
+done
 
 echo "==> Syncing repo to server..."
 rsync -aHPvz --exclude=.git --delete "$REPO_ROOT/" "$REMOTE/"
