@@ -1,0 +1,108 @@
+# syntax=docker/dockerfile:1
+FROM fedora:42
+
+# rpmbuild in a container does not auto-install BuildRequires. Since we're
+# building directly in Docker (not mock), we pre-install the common deps that
+# Fedora's pyproject macros will require for Bouquin.
+#
+# NOTE: bouquin also needs python3dist(sqlcipher4) at build time (because
+# %pyproject_buildrequires includes runtime deps). That one is NOT in Fedora;
+# we install it from /deps.
+RUN set -eux; \
+    dnf -y update; \
+    dnf -y install \
+        rpm-build rpmdevtools \
+        redhat-rpm-config \
+        gcc \
+        make \
+        findutils \
+        tar \
+        gzip \
+        rsync \
+        python3 \
+        python3-devel \
+        python3-pip \
+        python3-setuptools \
+        python3-wheel \
+        pyproject-rpm-macros \
+        python3-rpm-macros \
+        python3-poetry-core \
+        desktop-file-utils \
+        python3-requests \
+        python3-markdown \
+        python3-pyside6 \
+        xcb-util-cursor ; \
+    dnf -y clean all
+
+RUN set -eux;   cat > /usr/local/bin/build-rpm <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SRC="${SRC:-/src}"
+WORKROOT="${WORKROOT:-/work}"
+OUT="${OUT:-/out}"
+DEPS_DIR="${DEPS_DIR:-/deps}"
+
+# Install bouquin-sqlcipher4 from local rpm
+# Filter out .src.rpm and debug* subpackages if present.
+if [ -d "${DEPS_DIR}" ] && compgen -G "${DEPS_DIR}/*.rpm" > /dev/null; then
+  mapfile -t rpms < <(ls -1 "${DEPS_DIR}"/*.rpm | grep -vE '(\.src\.rpm$|-(debuginfo|debugsource)-)')
+  if [ "${#rpms[@]}" -gt 0 ]; then
+    echo "Installing dependency RPMs from ${DEPS_DIR}:"
+    printf '  - %s\n' "${rpms[@]}"
+    dnf -y install "${rpms[@]}"
+    dnf -y clean all
+  else
+    echo "NOTE: Only src/debug RPMs found in ${DEPS_DIR}; nothing installed." >&2
+  fi
+else
+  echo "NOTE: No RPMs found in ${DEPS_DIR}. If the build fails with missing python3dist(sqlcipher4)," >&2
+  echo "      mount your bouquin-sqlcipher4 RPM directory as -v <dir>:/deps" >&2
+fi
+
+mkdir -p "${WORKROOT}" "${OUT}"
+WORK="${WORKROOT}/src"
+rm -rf "${WORK}"
+mkdir -p "${WORK}"
+
+rsync -a --delete \
+  --exclude '.git' \
+  --exclude '.venv' \
+  --exclude 'dist' \
+  --exclude 'build' \
+  --exclude '__pycache__' \
+  --exclude '.pytest_cache' \
+  --exclude '.mypy_cache' \
+  "${SRC}/" "${WORK}/"
+
+cd "${WORK}"
+
+# Determine version from pyproject.toml unless provided
+if [ -n "${VERSION:-}" ]; then
+  ver="${VERSION}"
+else
+  ver="$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "([^"]+)".*/\1/')"
+fi
+
+TOPDIR="${WORKROOT}/rpmbuild"
+mkdir -p "${TOPDIR}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+
+tarball="${TOPDIR}/SOURCES/bouquin-${ver}.tar.gz"
+tar -czf "${tarball}" --transform "s#^#bouquin/#" .
+
+cp -v "rpm/bouquin.spec" "${TOPDIR}/SPECS/bouquin.spec"
+
+rpmbuild -ba "${TOPDIR}/SPECS/bouquin.spec" \
+  --define "_topdir ${TOPDIR}" \
+  --define "upstream_version ${ver}"
+
+shopt -s nullglob
+cp -v "${TOPDIR}"/RPMS/*/*.rpm "${OUT}/" || true
+cp -v "${TOPDIR}"/SRPMS/*.src.rpm "${OUT}/" || true
+echo "Artifacts copied to ${OUT}"
+EOF
+
+RUN chmod +x /usr/local/bin/build-rpm
+
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/build-rpm"]

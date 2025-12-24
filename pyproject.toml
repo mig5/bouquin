@@ -13,8 +13,8 @@ include = ["bouquin/locales/*.json", "bouquin/keys/mig5.asc", "bouquin/fonts/Not
 python = ">=3.10,<3.14"
 pyside6 = ">=6.8.1,<7.0.0"
 bouquin-sqlcipher4 = "^4.12.0"
-requests = "^2.32.5"
-markdown = "^3.10"
+requests = "^2.32.3"
+markdown = "^3.7"
 
 [tool.poetry.scripts]
 bouquin = "bouquin.__main__:main"
