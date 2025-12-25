@@ -98,6 +98,7 @@ class ToolBar(QToolBar):
         self.actNumbers.triggered.connect(self.numbersRequested)
         self.actCheckboxes = QAction("☑", self)
         self.actCheckboxes.setToolTip(strings._("toolbar_toggle_checkboxes"))
+        self.actCheckboxes.setCheckable(True)
         self.actCheckboxes.triggered.connect(self.checkboxesRequested)
 
         # Images
@@ -126,22 +127,14 @@ class ToolBar(QToolBar):
         self.actDocuments = QAction("📁", self)
         self.actDocuments.setToolTip(strings._("toolbar_documents"))
         self.actDocuments.triggered.connect(self.documentsRequested)
-
-        # Set exclusive buttons in QActionGroups
+        # Headings are mutually exclusive (like radio buttons)
         self.grpHeadings = QActionGroup(self)
         self.grpHeadings.setExclusive(True)
-        for a in (
-            self.actBold,
-            self.actItalic,
-            self.actStrike,
-            self.actH1,
-            self.actH2,
-            self.actH3,
-            self.actNormal,
-        ):
+        for a in (self.actH1, self.actH2, self.actH3, self.actNormal):
             a.setCheckable(True)
             a.setActionGroup(self.grpHeadings)
 
+        # List types are mutually exclusive
         self.grpLists = QActionGroup(self)
         self.grpLists.setExclusive(True)
         for a in (self.actBullets, self.actNumbers, self.actCheckboxes):

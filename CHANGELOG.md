@@ -1,3 +1,7 @@
+# 0.8.1
+
+ * Fix bold/italic/strikethrough styling in certain conditions when toolbar action is used.
+
 # 0.8.0
 
  * Add .desktop file for Debian

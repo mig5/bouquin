@@ -46,7 +46,7 @@ class MarkdownEditor(QTextEdit):
     _COLLAPSE_LABEL_COLLAPSE = "collapse"
     _COLLAPSE_LABEL_EXPAND = "expand"
     _COLLAPSE_END_MARKER = "<!-- bouquin:collapse:end -->"
-    # Accept either "collapse" or "expand" in the header text (older files used only "collapse")
+    # Accept either "collapse" or "expand" in the header text
     _COLLAPSE_HEADER_RE = re.compile(r"^([ \t]*)([▸▾])\s+(?:collapse|expand)\s*$")
     _COLLAPSE_END_RE = re.compile(r"^([ \t]*)<!--\s*bouquin:collapse:end\s*-->\s*$")
 
@@ -113,6 +113,9 @@ class MarkdownEditor(QTextEdit):
 
         # Track if we're currently updating text programmatically
         self._updating = False
+
+        # Track pending inline marker insertion (e.g. Italic with no selection)
+        self._pending_inline_marker: str | None = None
 
         # Help avoid double-click selecting of checkbox
         self._suppress_next_checkbox_double_click = False
@@ -928,6 +931,69 @@ class MarkdownEditor(QTextEdit):
 
         return None
 
+    def _maybe_skip_over_marker_run(self, key: Qt.Key) -> bool:
+        """Skip over common markdown marker runs when navigating with Left/Right.
+
+        This prevents the caret from landing *inside* runs like '**', '***', '__', '___' or '~~',
+        which can cause temporary toolbar-state flicker and makes navigation feel like it takes
+        "two presses" to get past closing markers.
+
+        Hold any modifier key (Shift/Ctrl/Alt/Meta) to disable this behavior.
+        """
+        c = self.textCursor()
+        if c.hasSelection():
+            return False
+
+        p = c.position()
+        doc_max = self._doc_max_pos()
+
+        # Right: run starts at the caret
+        if key == Qt.Key.Key_Right:
+            if p >= doc_max:
+                return False
+            ch = self._text_range(p, p + 1)
+            if ch not in ("*", "_", "~"):
+                return False
+
+            run = 0
+            while p + run < doc_max and self._text_range(p + run, p + run + 1) == ch:
+                run += 1
+
+            # Only skip multi-char runs (bold/strong/emphasis runs or strike)
+            if ch in ("*", "_") and run >= 2:
+                c.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, run)
+                self.setTextCursor(c)
+                return True
+            if ch == "~" and run == 2:
+                c.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, 2)
+                self.setTextCursor(c)
+                return True
+
+            return False
+
+        # Left: run ends at the caret
+        if key == Qt.Key.Key_Left:
+            if p <= 0:
+                return False
+            ch = self._text_range(p - 1, p)
+            if ch not in ("*", "_", "~"):
+                return False
+
+            run = 0
+            while p - 1 - run >= 0 and self._text_range(p - 1 - run, p - run) == ch:
+                run += 1
+
+            if ch in ("*", "_") and run >= 2:
+                c.movePosition(QTextCursor.Left, QTextCursor.MoveAnchor, run)
+                self.setTextCursor(c)
+                return True
+            if ch == "~" and run == 2:
+                c.movePosition(QTextCursor.Left, QTextCursor.MoveAnchor, 2)
+                self.setTextCursor(c)
+                return True
+
+        return False
+
     def keyPressEvent(self, event):
         """Handle special key events for markdown editing."""
         c = self.textCursor()
@@ -936,7 +1002,6 @@ class MarkdownEditor(QTextEdit):
         in_code = self._is_inside_code_block(block)
         is_fence_line = block.text().strip().startswith("```")
 
-        # --- NEW: 3rd backtick shortcut → open code block dialog ---
         # Only when we're *not* already in a code block or on a fence line.
         if event.text() == "`" and not (in_code or is_fence_line):
             line = block.text()
@@ -1000,6 +1065,14 @@ class MarkdownEditor(QTextEdit):
                 if not self._edit_code_block(block):
                     # Fallback if bounds couldn't be found for some reason.
                     super().keyPressEvent(event)
+                return
+
+        if (
+            event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right)
+            and event.modifiers() == Qt.KeyboardModifier.NoModifier
+            and not self.textCursor().hasSelection()
+        ):
+            if self._maybe_skip_over_marker_run(event.key()):
                 return
 
         # --- Step out of a code block with Down at EOF ---
@@ -1509,19 +1582,389 @@ class MarkdownEditor(QTextEdit):
 
     # ------------------------ Toolbar action handlers ------------------------
 
+    # ------------------------ Inline markdown helpers ------------------------
+
+    def _doc_max_pos(self) -> int:
+        # QTextDocument includes a trailing null character; cursor positions stop before it.
+        doc = self.document()
+        return max(0, doc.characterCount() - 1)
+
+    def _text_range(self, start: int, end: int) -> str:
+        """Return document text between [start, end) using QTextCursor indexing."""
+        doc_max = self._doc_max_pos()
+        start = max(0, min(start, doc_max))
+        end = max(0, min(end, doc_max))
+        if end < start:
+            start, end = end, start
+        tc = QTextCursor(self.document())
+        tc.setPosition(start)
+        tc.setPosition(end, QTextCursor.KeepAnchor)
+        return tc.selectedText()
+
+    def _selection_wrapped_by(
+        self,
+        markers: tuple[str, ...],
+        *,
+        require_singletons: bool = False,
+    ) -> str | None:
+        """
+        If the current selection is wrapped by any marker in `markers`, return the marker.
+
+        Supports both cases:
+          1) the selection itself includes the markers, e.g. "**bold**"
+          2) the selection is the inner text, with markers immediately adjacent in the doc.
+        """
+        c = self.textCursor()
+        if not c.hasSelection():
+            return None
+
+        sel = c.selectedText()
+        start = c.selectionStart()
+        end = c.selectionEnd()
+        doc_max = self._doc_max_pos()
+
+        # Case 1: selection includes markers
+        for m in markers:
+            lm = len(m)
+            if len(sel) >= 2 * lm and sel.startswith(m) and sel.endswith(m):
+                return m
+
+        # Case 2: markers adjacent to selection
+        for m in markers:
+            lm = len(m)
+            if start < lm or end + lm > doc_max:
+                continue
+            before = self._text_range(start - lm, start)
+            after = self._text_range(end, end + lm)
+            if before != m or after != m:
+                continue
+
+            if require_singletons and lm == 1:
+                # Ensure the single marker isn't part of a double/triple (e.g. "**" or "__")
+                ch = m
+                left_marker_pos = start - 1
+                right_marker_pos = end
+
+                if (
+                    left_marker_pos - 1 >= 0
+                    and self._text_range(left_marker_pos - 1, left_marker_pos) == ch
+                ):
+                    continue
+                if (
+                    right_marker_pos + 1 <= doc_max
+                    and self._text_range(right_marker_pos + 1, right_marker_pos + 2)
+                    == ch
+                ):
+                    continue
+
+            return m
+
+        return None
+
+    def _caret_between_markers(
+        self, marker: str, *, require_singletons: bool = False
+    ) -> bool:
+        """True if the caret is exactly between an opening and closing marker (e.g. **|**)."""
+        c = self.textCursor()
+        if c.hasSelection():
+            return False
+
+        p = c.position()
+        lm = len(marker)
+        doc_max = self._doc_max_pos()
+        if p < lm or p + lm > doc_max:
+            return False
+
+        before = self._text_range(p - lm, p)
+        after = self._text_range(p, p + lm)
+        if before != marker or after != marker:
+            return False
+
+        if require_singletons and lm == 1:
+            # Disallow if either side is adjacent to the same char (part of "**", "__", "***", etc.)
+            ch = marker
+            if p - 2 >= 0 and self._text_range(p - 2, p - 1) == ch:
+                return False
+            if p + 1 <= doc_max and self._text_range(p + 1, p + 2) == ch:
+                return False
+
+        return True
+
+    def _caret_before_marker(
+        self, marker: str, *, require_singletons: bool = False
+    ) -> bool:
+        """True if the caret is immediately before `marker` (e.g. |**)."""
+        c = self.textCursor()
+        if c.hasSelection():
+            return False
+
+        p = c.position()
+        lm = len(marker)
+        doc_max = self._doc_max_pos()
+        if p + lm > doc_max:
+            return False
+
+        after = self._text_range(p, p + lm)
+        if after != marker:
+            return False
+
+        if require_singletons and lm == 1:
+            # Disallow if it's part of a run like "**" or "___".
+            ch = marker
+            if p - 1 >= 0 and self._text_range(p - 1, p) == ch:
+                return False
+            if p + 1 <= doc_max and self._text_range(p + 1, p + 2) == ch:
+                return False
+
+        return True
+
+    def _unwrap_selection(
+        self, marker: str, *, replacement_marker: str | None = None
+    ) -> bool:
+        """
+        Remove `marker` wrapping from the selection.
+        If replacement_marker is provided, replace marker with that (e.g. ***text*** -> *text*).
+        """
+        c = self.textCursor()
+        if not c.hasSelection():
+            return False
+
+        sel = c.selectedText()
+        start = c.selectionStart()
+        end = c.selectionEnd()
+        lm = len(marker)
+        doc_max = self._doc_max_pos()
+
+        def _select_inner(
+            edit_cursor: QTextCursor, inner_start: int, inner_len: int
+        ) -> None:
+            edit_cursor.setPosition(inner_start)
+            edit_cursor.setPosition(inner_start + inner_len, QTextCursor.KeepAnchor)
+            self.setTextCursor(edit_cursor)
+
+        # Case 1: selection includes markers
+        if len(sel) >= 2 * lm and sel.startswith(marker) and sel.endswith(marker):
+            inner = sel[lm:-lm]
+            new_text = (
+                f"{replacement_marker}{inner}{replacement_marker}"
+                if replacement_marker is not None
+                else inner
+            )
+            c.beginEditBlock()
+            c.insertText(new_text)
+            c.endEditBlock()
+
+            # Re-select the inner content (not the markers)
+            inner_start = c.position() - len(new_text)
+            if replacement_marker is not None:
+                inner_start += len(replacement_marker)
+            _select_inner(c, inner_start, len(inner))
+            return True
+
+        # Case 2: marker is adjacent to selection
+        if start >= lm and end + lm <= doc_max:
+            before = self._text_range(start - lm, start)
+            after = self._text_range(end, end + lm)
+            if before == marker and after == marker:
+                new_text = (
+                    f"{replacement_marker}{sel}{replacement_marker}"
+                    if replacement_marker is not None
+                    else sel
+                )
+                edit = QTextCursor(self.document())
+                edit.beginEditBlock()
+                edit.setPosition(start - lm)
+                edit.setPosition(end + lm, QTextCursor.KeepAnchor)
+                edit.insertText(new_text)
+                edit.endEditBlock()
+
+                inner_start = (start - lm) + (
+                    len(replacement_marker) if replacement_marker else 0
+                )
+                _select_inner(edit, inner_start, len(sel))
+                return True
+
+        return False
+
+    def _wrap_selection(self, marker: str) -> None:
+        """Wrap the current selection with `marker` and keep the content selected."""
+        c = self.textCursor()
+        if not c.hasSelection():
+            return
+        sel = c.selectedText()
+        start = c.selectionStart()
+        lm = len(marker)
+
+        c.beginEditBlock()
+        c.insertText(f"{marker}{sel}{marker}")
+        c.endEditBlock()
+
+        # Re-select the original content
+        edit = QTextCursor(self.document())
+        edit.setPosition(start + lm)
+        edit.setPosition(start + lm + len(sel), QTextCursor.KeepAnchor)
+        self.setTextCursor(edit)
+
+    def _pos_inside_inline_span(
+        self,
+        patterns: list[tuple[re.Pattern, int]],
+        start_in_block: int,
+        end_in_block: int,
+    ) -> bool:
+        """True if [start_in_block, end_in_block] lies within the content region of any pattern match."""
+        block_text = self.textCursor().block().text()
+        for pat, mlen in patterns:
+            for m in pat.finditer(block_text):
+                s, e = m.span()
+                cs, ce = s + mlen, e - mlen
+                if cs <= start_in_block and end_in_block <= ce:
+                    return True
+        return False
+
+    def is_markdown_bold_active(self) -> bool:
+        c = self.textCursor()
+        bold_markers = ("***", "___", "**", "__")
+
+        if c.hasSelection():
+            if self._selection_wrapped_by(bold_markers) is not None:
+                return True
+            block = c.block()
+            start_in_block = c.selectionStart() - block.position()
+            end_in_block = c.selectionEnd() - block.position()
+            patterns = [
+                (re.compile(r"(?<!\*)\*\*\*(.+?)(?<!\*)\*\*\*"), 3),
+                (re.compile(r"(?<!_)___(.+?)(?<!_)___"), 3),
+                (re.compile(r"(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)"), 2),
+                (re.compile(r"(?<!_)__(?!_)(.+?)(?<!_)__(?!_)"), 2),
+            ]
+            return self._pos_inside_inline_span(patterns, start_in_block, end_in_block)
+
+        # Caret (no selection)
+        if any(self._caret_between_markers(m) for m in ("**", "__")):
+            return True
+        block = c.block()
+        pos_in_block = c.position() - block.position()
+        patterns = [
+            (re.compile(r"(?<!\*)\*\*\*(.+?)(?<!\*)\*\*\*"), 3),
+            (re.compile(r"(?<!_)___(.+?)(?<!_)___"), 3),
+            (re.compile(r"(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)"), 2),
+            (re.compile(r"(?<!_)__(?!_)(.+?)(?<!_)__(?!_)"), 2),
+        ]
+        return self._pos_inside_inline_span(patterns, pos_in_block, pos_in_block)
+
+    def is_markdown_italic_active(self) -> bool:
+        c = self.textCursor()
+        italic_markers = ("*", "_", "***", "___")
+
+        if c.hasSelection():
+            if (
+                self._selection_wrapped_by(italic_markers, require_singletons=True)
+                is not None
+            ):
+                return True
+            block = c.block()
+            start_in_block = c.selectionStart() - block.position()
+            end_in_block = c.selectionEnd() - block.position()
+            patterns = [
+                (re.compile(r"(?<!\*)\*\*\*(.+?)(?<!\*)\*\*\*"), 3),
+                (re.compile(r"(?<!_)___(.+?)(?<!_)___"), 3),
+                (re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"), 1),
+                (re.compile(r"(?<!_)_(?!_)(.+?)(?<!_)_(?!_)"), 1),
+            ]
+            return self._pos_inside_inline_span(patterns, start_in_block, end_in_block)
+
+        pending = getattr(self, "_pending_inline_marker", None)
+        if pending in ("*", "_") and self._caret_between_markers(
+            pending, require_singletons=True
+        ):
+            return True
+        if pending in ("*", "_"):
+            # caret moved away from the empty pair; stop treating it as "pending"
+            self._pending_inline_marker = None
+
+        block = c.block()
+        pos_in_block = c.position() - block.position()
+        patterns = [
+            (re.compile(r"(?<!\*)\*\*\*(.+?)(?<!\*)\*\*\*"), 3),
+            (re.compile(r"(?<!_)___(.+?)(?<!_)___"), 3),
+            (re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"), 1),
+            (re.compile(r"(?<!_)_(?!_)(.+?)(?<!_)_(?!_)"), 1),
+        ]
+        return self._pos_inside_inline_span(patterns, pos_in_block, pos_in_block)
+
+    def is_markdown_strike_active(self) -> bool:
+        c = self.textCursor()
+        if c.hasSelection():
+            if self._selection_wrapped_by(("~~",)) is not None:
+                return True
+            block = c.block()
+            start_in_block = c.selectionStart() - block.position()
+            end_in_block = c.selectionEnd() - block.position()
+            patterns = [(re.compile(r"~~(.+?)~~"), 2)]
+            return self._pos_inside_inline_span(patterns, start_in_block, end_in_block)
+
+        if self._caret_between_markers("~~"):
+            return True
+        block = c.block()
+        pos_in_block = c.position() - block.position()
+        patterns = [(re.compile(r"~~(.+?)~~"), 2)]
+        return self._pos_inside_inline_span(patterns, pos_in_block, pos_in_block)
+
+    # ------------------------ Toolbar action handlers ------------------------
+
     def apply_weight(self):
-        """Toggle bold formatting."""
+        """Toggle bold formatting (markdown ** / __, and *** / ___)."""
         cursor = self.textCursor()
+
         if cursor.hasSelection():
-            selected = cursor.selectedText()
-            # Check if already bold
-            if selected.startswith("**") and selected.endswith("**"):
-                # Remove bold
-                new_text = selected[2:-2]
-            else:
-                # Add bold
-                new_text = f"**{selected}**"
-            cursor.insertText(new_text)
+            # If bold+italic, toggling bold should leave italic: ***text*** -> *text*
+            m = self._selection_wrapped_by(("***", "___"))
+            if m is not None:
+                repl = "*" if m == "***" else "_"
+                if self._unwrap_selection(m, replacement_marker=repl):
+                    self.setFocus()
+                    return
+
+            # Normal bold: **text** / __text__
+            m = self._selection_wrapped_by(("**", "__"))
+            if m is not None:
+                if self._unwrap_selection(m):
+                    self.setFocus()
+                    return
+
+            # Not bold: wrap selection with **
+            self._wrap_selection("**")
+            self.setFocus()
+            return
+
+        # No selection:
+        #   - If we're between an empty pair (**|**), remove them.
+        #   - If we're inside bold and sitting right before the closing marker (**text|**),
+        #     jump the caret *past* the marker (end-bold) instead of inserting more.
+        #   - Otherwise, insert a new empty pair and place the caret between.
+        if self._caret_between_markers("**") or self._caret_between_markers("__"):
+            marker = "**" if self._caret_between_markers("**") else "__"
+            p = cursor.position()
+            lm = len(marker)
+            edit = QTextCursor(self.document())
+            edit.beginEditBlock()
+            edit.setPosition(p - lm)
+            edit.setPosition(p + lm, QTextCursor.KeepAnchor)
+            edit.insertText("")
+            edit.endEditBlock()
+            edit.setPosition(p - lm)
+            self.setTextCursor(edit)
+        elif self.is_markdown_bold_active() and (
+            self._caret_before_marker("**") or self._caret_before_marker("__")
+        ):
+            marker = "**" if self._caret_before_marker("**") else "__"
+            cursor.movePosition(
+                QTextCursor.MoveOperation.Right,
+                QTextCursor.MoveMode.MoveAnchor,
+                len(marker),
+            )
+            self.setTextCursor(cursor)
+            self._pending_inline_marker = None
         else:
             # No selection - just insert markers
             cursor.insertText("****")
@@ -1529,44 +1972,120 @@ class MarkdownEditor(QTextEdit):
                 QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, 2
             )
             self.setTextCursor(cursor)
+            self._pending_inline_marker = "*"
 
         # Return focus to editor
         self.setFocus()
 
     def apply_italic(self):
-        """Toggle italic formatting."""
+        """Toggle italic formatting (markdown * / _, and *** / ___)."""
         cursor = self.textCursor()
+
         if cursor.hasSelection():
-            selected = cursor.selectedText()
-            if (
-                selected.startswith("*")
-                and selected.endswith("*")
-                and not selected.startswith("**")
-            ):
-                new_text = selected[1:-1]
-            else:
-                new_text = f"*{selected}*"
-            cursor.insertText(new_text)
+            # If bold+italic, toggling italic should leave bold: ***text*** -> **text**
+            m = self._selection_wrapped_by(("***", "___"))
+            if m is not None:
+                repl = "**" if m == "***" else "__"
+                if self._unwrap_selection(m, replacement_marker=repl):
+                    self.setFocus()
+                    return
+
+            m = self._selection_wrapped_by(("*", "_"), require_singletons=True)
+            if m is not None:
+                if self._unwrap_selection(m):
+                    self.setFocus()
+                    return
+
+            self._wrap_selection("*")
+            self.setFocus()
+            return
+
+        # No selection:
+        #   - If we're between an empty pair (*|*), remove them.
+        #   - If we're inside italic and sitting right before the closing marker (*text|*),
+        #     jump the caret past the marker (end-italic) instead of inserting more.
+        #   - Otherwise, insert a new empty pair and place the caret between.
+        if self._caret_between_markers(
+            "*", require_singletons=True
+        ) or self._caret_between_markers("_", require_singletons=True):
+            marker = (
+                "*"
+                if self._caret_between_markers("*", require_singletons=True)
+                else "_"
+            )
+            p = cursor.position()
+            lm = len(marker)
+            edit = QTextCursor(self.document())
+            edit.beginEditBlock()
+            edit.setPosition(p - lm)
+            edit.setPosition(p + lm, QTextCursor.KeepAnchor)
+            edit.insertText("")
+            edit.endEditBlock()
+            edit.setPosition(p - lm)
+            self.setTextCursor(edit)
+            self._pending_inline_marker = None
+        elif self.is_markdown_italic_active() and (
+            self._caret_before_marker("*", require_singletons=True)
+            or self._caret_before_marker("_", require_singletons=True)
+        ):
+            marker = (
+                "*" if self._caret_before_marker("*", require_singletons=True) else "_"
+            )
+            cursor.movePosition(
+                QTextCursor.MoveOperation.Right,
+                QTextCursor.MoveMode.MoveAnchor,
+                len(marker),
+            )
+            self.setTextCursor(cursor)
+            self._pending_inline_marker = None
         else:
             cursor.insertText("**")
             cursor.movePosition(
                 QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, 1
             )
             self.setTextCursor(cursor)
+            self._pending_inline_marker = "*"
 
         # Return focus to editor
         self.setFocus()
 
     def apply_strikethrough(self):
-        """Toggle strikethrough formatting."""
+        """Toggle strikethrough formatting (markdown ~~)."""
         cursor = self.textCursor()
+
         if cursor.hasSelection():
-            selected = cursor.selectedText()
-            if selected.startswith("~~") and selected.endswith("~~"):
-                new_text = selected[2:-2]
-            else:
-                new_text = f"~~{selected}~~"
-            cursor.insertText(new_text)
+            m = self._selection_wrapped_by(("~~",))
+            if m is not None:
+                if self._unwrap_selection(m):
+                    self.setFocus()
+                    return
+            self._wrap_selection("~~")
+            self.setFocus()
+            return
+
+        # No selection:
+        #   - If we're between an empty pair (~~|~~), remove them.
+        #   - If we're inside strike and sitting right before the closing marker (~~text|~~),
+        #     jump the caret past the marker (end-strike) instead of inserting more.
+        #   - Otherwise, insert a new empty pair and place the caret between.
+        if self._caret_between_markers("~~"):
+            p = cursor.position()
+            edit = QTextCursor(self.document())
+            edit.beginEditBlock()
+            edit.setPosition(p - 2)
+            edit.setPosition(p + 2, QTextCursor.KeepAnchor)
+            edit.insertText("")
+            edit.endEditBlock()
+            edit.setPosition(p - 2)
+            self.setTextCursor(edit)
+        elif self.is_markdown_strike_active() and self._caret_before_marker("~~"):
+            cursor.movePosition(
+                QTextCursor.MoveOperation.Right,
+                QTextCursor.MoveMode.MoveAnchor,
+                2,
+            )
+            self.setTextCursor(cursor)
+            self._pending_inline_marker = None
         else:
             cursor.insertText("~~~~")
             cursor.movePosition(

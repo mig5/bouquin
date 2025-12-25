@@ -28,7 +28,6 @@ from PySide6.QtGui import (
     QGuiApplication,
     QKeySequence,
     QTextCursor,
-    QTextListFormat,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -1241,46 +1240,58 @@ class MainWindow(QMainWindow):
         self._toolbar_bound = True
 
     def _sync_toolbar(self):
-        fmt = self.editor.currentCharFormat()
+        """
+        Keep the toolbar "sticky" by reflecting the markdown state at the current caret/selection.
+        """
         c = self.editor.textCursor()
+        line = c.block().text()
+
+        # Inline styles (markdown-aware)
+        bold_on = bool(getattr(self.editor, "is_markdown_bold_active", lambda: False)())
+        italic_on = bool(
+            getattr(self.editor, "is_markdown_italic_active", lambda: False)()
+        )
+        strike_on = bool(
+            getattr(self.editor, "is_markdown_strike_active", lambda: False)()
+        )
 
         # Block signals so setChecked() doesn't re-trigger actions
         QSignalBlocker(self.toolBar.actBold)
         QSignalBlocker(self.toolBar.actItalic)
         QSignalBlocker(self.toolBar.actStrike)
 
-        self.toolBar.actBold.setChecked(fmt.fontWeight() == QFont.Weight.Bold)
-        self.toolBar.actItalic.setChecked(fmt.fontItalic())
-        self.toolBar.actStrike.setChecked(fmt.fontStrikeOut())
+        self.toolBar.actBold.setChecked(bold_on)
+        self.toolBar.actItalic.setChecked(italic_on)
+        self.toolBar.actStrike.setChecked(strike_on)
 
-        # Headings: decide which to check by current point size
-        def _approx(a, b, eps=0.5):  # small float tolerance
-            return abs(float(a) - float(b)) <= eps
-
-        cur_size = fmt.fontPointSize() or self.editor.font().pointSizeF()
-
-        bH1 = _approx(cur_size, 24)
-        bH2 = _approx(cur_size, 18)
-        bH3 = _approx(cur_size, 14)
+        # Headings: infer from leading markdown markers
+        heading_level = 0
+        m = re.match(r"^\s*(#{1,3})\s+", line)
+        if m:
+            heading_level = len(m.group(1))
 
         QSignalBlocker(self.toolBar.actH1)
         QSignalBlocker(self.toolBar.actH2)
         QSignalBlocker(self.toolBar.actH3)
         QSignalBlocker(self.toolBar.actNormal)
 
-        self.toolBar.actH1.setChecked(bH1)
-        self.toolBar.actH2.setChecked(bH2)
-        self.toolBar.actH3.setChecked(bH3)
-        self.toolBar.actNormal.setChecked(not (bH1 or bH2 or bH3))
+        self.toolBar.actH1.setChecked(heading_level == 1)
+        self.toolBar.actH2.setChecked(heading_level == 2)
+        self.toolBar.actH3.setChecked(heading_level == 3)
+        self.toolBar.actNormal.setChecked(heading_level == 0)
 
-        # Lists
-        lst = c.currentList()
-        bullets_on = lst and lst.format().style() == QTextListFormat.Style.ListDisc
-        numbers_on = lst and lst.format().style() == QTextListFormat.Style.ListDecimal
+        # Lists: infer from leading markers on the current line
+        bullets_on = bool(re.match(r"^\s*(?:•|-|\*)\s+", line))
+        numbers_on = bool(re.match(r"^\s*\d+\.\s+", line))
+        checkboxes_on = bool(re.match(r"^\s*[☐☑]\s+", line))
+
         QSignalBlocker(self.toolBar.actBullets)
         QSignalBlocker(self.toolBar.actNumbers)
-        self.toolBar.actBullets.setChecked(bool(bullets_on))
-        self.toolBar.actNumbers.setChecked(bool(numbers_on))
+        QSignalBlocker(self.toolBar.actCheckboxes)
+
+        self.toolBar.actBullets.setChecked(bullets_on)
+        self.toolBar.actNumbers.setChecked(numbers_on)
+        self.toolBar.actCheckboxes.setChecked(checkboxes_on)
 
     def _change_font_size(self, delta: int) -> None:
         """Change font size for all editor tabs and save the setting."""
