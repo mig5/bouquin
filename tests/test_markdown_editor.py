@@ -1,6 +1,7 @@
 import base64
 
 import pytest
+import re
 from bouquin.markdown_editor import MarkdownEditor
 from bouquin.markdown_highlighter import MarkdownHighlighter
 from bouquin.theme import Theme, ThemeConfig, ThemeManager
@@ -72,8 +73,13 @@ def test_apply_styles_and_headings(editor, qtbot):
     editor.apply_italic()
     editor.apply_strikethrough()
     editor.apply_heading(24)
-    md = editor.to_markdown()
-    assert "**" in md and "*~~~~*" in md
+    md = editor.to_markdown().strip()
+
+    assert md.startswith("# ")
+    assert "~~hello world~~" in md
+    assert re.search(
+        r"\*{2,3}~~hello world~~\*{2,3}", md
+    )  # bold or bold+italic wrapping strike
 
 
 def test_toggle_lists_and_checkboxes(editor):

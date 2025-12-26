@@ -870,6 +870,11 @@ class MainWindow(QMainWindow):
         into the rollover target date (today, or next Monday if today
         is a weekend).
 
+        In addition to moving the unchecked checkbox *line* itself, this also
+        moves any subsequent lines that belong to that unchecked item, up to
+        (but not including) the next *checked* checkbox line. This allows
+        code fences, collapsed blocks, and notes under a todo to travel with it.
+
         Returns True if any items were moved, False otherwise.
         """
         if not getattr(self.cfg, "move_todos", False):
@@ -884,7 +889,9 @@ class MainWindow(QMainWindow):
 
         # Regexes for markdown headings and checkboxes
         heading_re = re.compile(r"^\s{0,3}(#+)\s+(.*)$")
-        unchecked_re = re.compile(r"^\s*-\s*\[[\s☐]\]\s+")
+        unchecked_re = re.compile(r"^(\s*)-\s*\[[\s☐]\]\s+(.*)$")
+        checked_re = re.compile(r"^(\s*)-\s*\[[xX☑]\]\s+(.*)$")
+        fence_re = re.compile(r"^\s*(`{3,}|~{3,})")
 
         def _normalize_heading(text: str) -> str:
             """
@@ -895,13 +902,47 @@ class MainWindow(QMainWindow):
             text = re.sub(r"\s+#+\s*$", "", text)
             return text.strip()
 
-        def _insert_todos_under_heading(
+        def _update_fence_state(
+            line: str, in_fence: bool, fence_marker: str | None
+        ) -> tuple[bool, str | None]:
+            """
+            Track fenced code blocks (``` / ~~~). We ignore checkbox markers inside
+            fences so we don't accidentally split/move based on "- [x]" that appears
+            in code.
+            """
+            m = fence_re.match(line)
+            if not m:
+                return in_fence, fence_marker
+
+            marker = m.group(1)
+            if not in_fence:
+                return True, marker
+
+            # Close only when we see a fence of the same char and >= length
+            if (
+                fence_marker
+                and marker[0] == fence_marker[0]
+                and len(marker) >= len(fence_marker)
+            ):
+                return False, None
+
+            return in_fence, fence_marker
+
+        def _is_list_item(line: str) -> bool:
+            s = line.lstrip()
+            return bool(
+                re.match(r"^([-*+]\s+|\d+\.\s+)", s)
+                or unchecked_re.match(line)
+                or checked_re.match(line)
+            )
+
+        def _insert_blocks_under_heading(
             target_lines: list[str],
             heading_level: int,
             heading_text: str,
-            todos: list[str],
+            blocks: list[list[str]],
         ) -> list[str]:
-            """Ensure a heading exists and append todos to the end of its section."""
+            """Ensure a heading exists and append blocks to the end of its section."""
             normalized = _normalize_heading(heading_text)
 
             # 1) Find existing heading with same text (any level)
@@ -941,15 +982,33 @@ class MainWindow(QMainWindow):
             ):
                 insert_at -= 1
 
-            for todo in todos:
-                target_lines.insert(insert_at, todo)
-                insert_at += 1
+            # Insert blocks (preserve internal blank lines)
+            for block in blocks:
+                if not block:
+                    continue
+
+                # Avoid gluing a paragraph to the new block unless both look like list items
+                if (
+                    insert_at > start_idx + 1
+                    and target_lines[insert_at - 1].strip() != ""
+                    and block[0].strip() != ""
+                    and not (
+                        _is_list_item(target_lines[insert_at - 1])
+                        and _is_list_item(block[0])
+                    )
+                ):
+                    target_lines.insert(insert_at, "")
+                    insert_at += 1
+
+                for line in block:
+                    target_lines.insert(insert_at, line)
+                    insert_at += 1
 
             return target_lines
 
-        # Collect moved todos as (heading_info, item_text)
+        # Collect moved blocks as (heading_info, block_lines)
         # heading_info is either None or (level, heading_text)
-        moved_items: list[tuple[tuple[int, str] | None, str]] = []
+        moved_blocks: list[tuple[tuple[int, str] | None, list[str]]] = []
         any_moved = False
 
         # Look back N days (yesterday = 1, up to `days_back`)
@@ -965,26 +1024,81 @@ class MainWindow(QMainWindow):
             moved_from_this_day = False
             current_heading: tuple[int, str] | None = None
 
-            for line in lines:
-                # Track the last seen heading (# / ## / ###)
-                m_head = heading_re.match(line)
-                if m_head:
-                    level = len(m_head.group(1))
-                    heading_text = _normalize_heading(m_head.group(2))
-                    if level <= 3:
-                        current_heading = (level, heading_text)
-                    # Keep headings in the original day
-                    remaining_lines.append(line)
-                    continue
+            in_fence = False
+            fence_marker: str | None = None
 
-                # Unchecked markdown checkboxes: "- [ ] " or "- [☐] "
-                if unchecked_re.match(line):
-                    item_text = unchecked_re.sub("", line)
-                    moved_items.append((current_heading, item_text))
-                    moved_from_this_day = True
-                    any_moved = True
-                else:
-                    remaining_lines.append(line)
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+
+                # If we're not in a fenced code block, we can interpret headings/checkboxes
+                if not in_fence:
+                    # Track the last seen heading (# / ## / ###)
+                    m_head = heading_re.match(line)
+                    if m_head:
+                        level = len(m_head.group(1))
+                        heading_text = _normalize_heading(m_head.group(2))
+                        if level <= 3:
+                            current_heading = (level, heading_text)
+                        # Keep headings in the original day (only headings ABOVE a moved block are "carried")
+                        remaining_lines.append(line)
+                        in_fence, fence_marker = _update_fence_state(
+                            line, in_fence, fence_marker
+                        )
+                        i += 1
+                        continue
+
+                    # Start of an unchecked checkbox block
+                    m_unchecked = unchecked_re.match(line)
+                    if m_unchecked:
+                        indent = m_unchecked.group(1) or ""
+                        item_text = m_unchecked.group(2)
+                        block: list[str] = [f"{indent}- [ ] {item_text}"]
+
+                        i += 1
+                        # Consume subsequent lines until the next *checked* checkbox
+                        # (ignoring any "- [x]" that appear inside fenced code blocks)
+                        block_in_fence = in_fence
+                        block_fence_marker = fence_marker
+
+                        while i < len(lines):
+                            nxt = lines[i]
+
+                            # If we're not inside a fence, a checked checkbox ends the block
+                            if not block_in_fence and checked_re.match(nxt):
+                                break
+
+                            # Normalize any unchecked checkbox lines inside the block
+                            m_inner_unchecked = (
+                                unchecked_re.match(nxt) if not block_in_fence else None
+                            )
+                            if m_inner_unchecked:
+                                inner_indent = m_inner_unchecked.group(1) or ""
+                                inner_text = m_inner_unchecked.group(2)
+                                block.append(f"{inner_indent}- [ ] {inner_text}")
+                            else:
+                                block.append(nxt)
+
+                            # Update fence state after consuming the line
+                            block_in_fence, block_fence_marker = _update_fence_state(
+                                nxt, block_in_fence, block_fence_marker
+                            )
+                            i += 1
+
+                        # Carry the last heading *above* the unchecked checkbox
+                        moved_blocks.append((current_heading, block))
+                        moved_from_this_day = True
+                        any_moved = True
+
+                        # We consumed the block; keep scanning from the checked checkbox (or EOF)
+                        continue
+
+                # Default: keep the line on the original day
+                remaining_lines.append(line)
+                in_fence, fence_marker = _update_fence_state(
+                    line, in_fence, fence_marker
+                )
+                i += 1
 
             if moved_from_this_day:
                 modified_text = "\n".join(remaining_lines)
@@ -998,33 +1112,46 @@ class MainWindow(QMainWindow):
         if not any_moved:
             return False
 
-        # --- Merge all moved items into the *target* date ---
+        # --- Merge all moved blocks into the *target* date ---
 
         target_text = self.db.get_entry(target_iso) or ""
         target_lines = target_text.split("\n") if target_text else []
 
-        by_heading: dict[tuple[int, str], list[str]] = {}
-        plain_items: list[str] = []
+        by_heading: dict[tuple[int, str], list[list[str]]] = {}
+        plain_blocks: list[list[str]] = []
 
-        for heading_info, item_text in moved_items:
-            todo_line = f"- [ ] {item_text}"
+        for heading_info, block in moved_blocks:
             if heading_info is None:
-                # No heading above this checkbox in the source: behave as before
-                plain_items.append(todo_line)
+                plain_blocks.append(block)
             else:
-                by_heading.setdefault(heading_info, []).append(todo_line)
+                by_heading.setdefault(heading_info, []).append(block)
 
-        # First insert all items that have headings
-        for (level, heading_text), todos in by_heading.items():
-            target_lines = _insert_todos_under_heading(
-                target_lines, level, heading_text, todos
+        # First insert all blocks that have headings
+        for (level, heading_text), blocks in by_heading.items():
+            target_lines = _insert_blocks_under_heading(
+                target_lines, level, heading_text, blocks
             )
 
-        # Then append all items without headings at the end, like before
-        if plain_items:
+        # Then append all blocks without headings at the end, like before
+        if plain_blocks:
             if target_lines and target_lines[-1].strip():
                 target_lines.append("")  # one blank line before the "unsectioned" todos
-            target_lines.extend(plain_items)
+            first = True
+            for block in plain_blocks:
+                if not block:
+                    continue
+                if (
+                    not first
+                    and target_lines
+                    and target_lines[-1].strip() != ""
+                    and block[0].strip() != ""
+                    and not (
+                        _is_list_item(target_lines[-1]) and _is_list_item(block[0])
+                    )
+                ):
+                    target_lines.append("")
+                target_lines.extend(block)
+                first = False
 
         new_target_text = "\n".join(target_lines)
         if not new_target_text.endswith("\n"):

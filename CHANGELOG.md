@@ -1,6 +1,7 @@
 # 0.8.1
 
  * Fix bold/italic/strikethrough styling in certain conditions when toolbar action is used.
+ * Move a code block or collapsed section (or generally, anything after a checkbox line until the next checkbox line) when moving an unchecked checkbox line to another day.
 
 # 0.8.0
 
