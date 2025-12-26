@@ -4,7 +4,7 @@
 # provides the Python distribution/module as "sqlcipher4". To keep Fedora's
 # auto-generated python3dist() Requires correct, we rewrite the dependency key in
 # pyproject.toml at build time.
-%global upstream_version 0.8.0
+%global upstream_version 0.8.1
 
 Name:           bouquin
 Version:        %{upstream_version}
@@ -82,5 +82,8 @@ install -Dpm 0644 bouquin/icons/bouquin.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/bouquin.svg
 
 %changelog
+* Fri Dec 26 2025 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
+- Fix bold/italic/strikethrough styling in certain conditions when toolbar action is used.
+- Move a code block or collapsed section (or generally, anything after a checkbox line until the next checkbox line) when moving an unchecked checkbox line to another day.
 * Wed Dec 24 2025 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
 - Initial RPM packaging for Fedora 42
