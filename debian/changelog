@@ -1,3 +1,9 @@
+bouquin (0.8.2) unstable; urgency=medium
+
+ * Add ability to delete an invoice via 'Manage Invoices' dialog
+
+ -- Miguel Jacq <mig@mig5.net>  Wed, 31 Dec 2025 16:00:00 +1100
+
 bouquin (0.8.1) unstable; urgency=medium
 
  * Fix bold/italic/strikethrough styling in certain conditions when toolbar action is used.

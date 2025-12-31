@@ -436,5 +436,6 @@
     "invoice_invalid_date_format": "Invalid date format",
     "invoice_invalid_tax_rate": "The tax rate is invalid",
     "invoice_no_items": "There are no items in the invoice",
-    "invoice_number_required": "An invoice number is required"
+    "invoice_number_required": "An invoice number is required",
+    "invoice_required": "Please select a specific invoice before trying to delete an invoice."
 }

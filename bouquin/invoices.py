@@ -1065,11 +1065,77 @@ class InvoicesDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
+        delete_btn = QPushButton(strings._("delete"))
+        delete_btn.clicked.connect(self._on_delete_clicked)
+        btn_row.addWidget(delete_btn)
+
         close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
 
         root.addLayout(btn_row)
+
+        self._reload_invoices()
+
+    # ----------------------------------------------------------------- deletion
+
+    def _on_delete_clicked(self) -> None:
+        """Delete the currently selected invoice."""
+        row = self.table.currentRow()
+        if row < 0:
+            sel = self.table.selectionModel().selectedRows()
+            if sel:
+                row = sel[0].row()
+        if row < 0:
+            QMessageBox.information(
+                self,
+                strings._("delete"),
+                strings._("invoice_required"),
+            )
+            return
+
+        base_item = self.table.item(row, self.COL_NUMBER)
+        if base_item is None:
+            return
+
+        inv_id = base_item.data(Qt.ItemDataRole.UserRole)
+        if not inv_id:
+            return
+
+        invoice_number = (base_item.text() or "").strip() or "?"
+        proj_item = self.table.item(row, self.COL_PROJECT)
+        project_name = (proj_item.text() if proj_item is not None else "").strip()
+
+        label = strings._("delete")
+        prompt = (
+            f"{label} '{invoice_number}'"
+            + (f" ({project_name})" if project_name else "")
+            + "?"
+        )
+
+        resp = QMessageBox.question(
+            self,
+            label,
+            prompt,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+
+        # Remove any automatically created due-date reminder.
+        if self.cfg.reminders:
+            self._remove_invoice_due_reminder(row, int(inv_id))
+
+        try:
+            self._db.delete_invoice(int(inv_id))
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                strings._("error"),
+                f"Failed to delete invoice: {e}",
+            )
+            return
 
         self._reload_invoices()
 

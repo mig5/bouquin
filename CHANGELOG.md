@@ -1,3 +1,7 @@
+# 0.8.2
+
+ * Add ability to delete an invoice via 'Manage Invoices' dialog
+
 # 0.8.1
 
  * Fix bold/italic/strikethrough styling in certain conditions when toolbar action is used.

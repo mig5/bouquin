@@ -2392,6 +2392,18 @@ class DBManager:
                 (document_id, invoice_id),
             )
 
+    def delete_invoice(self, invoice_id: int) -> None:
+        """Delete an invoice.
+
+        Related invoice line items and invoice ↔ time log links are removed via
+        ON DELETE CASCADE.
+        """
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM invoices WHERE id = ?",
+                (invoice_id,),
+            )
+
     def time_logs_for_range(
         self,
         project_id: int,

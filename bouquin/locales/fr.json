@@ -432,5 +432,6 @@
   "invoice_invalid_date_format": "Format de date invalide",
   "invoice_invalid_tax_rate": "Le taux de TVA est invalide",
   "invoice_no_items": "La facture ne contient aucun article",
-  "invoice_number_required": "Un numéro de facture est requis"
+  "invoice_number_required": "Un numéro de facture est requis",
+  "invoice_required": "Veuillez sélectionner une facture spécifique avant d'essayer de supprimer la facture."
 }
