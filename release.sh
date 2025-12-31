@@ -24,18 +24,18 @@ fi
 set +e
 sed -i s/version.*$/version\ =\ \"${VERSION}\"/g pyproject.toml
 
-git add pyproject.toml
-git commit -m "Bump to ${VERSION}"
-git push origin main
+#git add pyproject.toml
+#git commit -m "Bump to ${VERSION}"
+#git push origin main
 
 set -e
 
 # Clean caches etc
-filedust -y .
+#filedust -y .
 
 # Publish to Pypi
-poetry build
-poetry publish
+#poetry build
+#poetry publish
 
 # Make AppImage
 sudo apt-get -y install libfuse-dev
@@ -100,4 +100,4 @@ rsync -aHPvz --exclude=.git --delete "$REPO_ROOT/" "$REMOTE/"
 
 echo "Done!"
 
-ssh wolverine.mig5.net "echo ${VERSION} | tee /opt/www/mig5.net/bouquin/version.txt"
+ssh lupin.mig5.net "echo ${VERSION} | tee /opt/www/mig5.net/bouquin/version.txt"
