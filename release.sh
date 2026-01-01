@@ -24,18 +24,18 @@ fi
 set +e
 sed -i s/version.*$/version\ =\ \"${VERSION}\"/g pyproject.toml
 
-#git add pyproject.toml
-#git commit -m "Bump to ${VERSION}"
-#git push origin main
+git add pyproject.toml
+git commit -m "Bump to ${VERSION}"
+git push origin main
 
 set -e
 
 # Clean caches etc
-#filedust -y .
+filedust -y .
 
 # Publish to Pypi
-#poetry build
-#poetry publish
+poetry build
+poetry publish
 
 # Make AppImage
 sudo apt-get -y install libfuse-dev
@@ -70,30 +70,41 @@ for dist in ${DISTS[@]}; do
 done
 
 # RPM
-sudo apt-get -y install createrepo-c rpm
-docker build -f Dockerfile.rpmbuild -t bouquin-rpm:f42 --progress=plain .
-docker run --rm -v "$PWD":/src -v "$PWD/dist/rpm":/out -v "$HOME/git/bouquin-sqlcipher4/dist/rpm":/deps:ro bouquin-rpm:f42
-sudo chown -R "${USER}" "$PWD/dist"
-
 REPO_ROOT="${HOME}/git/repo_rpm"
 RPM_REPO="${REPO_ROOT}/rpm/x86_64"
 BUILD_OUTPUT="${HOME}/git/bouquin/dist"
 REMOTE="letessier.mig5.net:/opt/repo_rpm"
 KEYID="00AE817C24A10C2540461A9C1D7CDE0234DB458D"
-
-echo "==> Updating RPM repo..."
 mkdir -p "$RPM_REPO"
 
-for file in `ls -1 "${BUILD_OUTPUT}/rpm"`; do
-  rpmsign --addsign "${BUILD_OUTPUT}/rpm/$file"
+sudo apt-get -y install createrepo-c rpm
+
+DISTS=(
+  fedora:42
+)
+
+for dist in ${DISTS[@]}; do
+  release=$(echo ${dist} | cut -d: -f2)
+  docker build -f Dockerfile.rpmbuild \
+    -t bouquin-rpm:${release} \
+    --progress=plain \
+    --build-arg BASE_IMAGE=${dist} \
+    .
+
+  docker run --rm -v "$PWD":/src -v "$PWD/dist/rpm":/out -v "$HOME/git/bouquin-sqlcipher4/dist/rpm":/deps:ro bouquin-rpm:${release}
+  sudo chown -R "${USER}" "$PWD/dist"
+
+  for file in `ls -1 "${BUILD_OUTPUT}/rpm"`; do
+    rpmsign --addsign "${BUILD_OUTPUT}/rpm/$file"
+  done
+
+  cp "${BUILD_OUTPUT}/rpm/"*.rpm "$RPM_REPO/"
+
+  createrepo_c "$RPM_REPO"
+
+  echo "==> Signing repomd.xml..."
+  qubes-gpg-client --local-user "$KEYID" --detach-sign --armor "$RPM_REPO/repodata/repomd.xml" > "$RPM_REPO/repodata/repomd.xml.asc"
 done
-
-cp "${BUILD_OUTPUT}/rpm/"*.rpm "$RPM_REPO/"
-
-createrepo_c "$RPM_REPO"
-
-echo "==> Signing repomd.xml..."
-qubes-gpg-client --local-user "$KEYID" --detach-sign --armor "$RPM_REPO/repodata/repomd.xml" > "$RPM_REPO/repodata/repomd.xml.asc"
 
 echo "==> Syncing repo to server..."
 rsync -aHPvz --exclude=.git --delete "$REPO_ROOT/" "$REMOTE/"
