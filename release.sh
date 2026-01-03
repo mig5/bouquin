@@ -69,15 +69,13 @@ for dist in ${DISTS[@]}; do
   reprepro -b /home/user/git/repo includedeb "${release}" "${debfile}"
 done
 
-# RPM
-REPO_ROOT="${HOME}/git/repo_rpm"
-RPM_REPO="${REPO_ROOT}/rpm/x86_64"
-BUILD_OUTPUT="${HOME}/git/bouquin/dist"
-REMOTE="letessier.mig5.net:/opt/repo_rpm"
-KEYID="00AE817C24A10C2540461A9C1D7CDE0234DB458D"
-mkdir -p "$RPM_REPO"
 
+# RPM
 sudo apt-get -y install createrepo-c rpm
+BUILD_OUTPUT="${HOME}/git/bouquin/dist"
+KEYID="00AE817C24A10C2540461A9C1D7CDE0234DB458D"
+REPO_ROOT="${HOME}/git/repo_rpm"
+REMOTE="letessier.mig5.net:/opt/repo_rpm"
 
 DISTS=(
   fedora:42
@@ -85,7 +83,13 @@ DISTS=(
 
 for dist in ${DISTS[@]}; do
   release=$(echo ${dist} | cut -d: -f2)
-  docker build -f Dockerfile.rpmbuild \
+  REPO_RELEASE_ROOT="${REPO_ROOT}/fc${release}"
+  RPM_REPO="${REPO_RELEASE_ROOT}/rpm/x86_64"
+  mkdir -p "$RPM_REPO"
+
+  docker build \
+    --no-cache \
+    -f Dockerfile.rpmbuild \
     -t bouquin-rpm:${release} \
     --progress=plain \
     --build-arg BASE_IMAGE=${dist} \
