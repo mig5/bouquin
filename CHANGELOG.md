@@ -1,3 +1,7 @@
+# 0.8.3 (unreleased)
+
+ * Update urllib3 dependency to resolve CVE-2026-21441
+
 # 0.8.2
 
  * Add ability to delete an invoice via 'Manage Invoices' dialog
