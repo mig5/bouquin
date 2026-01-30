@@ -871,9 +871,11 @@ class MainWindow(QMainWindow):
         is a weekend).
 
         In addition to moving the unchecked checkbox *line* itself, this also
-        moves any subsequent lines that belong to that unchecked item, up to
-        (but not including) the next *checked* checkbox line. This allows
-        code fences, collapsed blocks, and notes under a todo to travel with it.
+        moves any subsequent lines that belong to that unchecked item, stopping
+        at the next *checked* checkbox line **or** the next markdown heading.
+
+        This allows code fences, collapsed blocks, and notes under a todo to
+        travel with it without accidentally pulling in the next section.
 
         Returns True if any items were moved, False otherwise.
         """
@@ -1006,6 +1008,110 @@ class MainWindow(QMainWindow):
 
             return target_lines
 
+        def _prune_empty_headings(src_lines: list[str]) -> list[str]:
+            """Remove markdown headings whose section became empty.
+
+            The rollover logic removes unchecked todo *blocks* but intentionally keeps
+            headings on the source day so we can re-create the same section on the
+            target day. If a heading ends up with no remaining content (including
+            empty subheadings), we should remove it from the source day too.
+
+            Headings inside fenced code blocks are ignored.
+            """
+
+            # Identify headings (outside fences) and their levels
+            heading_levels: dict[int, int] = {}
+            heading_indices: list[int] = []
+
+            in_f = False
+            f_mark: str | None = None
+            for idx, ln in enumerate(src_lines):
+                if not in_f:
+                    m = heading_re.match(ln)
+                    if m:
+                        heading_indices.append(idx)
+                        heading_levels[idx] = len(m.group(1))
+                in_f, f_mark = _update_fence_state(ln, in_f, f_mark)
+
+            if not heading_indices:
+                return src_lines
+
+            # Compute each heading's section boundary: next heading with level <= current
+            boundary: dict[int, int] = {}
+            stack: list[int] = []
+            for idx in heading_indices:
+                lvl = heading_levels[idx]
+                while stack and lvl <= heading_levels[stack[-1]]:
+                    boundary[stack.pop()] = idx
+                stack.append(idx)
+            for idx in stack:
+                boundary[idx] = len(src_lines)
+
+            # Build parent/children relationships based on heading levels
+            children: dict[int, list[int]] = {}
+            parent_stack: list[int] = []
+            for idx in heading_indices:
+                lvl = heading_levels[idx]
+                while parent_stack and lvl <= heading_levels[parent_stack[-1]]:
+                    parent_stack.pop()
+                if parent_stack:
+                    children.setdefault(parent_stack[-1], []).append(idx)
+                parent_stack.append(idx)
+
+            # Determine whether each heading has any non-heading, non-blank content in its span
+            has_body: dict[int, bool] = {}
+            for h_idx in heading_indices:
+                end = boundary[h_idx]
+                body = False
+                in_f = False
+                f_mark = None
+                for j in range(h_idx + 1, end):
+                    ln = src_lines[j]
+                    if not in_f:
+                        if ln.strip() and not heading_re.match(ln):
+                            body = True
+                            break
+                    in_f, f_mark = _update_fence_state(ln, in_f, f_mark)
+                has_body[h_idx] = body
+
+            # Bottom-up: keep headings that have body content or any kept child headings
+            keep: dict[int, bool] = {}
+            for h_idx in reversed(heading_indices):
+                keep_child = any(keep.get(ch, False) for ch in children.get(h_idx, []))
+                keep[h_idx] = has_body[h_idx] or keep_child
+
+            remove_set = {idx for idx, k in keep.items() if not k}
+            if not remove_set:
+                return src_lines
+
+            # Remove empty headings and any immediate blank lines following them
+            out: list[str] = []
+            i = 0
+            while i < len(src_lines):
+                if i in remove_set:
+                    i += 1
+                    while i < len(src_lines) and src_lines[i].strip() == "":
+                        i += 1
+                    continue
+                out.append(src_lines[i])
+                i += 1
+
+            # Normalize excessive blank lines created by removals
+            cleaned: list[str] = []
+            prev_blank = False
+            for ln in out:
+                blank = ln.strip() == ""
+                if blank and prev_blank:
+                    continue
+                cleaned.append(ln)
+                prev_blank = blank
+
+            while cleaned and cleaned[0].strip() == "":
+                cleaned.pop(0)
+            while cleaned and cleaned[-1].strip() == "":
+                cleaned.pop()
+            return cleaned
+
         # Collect moved blocks as (heading_info, block_lines)
         # heading_info is either None or (level, heading_text)
         moved_blocks: list[tuple[tuple[int, str] | None, list[str]]] = []
@@ -1064,8 +1170,11 @@ class MainWindow(QMainWindow):
                         while i < len(lines):
                             nxt = lines[i]
 
-                            # If we're not inside a fence, a checked checkbox ends the block
-                            if not block_in_fence and checked_re.match(nxt):
+                            # If we're not inside a fence, a checked checkbox ends the block,
+                            # otherwise a new heading does as well.
+                            if not block_in_fence and (
+                                checked_re.match(nxt) or heading_re.match(nxt)
+                            ):
                                 break
 
                             # Normalize any unchecked checkbox lines inside the block
@@ -1101,6 +1210,7 @@ class MainWindow(QMainWindow):
                 i += 1
 
             if moved_from_this_day:
+                remaining_lines = _prune_empty_headings(remaining_lines)
                 modified_text = "\n".join(remaining_lines)
                 # Save the cleaned-up source day
                 self.db.save_new_version(
@@ -1115,7 +1225,13 @@ class MainWindow(QMainWindow):
         # --- Merge all moved blocks into the *target* date ---
 
         target_text = self.db.get_entry(target_iso) or ""
-        target_lines = target_text.split("\n") if target_text else []
+        # Treat a whitespace-only target note as truly empty; otherwise we can
+        # end up appending the new heading *after* leading blank lines (e.g. if
+        # a newly-created empty day was previously saved as just "\n").
+        if not target_text.strip():
+            target_lines = []
+        else:
+            target_lines = target_text.split("\n")
 
         by_heading: dict[tuple[int, str], list[list[str]]] = {}
         plain_blocks: list[list[str]] = []

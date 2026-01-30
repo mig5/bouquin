@@ -4,7 +4,7 @@
 # provides the Python distribution/module as "sqlcipher4". To keep Fedora's
 # auto-generated python3dist() Requires correct, we rewrite the dependency key in
 # pyproject.toml at build time.
-%global upstream_version 0.8.2
+%global upstream_version 0.8.3
 
 Name:           bouquin
 Version:        %{upstream_version}
@@ -82,6 +82,10 @@ install -Dpm 0644 bouquin/icons/bouquin.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/bouquin.svg
 
 %changelog
+* Fri Jan 30 2026 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
+- Update urllib3 dependency to resolve CVE-2026-21441
+- Fix carrying over data to next day from over-capturing data belonging to next header section
+- Other dependency updates
 * Wed Dec 31 2025 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
 - Add ability to delete an invoice via 'Manage Invoices' dialog
 * Fri Dec 26 2025 Miguel Jacq <mig@mig5.net> - %{version}-%{release}

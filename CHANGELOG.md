@@ -1,6 +1,8 @@
-# 0.8.3 (unreleased)
+# 0.8.3
 
  * Update urllib3 dependency to resolve CVE-2026-21441
+ * Fix carrying over data to next day from over-capturing data belonging to next header section
+ * Other dependency updates
 
 # 0.8.2
 
