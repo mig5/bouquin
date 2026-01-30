@@ -115,4 +115,4 @@ rsync -aHPvz --exclude=.git --delete "$REPO_ROOT/" "$REMOTE/"
 
 echo "Done!"
 
-ssh lupin.mig5.net "echo ${VERSION} | tee /opt/www/mig5.net/bouquin/version.txt"
+ssh lupin.mig5.net "echo ${VERSION} | tee /var/www/bouquin/version.txt"
