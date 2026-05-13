@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM fedora:42
+ARG BASE_IMAGE=fedora:43
+FROM ${BASE_IMAGE}
 
 # rpmbuild in a container does not auto-install BuildRequires. Since we're
 # building directly in Docker (not mock), we pre-install the common deps that

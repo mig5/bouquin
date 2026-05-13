@@ -4,7 +4,7 @@
 # provides the Python distribution/module as "sqlcipher4". To keep Fedora's
 # auto-generated python3dist() Requires correct, we rewrite the dependency key in
 # pyproject.toml at build time.
-%global upstream_version 0.8.3
+%global upstream_version 0.8.4
 
 Name:           bouquin
 Version:        %{upstream_version}
@@ -82,6 +82,9 @@ install -Dpm 0644 bouquin/icons/bouquin.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/bouquin.svg
 
 %changelog
+* Wed May 13 2026 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
+- Dependency updates
+- SQLCipher 4.16.0
 * Fri Jan 30 2026 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
 - Update urllib3 dependency to resolve CVE-2026-21441
 - Fix carrying over data to next day from over-capturing data belonging to next header section

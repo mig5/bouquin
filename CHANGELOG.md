@@ -1,3 +1,8 @@
+# 0.8.4
+
+ * Update dependencies
+ * SQLCipher 4.16.0
+
 # 0.8.3
 
  * Update urllib3 dependency to resolve CVE-2026-21441

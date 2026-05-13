@@ -78,6 +78,7 @@ REPO_ROOT="${HOME}/git/repo_rpm"
 REMOTE="letessier.mig5.net:/opt/repo_rpm"
 
 DISTS=(
+  fedora:43
   fedora:42
 )
 
