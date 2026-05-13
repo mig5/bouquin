@@ -10,8 +10,8 @@ packages = [{ include = "bouquin" }]
 include = ["bouquin/locales/*.json", "bouquin/keys/mig5.asc", "bouquin/fonts/NotoSansSymbols2-Regular.ttf", "bouquin/fonts/OFL.txt"]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.14"
-pyside6 = ">=6.8.1,<7.0.0"
+python = ">=3.10,<3.15"
+pyside6 = ">=6.10.1,<7.0.0"
 bouquin-sqlcipher4 = "^4.16.0"
 requests = "^2.32.3"
 markdown = "^3.7"
