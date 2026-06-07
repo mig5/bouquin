@@ -578,3 +578,191 @@ def test_time_report_dialog_shows_bucket_for_selected_project_and_clears_for_all
     dialog.project_combo.setCurrentIndex(dialog.project_combo.findData(None))
     dialog._run_report()
     assert dialog.bucket_label.text() == ""
+
+
+def test_project_bucket_ledger_records_settings_topups_and_time_use(fresh_db):
+    project_id = _add_project(fresh_db, "Ledger Project")
+
+    fresh_db.upsert_project_bucket(project_id, 30, 120, 80.0)
+    fresh_db.add_to_project_bucket_ceiling(
+        project_id,
+        60,
+        description="Extra prepaid hours",
+    )
+    _add_minutes(fresh_db, project_id, 45, "Ledger work")
+
+    rows = fresh_db.project_bucket_ledger_for_project(project_id)
+    types = [r["entry_type"] for r in rows]
+    assert "settings_adjustment" in types
+    assert "manual_topup" in types
+    assert "time_log" in types
+
+    settings = next(r for r in rows if r["entry_type"] == "settings_adjustment")
+    assert settings["baseline_delta_minutes"] == 30
+    assert settings["ceiling_delta_minutes"] == 120
+
+    topup = next(r for r in rows if r["entry_type"] == "manual_topup")
+    assert topup["ceiling_delta_minutes"] == 60
+    assert topup["description"] == "Extra prepaid hours"
+
+    time_log = next(r for r in rows if r["entry_type"] == "time_log")
+    assert time_log["used_delta_minutes"] == 45
+    assert time_log["description"] == "Ledger work"
+
+    status = fresh_db.project_bucket_status(project_id)
+    assert status["baseline_minutes"] == 30
+    assert status["logged_minutes"] == 45
+    assert status["bucket_ceiling_minutes"] == 180
+    assert status["remaining_minutes"] == 105
+
+
+def test_project_bucket_ledger_records_negative_corrections(fresh_db):
+    project_id = _add_project(fresh_db, "Correction Project")
+
+    fresh_db.upsert_project_bucket(project_id, 120, 240, 80.0)
+    fresh_db.upsert_project_bucket(project_id, 60, 180, 80.0)
+
+    rows = [
+        r
+        for r in fresh_db.project_bucket_ledger_for_project(project_id)
+        if r["entry_type"] == "settings_adjustment"
+    ]
+    assert len(rows) == 2
+    assert any(r["baseline_delta_minutes"] == -60 for r in rows)
+    assert any(r["ceiling_delta_minutes"] == -60 for r in rows)
+
+    status = fresh_db.project_bucket_status(project_id)
+    assert status["baseline_minutes"] == 60
+    assert status["bucket_ceiling_minutes"] == 180
+
+
+def test_project_activity_log_includes_time_documents_invoices_and_bucket_events(
+    fresh_db, tmp_path
+):
+    project_id = _add_project(fresh_db, "Activity Log Project")
+    _add_minutes(fresh_db, project_id, 30, "Log work")
+    fresh_db.upsert_project_bucket(project_id, 0, 120, 80.0)
+
+    doc_path = tmp_path / "activity-doc.pdf"
+    doc_path.write_bytes(b"activity")
+    fresh_db.add_document_from_path(
+        project_id,
+        str(doc_path),
+        description="Activity document",
+        uploaded_at="2026-04-01",
+    )
+    fresh_db.create_invoice(
+        project_id=project_id,
+        invoice_number="ACT-001",
+        issue_date="2026-04-02",
+        due_date="2026-04-16",
+        currency="AUD",
+        tax_label=None,
+        tax_rate_percent=None,
+        detail_mode="summary",
+        line_items=[("Activity prepaid", 2.0, 10000)],
+        time_log_ids=[],
+    )
+
+    rows = fresh_db.project_activity_log_for_project(project_id)
+    event_types = [r["event_type"] for r in rows]
+    assert "time_log" in event_types
+    assert "document" in event_types
+    assert "invoice" in event_types
+    assert "bucket" in event_types
+    assert any("Log work" in r["details"] for r in rows)
+    assert any("activity-doc.pdf" in r["details"] for r in rows)
+    assert any("ACT-001" in r["details"] for r in rows)
+    assert any("Bucket settings updated" in r["details"] for r in rows)
+
+
+def test_projects_dialog_shows_bucket_ledger_and_project_log(qtbot, fresh_db, tmp_path):
+    project_id = _add_project(fresh_db, "Ledger UI Project")
+    _add_minutes(fresh_db, project_id, 60, "UI ledger work")
+    fresh_db.upsert_project_bucket(project_id, 30, 120, 75.0)
+    fresh_db.add_to_project_bucket_ceiling(
+        project_id,
+        60,
+        description="UI top-up",
+    )
+
+    doc_path = tmp_path / "ledger-ui.pdf"
+    doc_path.write_bytes(b"ledger")
+    fresh_db.add_document_from_path(project_id, str(doc_path), uploaded_at="2026-05-01")
+    fresh_db.create_invoice(
+        project_id=project_id,
+        invoice_number="LEDGER-UI-001",
+        issue_date="2026-05-02",
+        due_date=None,
+        currency="AUD",
+        tax_label=None,
+        tax_rate_percent=None,
+        detail_mode="summary",
+        line_items=[("Ledger UI prepaid", 1.0, 10000)],
+        time_log_ids=[],
+    )
+
+    dialog = ProjectsDialog(fresh_db)
+    qtbot.addWidget(dialog)
+
+    assert dialog.bucket_ledger_table.rowCount() == 3
+    ledger_types = {
+        dialog.bucket_ledger_table.item(row, dialog.LEDGER_TYPE).text()
+        for row in range(dialog.bucket_ledger_table.rowCount())
+    }
+    assert "Bucket settings" in ledger_types
+    assert "Manual top-up" in ledger_types
+    assert "Time logged" in ledger_types
+    assert any(
+        dialog.bucket_ledger_table.item(row, dialog.LEDGER_NOTE).text()
+        for row in range(dialog.bucket_ledger_table.rowCount())
+    )
+
+    changelog_types = {
+        dialog.changelog_table.item(row, dialog.CHANGE_TYPE).text()
+        for row in range(dialog.changelog_table.rowCount())
+    }
+    assert {"Time log", "Document", "Invoice", "Bucket"}.issubset(changelog_types)
+    assert any(
+        "LEDGER-UI-001"
+        in dialog.changelog_table.item(row, dialog.CHANGE_DETAILS).text()
+        for row in range(dialog.changelog_table.rowCount())
+    )
+
+
+def test_prepaid_invoice_dialog_adds_bucket_ledger_entry_when_invoice_is_created(
+    qtbot, fresh_db
+):
+    project_id = _add_project(fresh_db, "Prepaid Ledger Project")
+    invoice_id = fresh_db.create_invoice(
+        project_id=project_id,
+        invoice_number="PREPAID-LEDGER-001",
+        issue_date="2026-06-01",
+        due_date=None,
+        currency="AUD",
+        tax_label=None,
+        tax_rate_percent=None,
+        detail_mode="summary",
+        line_items=[("Prepaid", 40.0, 15000)],
+        time_log_ids=[],
+    )
+    dialog = ProjectsDialog(fresh_db)
+    qtbot.addWidget(dialog)
+    dialog.topup_spin.setValue(40.0)
+
+    class _InvoiceDialogWithId(_FakeInvoiceDialog):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.last_invoice_id = invoice_id
+
+    with patch("bouquin.projects.InvoiceDialog", _InvoiceDialogWithId):
+        dialog._invoice_prepaid_hours()
+
+    row = next(
+        r
+        for r in fresh_db.project_bucket_ledger_for_project(project_id)
+        if r["entry_type"] == "prepaid_invoice"
+    )
+    assert row["ceiling_delta_minutes"] == 2400
+    assert row["invoice_id"] == invoice_id
+    assert "40.00 hours" in row["description"]

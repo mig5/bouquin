@@ -91,6 +91,7 @@ class InvoiceDialog(QDialog):
         super().__init__(parent)
         self._db = db
         self._project_id = project_id
+        self.last_invoice_id: int | None = None
         self._start = start_date_iso
         self._end = end_date_iso
 
@@ -661,6 +662,7 @@ class InvoiceDialog(QDialog):
                 line_items=[(li.description, li.hours, li.rate_cents) for li in items],
                 time_log_ids=time_log_ids,
             )
+            self.last_invoice_id = invoice_id
 
             # Automatically create a reminder for the invoice due date
             if self.cfg.reminders:

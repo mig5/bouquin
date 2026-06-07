@@ -323,6 +323,24 @@ class DBManager:
                 )
             );
 
+            CREATE TABLE IF NOT EXISTS project_bucket_ledger (
+                id                      INTEGER PRIMARY KEY,
+                project_id              INTEGER NOT NULL
+                                        REFERENCES projects(id) ON DELETE CASCADE,
+                occurred_at             TEXT NOT NULL DEFAULT (
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ),
+                entry_type              TEXT NOT NULL,
+                baseline_delta_minutes  INTEGER NOT NULL DEFAULT 0,
+                ceiling_delta_minutes   INTEGER NOT NULL DEFAULT 0,
+                description             TEXT,
+                invoice_id              INTEGER,
+                FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_project_bucket_ledger_project
+                ON project_bucket_ledger(project_id, occurred_at);
+
 
             CREATE TABLE IF NOT EXISTS company_profile (
                 id       INTEGER PRIMARY KEY CHECK (id = 1),
@@ -352,6 +370,9 @@ class DBManager:
                 paid_at          TEXT,
                 payment_note     TEXT,
                 document_id      INTEGER,
+                created_at       TEXT NOT NULL DEFAULT (
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ),
                 FOREIGN KEY(document_id) REFERENCES project_documents(id)
                     ON DELETE SET NULL,
                 UNIQUE(project_id, invoice_number)
@@ -382,7 +403,19 @@ class DBManager:
             );
             """
         )
+        self._ensure_column(
+            "invoices",
+            "created_at",
+            "created_at TEXT",
+        )
         self.conn.commit()
+
+    def _ensure_column(self, table: str, column: str, definition: str) -> None:
+        """Add a simple column during startup schema upgrades if needed."""
+        rows = self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if any(str(r["name"]) == column for r in rows):
+            return
+        self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
     def rekey(self, new_key: str) -> None:
         """
@@ -1243,6 +1276,104 @@ class DBManager:
             raise ValueError("invalid project id")
         return project_id
 
+    def _normalise_minutes_delta(self, minutes: int | float | None) -> int:
+        return int(round(float(minutes or 0)))
+
+    def _normalise_bucket_warning(self, warn_at_percent: float | None) -> float:
+        return min(100.0, max(0.0, float(warn_at_percent or 0.0)))
+
+    def _project_bucket_ledger_totals(self, project_id: int) -> tuple[int, int]:
+        row = self.conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(baseline_delta_minutes), 0) AS baseline_minutes,
+                COALESCE(SUM(ceiling_delta_minutes), 0) AS bucket_ceiling_minutes
+            FROM project_bucket_ledger
+            WHERE project_id = ?;
+            """,
+            (project_id,),
+        ).fetchone()
+        baseline = max(0, int(row["baseline_minutes"] or 0))
+        ceiling = max(0, int(row["bucket_ceiling_minutes"] or 0))
+        return baseline, ceiling
+
+    def _sync_project_bucket_cache(self, project_id: int) -> None:
+        """Refresh the project_buckets cache from the ledger."""
+        baseline, ceiling = self._project_bucket_ledger_totals(project_id)
+        existing = self.conn.execute(
+            "SELECT warn_at_percent FROM project_buckets WHERE project_id = ?;",
+            (project_id,),
+        ).fetchone()
+        warn_at = float(existing["warn_at_percent"] or 80.0) if existing else 80.0
+        self.conn.execute(
+            """
+            INSERT INTO project_buckets (
+                project_id,
+                baseline_minutes,
+                bucket_ceiling_minutes,
+                warn_at_percent
+            )
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(project_id) DO UPDATE SET
+                baseline_minutes = excluded.baseline_minutes,
+                bucket_ceiling_minutes = excluded.bucket_ceiling_minutes,
+                warn_at_percent = project_buckets.warn_at_percent,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
+            """,
+            (project_id, baseline, ceiling, warn_at),
+        )
+
+    def add_project_bucket_ledger_entry(
+        self,
+        project_id: int,
+        entry_type: str,
+        baseline_delta_minutes: int = 0,
+        ceiling_delta_minutes: int = 0,
+        description: str | None = None,
+        invoice_id: int | None = None,
+    ) -> int:
+        """Append an auditable project bucket ledger entry.
+
+        Positive ``baseline_delta_minutes`` increases the already-spent baseline.
+        Positive ``ceiling_delta_minutes`` increases the prepaid bucket ceiling.
+        Negative deltas are used for explicit corrections when the user lowers a
+        previously saved baseline or ceiling.
+        """
+        project_id = self._normalise_project_id(project_id)
+        entry_type = str(entry_type or "adjustment").strip() or "adjustment"
+        baseline_delta_minutes = self._normalise_minutes_delta(baseline_delta_minutes)
+        ceiling_delta_minutes = self._normalise_minutes_delta(ceiling_delta_minutes)
+        description = (description or "").strip() or None
+        if baseline_delta_minutes == 0 and ceiling_delta_minutes == 0:
+            raise ValueError("bucket ledger entry has no minute delta")
+
+        with self.conn:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO project_bucket_ledger (
+                    project_id,
+                    entry_type,
+                    baseline_delta_minutes,
+                    ceiling_delta_minutes,
+                    description,
+                    invoice_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    project_id,
+                    entry_type,
+                    baseline_delta_minutes,
+                    ceiling_delta_minutes,
+                    description,
+                    invoice_id,
+                ),
+            )
+            ledger_id = cur.lastrowid
+            self._sync_project_bucket_cache(project_id)
+            return ledger_id
+
     def upsert_project_bucket(
         self,
         project_id: int,
@@ -1250,16 +1381,23 @@ class DBManager:
         bucket_ceiling_minutes: int,
         warn_at_percent: float = 80.0,
     ) -> None:
-        """Save cumulative prepaid-hour bucket settings for a project.
+        """Save project bucket settings as an auditable ledger adjustment.
 
         ``baseline_minutes`` represents already-spent hours that pre-date
         Bouquin time logging. ``bucket_ceiling_minutes`` is the cumulative
-        prepaid ceiling purchased for this project.
+        prepaid ceiling purchased for this project. The current values are
+        derived from ``project_bucket_ledger`` rather than silently overwritten.
         """
         project_id = self._normalise_project_id(project_id)
         baseline_minutes = max(0, int(baseline_minutes or 0))
         bucket_ceiling_minutes = max(0, int(bucket_ceiling_minutes or 0))
-        warn_at_percent = min(100.0, max(0.0, float(warn_at_percent or 0.0)))
+        warn_at_percent = self._normalise_bucket_warning(warn_at_percent)
+        current_baseline, current_ceiling = self._project_bucket_ledger_totals(
+            project_id
+        )
+        baseline_delta = baseline_minutes - current_baseline
+        ceiling_delta = bucket_ceiling_minutes - current_ceiling
+
         with self.conn:
             self.conn.execute(
                 """
@@ -1271,41 +1409,67 @@ class DBManager:
                 )
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(project_id) DO UPDATE SET
-                    baseline_minutes = excluded.baseline_minutes,
-                    bucket_ceiling_minutes = excluded.bucket_ceiling_minutes,
                     warn_at_percent = excluded.warn_at_percent,
                     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
                 """,
                 (
                     project_id,
-                    baseline_minutes,
-                    bucket_ceiling_minutes,
+                    current_baseline,
+                    current_ceiling,
                     warn_at_percent,
                 ),
             )
+            if baseline_delta or ceiling_delta:
+                self.conn.execute(
+                    """
+                    INSERT INTO project_bucket_ledger (
+                        project_id,
+                        entry_type,
+                        baseline_delta_minutes,
+                        ceiling_delta_minutes,
+                        description
+                    )
+                    VALUES (?, ?, ?, ?, ?);
+                    """,
+                    (
+                        project_id,
+                        "settings_adjustment",
+                        baseline_delta,
+                        ceiling_delta,
+                        "Bucket settings updated",
+                    ),
+                )
+            self._sync_project_bucket_cache(project_id)
+            self.conn.execute(
+                """
+                UPDATE project_buckets
+                   SET warn_at_percent = ?,
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 WHERE project_id = ?;
+                """,
+                (warn_at_percent, project_id),
+            )
 
-    def add_to_project_bucket_ceiling(self, project_id: int, add_minutes: int) -> None:
+    def add_to_project_bucket_ceiling(
+        self,
+        project_id: int,
+        add_minutes: int,
+        description: str | None = None,
+        invoice_id: int | None = None,
+    ) -> None:
         """Increase a project's cumulative bucket ceiling by ``add_minutes``."""
         project_id = self._normalise_project_id(project_id)
         add_minutes = max(0, int(add_minutes or 0))
         if add_minutes <= 0:
             return
-        with self.conn:
-            self.conn.execute(
-                """
-                INSERT INTO project_buckets (
-                    project_id,
-                    baseline_minutes,
-                    bucket_ceiling_minutes,
-                    warn_at_percent
-                )
-                VALUES (?, 0, ?, 80.0)
-                ON CONFLICT(project_id) DO UPDATE SET
-                    bucket_ceiling_minutes = bucket_ceiling_minutes + excluded.bucket_ceiling_minutes,
-                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
-                """,
-                (project_id, add_minutes),
-            )
+        entry_type = "prepaid_invoice" if invoice_id is not None else "manual_topup"
+        self.add_project_bucket_ledger_entry(
+            project_id,
+            entry_type,
+            ceiling_delta_minutes=add_minutes,
+            description=description or "Bucket ceiling increased",
+            invoice_id=invoice_id,
+        )
 
     def get_project_bucket(self, project_id: int):
         """Return the bucket row for a project, or None if none is configured."""
@@ -1326,6 +1490,24 @@ class DBManager:
             """,
             (project_id,),
         ).fetchone()
+        if row is None:
+            baseline, ceiling = self._project_bucket_ledger_totals(project_id)
+            if baseline == 0 and ceiling == 0:
+                return None
+            self._sync_project_bucket_cache(project_id)
+            row = self.conn.execute(
+                """
+                SELECT
+                    project_id,
+                    baseline_minutes,
+                    bucket_ceiling_minutes,
+                    warn_at_percent,
+                    updated_at
+                FROM project_buckets
+                WHERE project_id = ?;
+                """,
+                (project_id,),
+            ).fetchone()
         return row
 
     def logged_minutes_for_project(self, project_id: int) -> int:
@@ -1470,6 +1652,122 @@ class DBManager:
             """,
             (project_id,),
         ).fetchall()
+
+    def project_bucket_ledger_for_project(self, project_id: int):
+        """Return bucket ledger rows, including time-log consumption entries."""
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return []
+        rows = self.conn.execute(
+            """
+            SELECT
+                l.occurred_at AS occurred_at,
+                l.entry_type AS entry_type,
+                l.description AS description,
+                l.baseline_delta_minutes AS baseline_delta_minutes,
+                l.ceiling_delta_minutes AS ceiling_delta_minutes,
+                0 AS used_delta_minutes,
+                l.invoice_id AS invoice_id,
+                i.invoice_number AS invoice_number,
+                NULL AS time_log_id,
+                NULL AS page_date,
+                NULL AS activity_name,
+                l.id AS source_id
+            FROM project_bucket_ledger AS l
+            LEFT JOIN invoices AS i ON i.id = l.invoice_id
+            WHERE l.project_id = ?
+
+            UNION ALL
+
+            SELECT
+                t.created_at AS occurred_at,
+                'time_log' AS entry_type,
+                COALESCE(NULLIF(t.note, ''), a.name) AS description,
+                0 AS baseline_delta_minutes,
+                0 AS ceiling_delta_minutes,
+                t.minutes AS used_delta_minutes,
+                NULL AS invoice_id,
+                NULL AS invoice_number,
+                t.id AS time_log_id,
+                t.page_date AS page_date,
+                a.name AS activity_name,
+                t.id AS source_id
+            FROM time_log AS t
+            JOIN activities AS a ON a.id = t.activity_id
+            WHERE t.project_id = ?
+
+            ORDER BY occurred_at DESC, source_id DESC;
+            """,
+            (project_id, project_id),
+        ).fetchall()
+        return rows
+
+    def project_activity_log_for_project(self, project_id: int):
+        """Return a generated project changelog from existing dated records."""
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return []
+        rows = self.conn.execute(
+            """
+            SELECT
+                t.created_at AS occurred_at,
+                'time_log' AS event_type,
+                'Time logged' AS title,
+                printf('%.2f hours for %s%s',
+                       t.minutes / 60.0,
+                       a.name,
+                       CASE
+                         WHEN COALESCE(t.note, '') = '' THEN ''
+                         ELSE ': ' || t.note
+                       END) AS details,
+                t.id AS source_id
+            FROM time_log AS t
+            JOIN activities AS a ON a.id = t.activity_id
+            WHERE t.project_id = ?
+
+            UNION ALL
+
+            SELECT
+                d.uploaded_at AS occurred_at,
+                'document' AS event_type,
+                'Document added' AS title,
+                d.file_name || CASE
+                    WHEN COALESCE(d.description, '') = '' THEN ''
+                    ELSE ': ' || d.description
+                END AS details,
+                d.id AS source_id
+            FROM project_documents AS d
+            WHERE d.project_id = ?
+
+            UNION ALL
+
+            SELECT
+                COALESCE(i.created_at, i.issue_date) AS occurred_at,
+                'invoice' AS event_type,
+                'Invoice issued' AS title,
+                i.invoice_number || ' — ' || printf('%.2f %s', i.total_cents / 100.0, i.currency) AS details,
+                i.id AS source_id
+            FROM invoices AS i
+            WHERE i.project_id = ?
+
+            UNION ALL
+
+            SELECT
+                l.occurred_at AS occurred_at,
+                'bucket' AS event_type,
+                'Bucket ledger updated' AS title,
+                COALESCE(l.description, l.entry_type) AS details,
+                l.id AS source_id
+            FROM project_bucket_ledger AS l
+            WHERE l.project_id = ?
+
+            ORDER BY occurred_at DESC, source_id DESC;
+            """,
+            (project_id, project_id, project_id, project_id),
+        ).fetchall()
+        return rows
 
     def list_activities(self) -> list[ActivityRow]:
         cur = self.conn.cursor()
@@ -2479,6 +2777,7 @@ class DBManager:
                 i.paid_at,
                 i.payment_note,
                 i.document_id,
+                i.created_at,
                 d.file_name AS document_file_name
             FROM invoices AS i
             LEFT JOIN projects AS p ON p.id = i.project_id

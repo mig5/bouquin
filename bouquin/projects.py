@@ -108,6 +108,18 @@ class ProjectsDialog(QDialog):
     LOG_HOURS = 3
     LOG_CREATED = 4
 
+    LEDGER_DATE = 0
+    LEDGER_TYPE = 1
+    LEDGER_BASELINE = 2
+    LEDGER_CEILING = 3
+    LEDGER_USED = 4
+    LEDGER_NOTE = 5
+
+    CHANGE_DATE = 0
+    CHANGE_TYPE = 1
+    CHANGE_TITLE = 2
+    CHANGE_DETAILS = 3
+
     DOC_FILE = 0
     DOC_ADDED = 1
     DOC_DESCRIPTION = 2
@@ -263,6 +275,72 @@ class ProjectsDialog(QDialog):
         log_header.setSectionResizeMode(self.LOG_CREATED, QHeaderView.ResizeToContents)
         logs_layout.addWidget(self.time_logs_table, 1)
         self.tabs.addTab(logs_tab, strings._("time_logs"))
+
+        ledger_tab = QWidget()
+        ledger_layout = QVBoxLayout(ledger_tab)
+        self.bucket_ledger_table = QTableWidget()
+        self.bucket_ledger_table.setColumnCount(6)
+        self.bucket_ledger_table.setHorizontalHeaderLabels(
+            [
+                strings._("date"),
+                strings._("type"),
+                strings._("project_bucket_baseline_delta"),
+                strings._("project_bucket_ceiling_delta"),
+                strings._("project_bucket_used_delta"),
+                strings._("note"),
+            ]
+        )
+        self.bucket_ledger_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.bucket_ledger_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.bucket_ledger_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        ledger_header = self.bucket_ledger_table.horizontalHeader()
+        ledger_header.setSectionResizeMode(
+            self.LEDGER_DATE, QHeaderView.ResizeToContents
+        )
+        ledger_header.setSectionResizeMode(
+            self.LEDGER_TYPE, QHeaderView.ResizeToContents
+        )
+        ledger_header.setSectionResizeMode(
+            self.LEDGER_BASELINE, QHeaderView.ResizeToContents
+        )
+        ledger_header.setSectionResizeMode(
+            self.LEDGER_CEILING, QHeaderView.ResizeToContents
+        )
+        ledger_header.setSectionResizeMode(
+            self.LEDGER_USED, QHeaderView.ResizeToContents
+        )
+        ledger_header.setSectionResizeMode(self.LEDGER_NOTE, QHeaderView.Stretch)
+        ledger_layout.addWidget(self.bucket_ledger_table, 1)
+        self.tabs.addTab(ledger_tab, strings._("project_bucket_ledger_tab"))
+
+        changelog_tab = QWidget()
+        changelog_layout = QVBoxLayout(changelog_tab)
+        self.changelog_table = QTableWidget()
+        self.changelog_table.setColumnCount(4)
+        self.changelog_table.setHorizontalHeaderLabels(
+            [
+                strings._("date"),
+                strings._("type"),
+                strings._("summary"),
+                strings._("details"),
+            ]
+        )
+        self.changelog_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.changelog_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.changelog_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        changelog_header = self.changelog_table.horizontalHeader()
+        changelog_header.setSectionResizeMode(
+            self.CHANGE_DATE, QHeaderView.ResizeToContents
+        )
+        changelog_header.setSectionResizeMode(
+            self.CHANGE_TYPE, QHeaderView.ResizeToContents
+        )
+        changelog_header.setSectionResizeMode(
+            self.CHANGE_TITLE, QHeaderView.ResizeToContents
+        )
+        changelog_header.setSectionResizeMode(self.CHANGE_DETAILS, QHeaderView.Stretch)
+        changelog_layout.addWidget(self.changelog_table, 1)
+        self.tabs.addTab(changelog_tab, strings._("project_changelog_tab"))
 
         docs_tab = QWidget()
         docs_layout = QVBoxLayout(docs_tab)
@@ -479,6 +557,8 @@ class ProjectsDialog(QDialog):
             self.ceiling_spin.setValue(0.0)
             self.warn_spin.setValue(80.0)
             self.time_logs_table.setRowCount(0)
+            self.bucket_ledger_table.setRowCount(0)
+            self.changelog_table.setRowCount(0)
             self.documents_table.setRowCount(0)
             self.invoices_table.setRowCount(0)
             return
@@ -498,6 +578,8 @@ class ProjectsDialog(QDialog):
         self.warn_spin.setValue(float(bucket["warn_at_percent"] if bucket else 80.0))
 
         self._reload_time_logs(project_id)
+        self._reload_bucket_ledger(project_id)
+        self._reload_changelog(project_id)
         self._reload_documents(project_id)
         self._reload_invoices(project_id)
 
@@ -521,6 +603,81 @@ class ProjectsDialog(QDialog):
             )
             self.time_logs_table.setItem(
                 row_idx, self.LOG_CREATED, QTableWidgetItem(r["created_at"] or "")
+            )
+
+    def _format_delta_hours(self, minutes: int | None, invert: bool = False) -> str:
+        minutes = int(minutes or 0)
+        if minutes == 0:
+            return ""
+        if invert:
+            minutes = -minutes
+        sign = "+" if minutes > 0 else "-"
+        return f"{sign}{hours_from_minutes(abs(minutes)):.2f}"
+
+    def _reload_bucket_ledger(self, project_id: int) -> None:
+        rows = self._db.project_bucket_ledger_for_project(project_id)
+        self.bucket_ledger_table.setRowCount(len(rows))
+        for row_idx, r in enumerate(rows):
+            entry_type = str(r["entry_type"] or "")
+            type_text = strings._(f"project_bucket_ledger_type_{entry_type}")
+            if type_text == f"project_bucket_ledger_type_{entry_type}":
+                type_text = entry_type.replace("_", " ").title()
+
+            note = r["description"] or ""
+            if r["invoice_number"]:
+                note = (
+                    f"{note} ({r['invoice_number']})" if note else r["invoice_number"]
+                )
+            if entry_type == "time_log" and r["page_date"]:
+                activity = r["activity_name"] or ""
+                note = f"{r['page_date']} — {activity}: {note}".strip()
+
+            self.bucket_ledger_table.setItem(
+                row_idx, self.LEDGER_DATE, QTableWidgetItem(r["occurred_at"] or "")
+            )
+            self.bucket_ledger_table.setItem(
+                row_idx, self.LEDGER_TYPE, QTableWidgetItem(type_text)
+            )
+            self.bucket_ledger_table.setItem(
+                row_idx,
+                self.LEDGER_BASELINE,
+                QTableWidgetItem(self._format_delta_hours(r["baseline_delta_minutes"])),
+            )
+            self.bucket_ledger_table.setItem(
+                row_idx,
+                self.LEDGER_CEILING,
+                QTableWidgetItem(self._format_delta_hours(r["ceiling_delta_minutes"])),
+            )
+            self.bucket_ledger_table.setItem(
+                row_idx,
+                self.LEDGER_USED,
+                QTableWidgetItem(
+                    self._format_delta_hours(r["used_delta_minutes"], invert=True)
+                ),
+            )
+            self.bucket_ledger_table.setItem(
+                row_idx, self.LEDGER_NOTE, QTableWidgetItem(note)
+            )
+
+    def _reload_changelog(self, project_id: int) -> None:
+        rows = self._db.project_activity_log_for_project(project_id)
+        self.changelog_table.setRowCount(len(rows))
+        for row_idx, r in enumerate(rows):
+            event_type = str(r["event_type"] or "")
+            type_text = strings._(f"project_changelog_type_{event_type}")
+            if type_text == f"project_changelog_type_{event_type}":
+                type_text = event_type.replace("_", " ").title()
+            self.changelog_table.setItem(
+                row_idx, self.CHANGE_DATE, QTableWidgetItem(r["occurred_at"] or "")
+            )
+            self.changelog_table.setItem(
+                row_idx, self.CHANGE_TYPE, QTableWidgetItem(type_text)
+            )
+            self.changelog_table.setItem(
+                row_idx, self.CHANGE_TITLE, QTableWidgetItem(r["title"] or "")
+            )
+            self.changelog_table.setItem(
+                row_idx, self.CHANGE_DETAILS, QTableWidgetItem(r["details"] or "")
             )
 
     def _reload_documents(self, project_id: int) -> None:
@@ -592,7 +749,13 @@ class ProjectsDialog(QDialog):
         add_minutes = minutes_from_hours(self.topup_spin.value())
         if add_minutes <= 0:
             return
-        self._db.add_to_project_bucket_ceiling(project_id, add_minutes)
+        self._db.add_to_project_bucket_ceiling(
+            project_id,
+            add_minutes,
+            description=strings._("project_bucket_manual_topup_desc").format(
+                hours=hours_from_minutes(add_minutes)
+            ),
+        )
         self.reload()
 
     def _invoice_prepaid_hours(self) -> None:
@@ -626,6 +789,16 @@ class ProjectsDialog(QDialog):
         dialog._recalc_totals()
 
         if dialog.exec() == QDialog.Accepted:
+            invoice_id = getattr(dialog, "last_invoice_id", None)
+            if invoice_id is not None:
+                self._db.add_to_project_bucket_ceiling(
+                    project_id,
+                    minutes_from_hours(hours),
+                    description=strings._("project_bucket_prepaid_invoice_desc").format(
+                        hours=hours
+                    ),
+                    invoice_id=int(invoice_id),
+                )
             self.reload()
 
     def _selected_doc_id(self) -> tuple[int, str] | None:
