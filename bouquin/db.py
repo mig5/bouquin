@@ -1525,17 +1525,6 @@ class DBManager:
         ).fetchone()
         return int(row["minutes"] or 0)
 
-    def time_log_count_for_project(self, project_id: int) -> int:
-        try:
-            project_id = self._normalise_project_id(project_id)
-        except (TypeError, ValueError):
-            return 0
-        row = self.conn.execute(
-            "SELECT COUNT(*) AS c FROM time_log WHERE project_id = ?;",
-            (project_id,),
-        ).fetchone()
-        return int(row["c"] or 0)
-
     def project_bucket_status(self, project_id: int) -> dict[str, object] | None:
         """Return computed bucket state for a project.
 
