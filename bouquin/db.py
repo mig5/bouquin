@@ -308,6 +308,22 @@ class DBManager:
                 client_email      TEXT
             );
 
+            CREATE INDEX IF NOT EXISTS ix_project_billing_client_company
+                ON project_billing(client_company);
+
+
+            CREATE TABLE IF NOT EXISTS project_buckets (
+                project_id              INTEGER PRIMARY KEY
+                                        REFERENCES projects(id) ON DELETE CASCADE,
+                baseline_minutes        INTEGER NOT NULL DEFAULT 0,
+                bucket_ceiling_minutes  INTEGER NOT NULL DEFAULT 0,
+                warn_at_percent         REAL NOT NULL DEFAULT 80.0,
+                updated_at              TEXT NOT NULL DEFAULT (
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                )
+            );
+
+
             CREATE TABLE IF NOT EXISTS company_profile (
                 id       INTEGER PRIMARY KEY CHECK (id = 1),
                 name     TEXT,
@@ -1219,6 +1235,242 @@ class DBManager:
                 (project_id,),
             )
 
+    # -------- Time logging: project buckets ---------------------------
+
+    def _normalise_project_id(self, project_id: int) -> int:
+        project_id = int(project_id)
+        if project_id <= 0:
+            raise ValueError("invalid project id")
+        return project_id
+
+    def upsert_project_bucket(
+        self,
+        project_id: int,
+        baseline_minutes: int,
+        bucket_ceiling_minutes: int,
+        warn_at_percent: float = 80.0,
+    ) -> None:
+        """Save cumulative prepaid-hour bucket settings for a project.
+
+        ``baseline_minutes`` represents already-spent hours that pre-date
+        Bouquin time logging. ``bucket_ceiling_minutes`` is the cumulative
+        prepaid ceiling purchased for this project.
+        """
+        project_id = self._normalise_project_id(project_id)
+        baseline_minutes = max(0, int(baseline_minutes or 0))
+        bucket_ceiling_minutes = max(0, int(bucket_ceiling_minutes or 0))
+        warn_at_percent = min(100.0, max(0.0, float(warn_at_percent or 0.0)))
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO project_buckets (
+                    project_id,
+                    baseline_minutes,
+                    bucket_ceiling_minutes,
+                    warn_at_percent
+                )
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(project_id) DO UPDATE SET
+                    baseline_minutes = excluded.baseline_minutes,
+                    bucket_ceiling_minutes = excluded.bucket_ceiling_minutes,
+                    warn_at_percent = excluded.warn_at_percent,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
+                """,
+                (
+                    project_id,
+                    baseline_minutes,
+                    bucket_ceiling_minutes,
+                    warn_at_percent,
+                ),
+            )
+
+    def add_to_project_bucket_ceiling(self, project_id: int, add_minutes: int) -> None:
+        """Increase a project's cumulative bucket ceiling by ``add_minutes``."""
+        project_id = self._normalise_project_id(project_id)
+        add_minutes = max(0, int(add_minutes or 0))
+        if add_minutes <= 0:
+            return
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO project_buckets (
+                    project_id,
+                    baseline_minutes,
+                    bucket_ceiling_minutes,
+                    warn_at_percent
+                )
+                VALUES (?, 0, ?, 80.0)
+                ON CONFLICT(project_id) DO UPDATE SET
+                    bucket_ceiling_minutes = bucket_ceiling_minutes + excluded.bucket_ceiling_minutes,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
+                """,
+                (project_id, add_minutes),
+            )
+
+    def get_project_bucket(self, project_id: int):
+        """Return the bucket row for a project, or None if none is configured."""
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return None
+        row = self.conn.execute(
+            """
+            SELECT
+                project_id,
+                baseline_minutes,
+                bucket_ceiling_minutes,
+                warn_at_percent,
+                updated_at
+            FROM project_buckets
+            WHERE project_id = ?;
+            """,
+            (project_id,),
+        ).fetchone()
+        return row
+
+    def logged_minutes_for_project(self, project_id: int) -> int:
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return 0
+        row = self.conn.execute(
+            """
+            SELECT COALESCE(SUM(minutes), 0) AS minutes
+            FROM time_log
+            WHERE project_id = ?;
+            """,
+            (project_id,),
+        ).fetchone()
+        return int(row["minutes"] or 0)
+
+    def time_log_count_for_project(self, project_id: int) -> int:
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return 0
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS c FROM time_log WHERE project_id = ?;",
+            (project_id,),
+        ).fetchone()
+        return int(row["c"] or 0)
+
+    def project_bucket_status(self, project_id: int) -> dict[str, object] | None:
+        """Return computed bucket state for a project.
+
+        States:
+        - ``unconfigured``: no bucket ceiling has been set
+        - ``ok``: below warning threshold
+        - ``warning``: at/above warning threshold but below ceiling
+        - ``reached``: exactly at ceiling
+        - ``exceeded``: beyond ceiling
+        """
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return None
+        project_name = self.list_projects_by_id(project_id)
+        if not project_name:
+            return None
+
+        bucket = self.get_project_bucket(project_id)
+        logged = self.logged_minutes_for_project(project_id)
+        baseline = int(bucket["baseline_minutes"] or 0) if bucket else 0
+        ceiling = int(bucket["bucket_ceiling_minutes"] or 0) if bucket else 0
+        warn_at = float(bucket["warn_at_percent"] or 80.0) if bucket else 80.0
+        used = baseline + logged
+        if ceiling <= 0:
+            state = "unconfigured"
+            remaining = None
+            pct = None
+        else:
+            remaining = ceiling - used
+            pct = used / ceiling * 100.0
+            if used > ceiling:
+                state = "exceeded"
+            elif used == ceiling:
+                state = "reached"
+            elif pct >= warn_at:
+                state = "warning"
+            else:
+                state = "ok"
+        return {
+            "project_id": project_id,
+            "project_name": project_name,
+            "baseline_minutes": baseline,
+            "logged_minutes": logged,
+            "used_minutes": used,
+            "bucket_ceiling_minutes": ceiling,
+            "remaining_minutes": remaining,
+            "percent_used": pct,
+            "warn_at_percent": warn_at,
+            "state": state,
+        }
+
+    def list_project_summaries(self):
+        """Return one row per project with aggregate time/docs/invoices."""
+        rows = self.conn.execute(
+            """
+            SELECT
+                p.id AS project_id,
+                p.name AS project_name,
+                COALESCE(pb.baseline_minutes, 0) AS baseline_minutes,
+                COALESCE(pb.bucket_ceiling_minutes, 0) AS bucket_ceiling_minutes,
+                COALESCE(pb.warn_at_percent, 80.0) AS warn_at_percent,
+                COALESCE((
+                    SELECT SUM(t.minutes)
+                    FROM time_log AS t
+                    WHERE t.project_id = p.id
+                ), 0) AS logged_minutes,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM time_log AS t2
+                    WHERE t2.project_id = p.id
+                ), 0) AS time_log_count,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM project_documents AS d
+                    WHERE d.project_id = p.id
+                ), 0) AS document_count,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM invoices AS i
+                    WHERE i.project_id = p.id
+                ), 0) AS invoice_count
+            FROM projects AS p
+            LEFT JOIN project_buckets AS pb
+              ON pb.project_id = p.id
+            ORDER BY LOWER(p.name);
+            """
+        ).fetchall()
+        return rows
+
+    def time_logs_for_project(self, project_id: int):
+        """Return all time-log entries for a project, newest first."""
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return []
+        return self.conn.execute(
+            """
+            SELECT
+                t.id,
+                t.page_date,
+                t.project_id,
+                p.name AS project_name,
+                t.activity_id,
+                a.name AS activity_name,
+                t.minutes,
+                t.note,
+                t.created_at
+            FROM time_log AS t
+            JOIN projects AS p ON p.id = t.project_id
+            JOIN activities AS a ON a.id = t.activity_id
+            WHERE t.project_id = ?
+            ORDER BY t.page_date DESC, t.created_at DESC, t.id DESC;
+            """,
+            (project_id,),
+        ).fetchall()
+
     def list_activities(self) -> list[ActivityRow]:
         cur = self.conn.cursor()
         rows = cur.execute(
@@ -2101,7 +2353,7 @@ class DBManager:
             )
 
     def list_client_companies(self) -> list[str]:
-        """Return distinct client display names from project_billing."""
+        """Return distinct client display names from project billing settings."""
         cur = self.conn.cursor()
         rows = cur.execute(
             """
@@ -2202,6 +2454,41 @@ class DBManager:
             )
 
     # ------------------------- Invoices -------------------------------#
+
+    def invoices_for_project_with_documents(self, project_id: int):
+        """Return all invoices for a project with linked invoice document metadata."""
+        try:
+            project_id = self._normalise_project_id(project_id)
+        except (TypeError, ValueError):
+            return []
+        rows = self.conn.execute(
+            """
+            SELECT
+                i.id,
+                i.project_id,
+                p.name AS project_name,
+                i.invoice_number,
+                i.issue_date,
+                i.due_date,
+                i.currency,
+                i.tax_label,
+                i.tax_rate_percent,
+                i.subtotal_cents,
+                i.tax_cents,
+                i.total_cents,
+                i.paid_at,
+                i.payment_note,
+                i.document_id,
+                d.file_name AS document_file_name
+            FROM invoices AS i
+            LEFT JOIN projects AS p ON p.id = i.project_id
+            LEFT JOIN project_documents AS d ON d.id = i.document_id
+            WHERE i.project_id = ?
+            ORDER BY i.issue_date DESC, i.invoice_number COLLATE NOCASE;
+            """,
+            (project_id,),
+        ).fetchall()
+        return rows
 
     def create_invoice(
         self,

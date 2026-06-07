@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 from sqlcipher4.dbapi2 import IntegrityError
 
 from . import strings
+from .projects import format_bucket_status
 from .db import DBManager
 from .settings import load_db_config
 from .theme import ThemeManager
@@ -302,6 +303,7 @@ class TimeLogDialog(QDialog):
         # Project
         proj_row = QHBoxLayout()
         self.project_combo = QComboBox()
+        self.project_combo.currentIndexChanged.connect(self._refresh_bucket_indicator)
         self.manage_projects_btn = QPushButton(strings._("manage_projects"))
         self.manage_projects_btn.clicked.connect(self._manage_projects)
         proj_row.addWidget(self.project_combo, 1)
@@ -330,6 +332,10 @@ class TimeLogDialog(QDialog):
         self.hours_spin.setSingleStep(0.25)
         self.hours_spin.setValue(0.25)
         form.addRow(strings._("hours"), self.hours_spin)
+
+        self.bucket_label = QLabel("")
+        self.bucket_label.setWordWrap(True)
+        form.addRow(strings._("project_bucket"), self.bucket_label)
 
         root.addLayout(form)
 
@@ -409,6 +415,7 @@ class TimeLogDialog(QDialog):
         self.project_combo.clear()
         for proj_id, name in self._db.list_projects():
             self.project_combo.addItem(name, proj_id)
+        self._refresh_bucket_indicator()
 
     def _reload_activities(self) -> None:
         activities = [name for _, name in self._db.list_activities()]
@@ -461,10 +468,47 @@ class TimeLogDialog(QDialog):
         self.total_label.setText(
             strings._("time_log_total_hours").format(hours=self.total_hours)
         )
+        self._refresh_bucket_indicator()
 
         self._current_entry_id = None
         self.delete_btn.setEnabled(False)
         self.add_update_btn.setText("&" + strings._("add_time_entry"))
+
+    # ----- Project bucket indicator -----------------------------------
+
+    def _refresh_bucket_indicator(self, *_args) -> None:
+        if not hasattr(self, "bucket_label"):
+            return
+        proj_id = self._ensure_project_id()
+        status = self._db.project_bucket_status(proj_id) if proj_id else None
+        self.bucket_label.setText(format_bucket_status(status))
+        state = str(status.get("state") if status else "unconfigured")
+        if state == "warning":
+            style = "QLabel { padding: 4px; border: 1px solid #b58900; border-radius: 4px; }"
+        elif state in ("reached", "exceeded"):
+            style = "QLabel { padding: 4px; border: 1px solid #b00020; border-radius: 4px; font-weight: bold; }"
+        elif state == "ok":
+            style = "QLabel { padding: 4px; border: 1px solid #5b8f5b; border-radius: 4px; }"
+        else:
+            style = ""
+        self.bucket_label.setStyleSheet(style)
+
+    def _maybe_show_bucket_alert(self, project_id: int | None) -> None:
+        if project_id is None:
+            return
+        status = self._db.project_bucket_status(project_id)
+        if not status:
+            return
+        state = str(status.get("state") or "")
+        if state not in {"reached", "exceeded"}:
+            return
+        QMessageBox.warning(
+            self,
+            strings._("project_bucket_alert_title"),
+            strings._("project_bucket_alert_message").format(
+                status=format_bucket_status(status)
+            ),
+        )
 
     # ----- Actions -----------------------------------------------------
 
@@ -561,6 +605,7 @@ class TimeLogDialog(QDialog):
             )
 
         self._reload_entries()
+        self._maybe_show_bucket_alert(proj_id)
         if self.close_after_add:
             self.close()
 
@@ -1135,6 +1180,10 @@ class TimeReportDialog(QDialog):
         self.total_label = QLabel("")
         root.addWidget(self.total_label)
 
+        self.bucket_label = QLabel("")
+        self.bucket_label.setWordWrap(True)
+        root.addWidget(self.bucket_label)
+
         # Close
         close_row = QHBoxLayout()
         close_row.addStretch(1)
@@ -1327,6 +1376,28 @@ class TimeReportDialog(QDialog):
             self.total_label.setText(
                 strings._("time_report_total").format(hours=total_hours)
             )
+
+        if proj_data is None:
+            self.bucket_label.setText("")
+            self.bucket_label.setStyleSheet("")
+        else:
+            status = self._db.project_bucket_status(int(proj_data))
+            self.bucket_label.setText(format_bucket_status(status))
+            state = str(status.get("state") if status else "unconfigured")
+            if state == "warning":
+                self.bucket_label.setStyleSheet(
+                    "QLabel { padding: 4px; border: 1px solid #b58900; border-radius: 4px; }"
+                )
+            elif state in ("reached", "exceeded"):
+                self.bucket_label.setStyleSheet(
+                    "QLabel { padding: 4px; border: 1px solid #b00020; border-radius: 4px; font-weight: bold; }"
+                )
+            elif state == "ok":
+                self.bucket_label.setStyleSheet(
+                    "QLabel { padding: 4px; border: 1px solid #5b8f5b; border-radius: 4px; }"
+                )
+            else:
+                self.bucket_label.setStyleSheet("")
 
     def _export_csv(self):
         if not self._last_rows:

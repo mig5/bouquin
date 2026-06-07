@@ -49,6 +49,7 @@ from PySide6.QtWidgets import (
 
 from . import strings
 from .bug_report_dialog import BugReportDialog
+from .projects import ProjectsDialog
 from .db import DBManager
 from .documents import DocumentsDialog, TodaysDocumentsWidget
 from .find_bar import FindBar
@@ -239,6 +240,12 @@ class MainWindow(QMainWindow):
         act_stats.setShortcut("Ctrl+Shift+S")
         act_stats.triggered.connect(self._open_statistics)
         file_menu.addAction(act_stats)
+        self.actProjects = QAction(strings._("projects"), self)
+        self.actProjects.setShortcut("Ctrl+Shift+C")
+        self.actProjects.setShortcutContext(Qt.ApplicationShortcut)
+        self.actProjects.triggered.connect(self._open_projects)
+        file_menu.addAction(self.actProjects)
+        self.addAction(self.actProjects)
         act_lock = QAction(strings._("main_window_lock_screen_accessibility"), self)
         act_lock.setShortcut("Ctrl+Shift+L")
         act_lock.triggered.connect(self._enter_lock)
@@ -338,6 +345,9 @@ class MainWindow(QMainWindow):
         if not self.cfg.time_log:
             self.time_log.hide()
             self.toolBar.actTimer.setVisible(False)
+            self.toolBar.actProjects.setVisible(False)
+            self.actProjects.setVisible(False)
+            self.actProjects.setEnabled(False)
         if not self.cfg.reminders:
             self.upcoming_reminders.hide()
             self.toolBar.actAlarm.setVisible(False)
@@ -1461,6 +1471,7 @@ class MainWindow(QMainWindow):
         self._tb_alarm = self._on_alarm_requested
         self._tb_timer = self._on_timer_requested
         self._tb_documents = self._on_documents_requested
+        self._tb_projects = self._open_projects
         self._tb_font_larger = self._on_font_larger_requested
         self._tb_font_smaller = self._on_font_smaller_requested
 
@@ -1475,6 +1486,7 @@ class MainWindow(QMainWindow):
         tb.alarmRequested.connect(self._tb_alarm)
         tb.timerRequested.connect(self._tb_timer)
         tb.documentsRequested.connect(self._tb_documents)
+        tb.projectsRequested.connect(self._tb_projects)
         tb.insertImageRequested.connect(self._on_insert_image)
         tb.historyRequested.connect(self._open_history)
         tb.fontSizeLargerRequested.connect(self._tb_font_larger)
@@ -1716,6 +1728,13 @@ class MainWindow(QMainWindow):
             timer.start(msecs)
             self._reminder_timers.append(timer)
 
+    # ----------- Projects handler ------------#
+    def _open_projects(self):
+        if not self.cfg.time_log:
+            return
+        dlg = ProjectsDialog(self.db, self)
+        dlg.exec()
+
     # ----------- Documents handler ------------#
     def _on_documents_requested(self):
         documents_dlg = DocumentsDialog(self.db, self)
@@ -1868,9 +1887,15 @@ class MainWindow(QMainWindow):
         if not self.cfg.time_log:
             self.time_log.hide()
             self.toolBar.actTimer.setVisible(False)
+            self.toolBar.actProjects.setVisible(False)
+            self.actProjects.setVisible(False)
+            self.actProjects.setEnabled(False)
         else:
             self.time_log.show()
             self.toolBar.actTimer.setVisible(True)
+            self.toolBar.actProjects.setVisible(True)
+            self.actProjects.setVisible(True)
+            self.actProjects.setEnabled(True)
         if not self.cfg.reminders:
             self.upcoming_reminders.hide()
             self.toolBar.actAlarm.setVisible(False)

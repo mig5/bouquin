@@ -1900,9 +1900,60 @@ def test_main_window_without_time_log(qtbot, app, tmp_db_cfg):
     qtbot.addWidget(window)
     window.show()
 
-    # Verify time_log widget is hidden
+    # Verify time_log widget is hidden, including dependent Projects entry points.
     assert window.time_log.isHidden()
     assert not window.toolBar.actTimer.isVisible()
+    assert not window.toolBar.actProjects.isVisible()
+    assert not window.actProjects.isVisible()
+    assert not window.actProjects.isEnabled()
+
+
+def test_main_window_projects_action_visible_with_time_log(qtbot, app, tmp_db_cfg):
+    """Projects is available from the menu/shortcut only when time logging is enabled."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", True)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    assert window.toolBar.actProjects.isVisible()
+    assert window.actProjects.isVisible()
+    assert window.actProjects.isEnabled()
+
+
+def test_main_window_open_projects_noops_when_time_log_disabled(qtbot, app, tmp_db_cfg):
+    """The handler is also guarded, so a stale shortcut cannot open Projects."""
+    s = get_settings()
+    s.setValue("db/default_db", str(tmp_db_cfg.path))
+    s.setValue("db/key", tmp_db_cfg.key)
+    s.setValue("ui/idle_minutes", 0)
+    s.setValue("ui/theme", "light")
+    s.setValue("ui/move_todos", True)
+    s.setValue("ui/tags", True)
+    s.setValue("ui/time_log", False)
+    s.setValue("ui/reminders", True)
+    s.setValue("ui/locale", "en")
+    s.setValue("ui/font_size", 11)
+
+    themes = ThemeManager(app, ThemeConfig(theme=Theme.LIGHT))
+    window = MainWindow(themes=themes)
+    qtbot.addWidget(window)
+    window.show()
+
+    with patch("bouquin.main_window.ProjectsDialog") as projects_dialog:
+        window._open_projects()
+        projects_dialog.assert_not_called()
 
 
 def test_main_window_without_documents(qtbot, app, tmp_db_cfg):

@@ -21,6 +21,7 @@ class ToolBar(QToolBar):
     alarmRequested = Signal()
     timerRequested = Signal()
     documentsRequested = Signal()
+    projectsRequested = Signal()
     fontSizeLargerRequested = Signal()
     fontSizeSmallerRequested = Signal()
 
@@ -127,6 +128,11 @@ class ToolBar(QToolBar):
         self.actDocuments = QAction("📁", self)
         self.actDocuments.setToolTip(strings._("toolbar_documents"))
         self.actDocuments.triggered.connect(self.documentsRequested)
+
+        # Projects
+        self.actProjects = QAction("📌", self)
+        self.actProjects.setToolTip(strings._("toolbar_projects"))
+        self.actProjects.triggered.connect(self.projectsRequested)
         # Headings are mutually exclusive (like radio buttons)
         self.grpHeadings = QActionGroup(self)
         self.grpHeadings.setExclusive(True)
@@ -159,6 +165,7 @@ class ToolBar(QToolBar):
                 self.actInsertImg,
                 self.actAlarm,
                 self.actTimer,
+                self.actProjects,
                 self.actDocuments,
                 self.actHistory,
             ]
@@ -186,6 +193,7 @@ class ToolBar(QToolBar):
         self._style_letter_button(self.actCheckboxes, "☑")
         self._style_letter_button(self.actAlarm, "⏰")
         self._style_letter_button(self.actTimer, "⌛")
+        self._style_letter_button(self.actProjects, "📌")
         self._style_letter_button(self.actDocuments, "📁")
 
         # History
