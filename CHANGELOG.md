@@ -1,3 +1,10 @@
+# 0.9.0
+
+ * Add 'Projects' interface for unified time/invoice/docs view.
+ * Add ability to set a 'bucket' of (prepaid) hours for a project and warn when time logged approaches it.
+ * Add ability to invoice for the increase in prepaid project bucket hours (without having had to 'log' them).
+ * Update dependencies
+
 # 0.8.4
 
  * Update dependencies

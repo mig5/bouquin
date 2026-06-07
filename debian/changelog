@@ -1,3 +1,11 @@
+bouquin (0.9.0) unstable; urgency=medium
+
+ * Add 'Projects' interface for unified time/invoice/docs view.
+ * Add ability to set a 'bucket' of (prepaid) hours for a project and warn when time logged approaches it.
+ * Add ability to invoice for the increase in prepaid project bucket hours (without having had to 'log' them).
+
+ -- Miguel Jacq <mig@mig5.net>  Sun, 07 Jun 2026 17:18:00 +1000
+
 bouquin (0.8.4) unstable; urgency=medium
 
  * Dependency updates
