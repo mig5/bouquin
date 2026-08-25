@@ -1,6 +1,7 @@
 # 0.10.0
 
  * New 'Earnings' interface for viewing/tracking earnings across reporting periods (e.g for BAS)
+ * Dependency updates (including upgrade to SQLCipher 4.18.0)
 
 # 0.9.0
 

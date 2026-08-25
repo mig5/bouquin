@@ -4,7 +4,7 @@
 # provides the Python distribution/module as "sqlcipher4". To keep Fedora's
 # auto-generated python3dist() Requires correct, we rewrite the dependency key in
 # pyproject.toml at build time.
-%global upstream_version 0.9.0
+%global upstream_version 0.10.0
 
 Name:           bouquin
 Version:        %{upstream_version}
@@ -82,6 +82,9 @@ install -Dpm 0644 bouquin/icons/bouquin.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/bouquin.svg
 
 %changelog
+* Tue Aug 25 2026 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
+- New 'Earnings' interface for viewing/tracking earnings across reporting periods (e.g for BAS)
+- Dependency updates (including upgrade to SQLCipher 4.18.0)
 * Sun Jun 07 2026 Miguel Jacq <mig@mig5.net> - %{version}-%{release}
 - Add 'Projects' interface for unified time/invoice/docs view.
 - Add ability to set a 'bucket' of (prepaid) hours for a project and warn when time logged approaches it.
