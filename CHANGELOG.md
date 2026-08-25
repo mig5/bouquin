@@ -1,3 +1,7 @@
+# 0.10.0
+
+ * New 'Earnings' interface for viewing/tracking earnings across reporting periods (e.g for BAS)
+
 # 0.9.0
 
  * Add 'Projects' interface for unified time/invoice/docs view.

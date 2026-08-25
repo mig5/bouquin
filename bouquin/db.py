@@ -100,6 +100,7 @@ class DBConfig:
     reminders_webhook_secret: str = (None,)
     documents: bool = True
     invoicing: bool = False
+    reporting_currency: str = "AUD"
     locale: str = "en"
     font_size: int = 11
 
@@ -120,6 +121,9 @@ class DBManager:
             "detail_mode",
             "paid_at",
             "payment_note",
+            "reporting_currency",
+            "reporting_total_cents",
+            "reporting_note",
             "document_id",
         }
     )
@@ -369,6 +373,9 @@ class DBManager:
                 detail_mode      TEXT NOT NULL,      -- 'detailed' | 'summary'
                 paid_at          TEXT,
                 payment_note     TEXT,
+                reporting_currency   TEXT,
+                reporting_total_cents INTEGER,
+                reporting_note       TEXT,
                 document_id      INTEGER,
                 created_at       TEXT NOT NULL DEFAULT (
                     strftime('%Y-%m-%dT%H:%M:%fZ','now')
@@ -401,12 +408,46 @@ class DBManager:
                             REFERENCES time_log(id) ON DELETE RESTRICT,
                 PRIMARY KEY (invoice_id, time_log_id)
             );
+
+            CREATE TABLE IF NOT EXISTS invoice_payments (
+                id                      INTEGER PRIMARY KEY,
+                invoice_id              INTEGER NOT NULL
+                                        REFERENCES invoices(id) ON DELETE CASCADE,
+                received_at             TEXT NOT NULL, -- yyyy-MM-dd
+                invoice_amount_cents    INTEGER NOT NULL,
+                reporting_currency      TEXT NOT NULL,
+                reporting_amount_cents  INTEGER NOT NULL,
+                note                    TEXT,
+                created_at              TEXT NOT NULL DEFAULT (
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                )
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_invoice_payments_invoice
+                ON invoice_payments(invoice_id, received_at);
+            CREATE INDEX IF NOT EXISTS ix_invoice_payments_received
+                ON invoice_payments(received_at);
             """
         )
         self._ensure_column(
             "invoices",
             "created_at",
             "created_at TEXT",
+        )
+        self._ensure_column(
+            "invoices",
+            "reporting_currency",
+            "reporting_currency TEXT",
+        )
+        self._ensure_column(
+            "invoices",
+            "reporting_total_cents",
+            "reporting_total_cents INTEGER",
+        )
+        self._ensure_column(
+            "invoices",
+            "reporting_note",
+            "reporting_note TEXT",
         )
         self.conn.commit()
 
@@ -2924,6 +2965,252 @@ class DBManager:
                 ).fetchall()
         return rows
 
+    def get_invoice_with_project(self, invoice_id: int):
+        return self.conn.execute(
+            """
+            SELECT
+                i.*,
+                p.name AS project_name
+            FROM invoices AS i
+            LEFT JOIN projects AS p ON p.id = i.project_id
+            WHERE i.id = ?
+            """,
+            (invoice_id,),
+        ).fetchone()
+
+    def set_invoice_reporting_value(
+        self,
+        invoice_id: int,
+        reporting_currency: str,
+        reporting_total_cents: int,
+        note: str | None = None,
+    ) -> None:
+        """Store the invoice-date value used by invoice-basis earnings reports."""
+        invoice = self.get_invoice_with_project(invoice_id)
+        if invoice is None:
+            raise ValueError("Invoice does not exist.")
+        reporting_currency = reporting_currency.strip().upper()
+        if not reporting_currency:
+            raise ValueError("A reporting currency is required.")
+        if reporting_total_cents <= 0:
+            raise ValueError("The reporting total must be greater than zero.")
+        with self.conn:
+            self.conn.execute(
+                """
+                UPDATE invoices
+                SET reporting_currency = ?,
+                    reporting_total_cents = ?,
+                    reporting_note = ?
+                WHERE id = ?
+                """,
+                (
+                    reporting_currency,
+                    int(reporting_total_cents),
+                    note.strip() if note and note.strip() else None,
+                    invoice_id,
+                ),
+            )
+
+    def clear_invoice_reporting_value(self, invoice_id: int) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                UPDATE invoices
+                SET reporting_currency = NULL,
+                    reporting_total_cents = NULL,
+                    reporting_note = NULL
+                WHERE id = ?
+                """,
+                (invoice_id,),
+            )
+
+    def get_invoices_for_earnings_range(self, start_date_iso: str, end_date_iso: str):
+        """Return invoices by issue date for invoice-basis earnings reporting."""
+        return self.conn.execute(
+            """
+            SELECT
+                i.id AS invoice_id,
+                i.issue_date,
+                i.invoice_number,
+                i.currency,
+                i.tax_label,
+                i.tax_rate_percent,
+                i.subtotal_cents,
+                i.tax_cents,
+                i.total_cents,
+                i.reporting_currency,
+                i.reporting_total_cents,
+                i.reporting_note,
+                p.name AS project_name,
+                pb.client_company
+            FROM invoices AS i
+            LEFT JOIN projects AS p ON p.id = i.project_id
+            LEFT JOIN project_billing AS pb ON pb.project_id = i.project_id
+            WHERE i.issue_date BETWEEN ? AND ?
+            ORDER BY i.issue_date, LOWER(p.name), i.invoice_number
+            """,
+            (start_date_iso, end_date_iso),
+        ).fetchall()
+
+    def get_invoice_payments(self, invoice_id: int):
+        return self.conn.execute(
+            """
+            SELECT *
+            FROM invoice_payments
+            WHERE invoice_id = ?
+            ORDER BY received_at, id
+            """,
+            (invoice_id,),
+        ).fetchall()
+
+    def get_invoice_payment_applied_cents(self, invoice_id: int) -> int:
+        row = self.conn.execute(
+            """
+            SELECT COALESCE(SUM(invoice_amount_cents), 0) AS total
+            FROM invoice_payments
+            WHERE invoice_id = ?
+            """,
+            (invoice_id,),
+        ).fetchone()
+        return int(row["total"] or 0)
+
+    def _sync_invoice_paid_at_from_payments(self, invoice_id: int) -> None:
+        invoice = self.get_invoice_with_project(invoice_id)
+        if invoice is None:
+            return
+        paid = self.get_invoice_payment_applied_cents(invoice_id)
+        total = int(invoice["total_cents"] or 0)
+        if total > 0 and paid >= total:
+            row = self.conn.execute(
+                """
+                SELECT MAX(received_at) AS paid_at
+                FROM invoice_payments
+                WHERE invoice_id = ?
+                """,
+                (invoice_id,),
+            ).fetchone()
+            paid_at = row["paid_at"] if row else None
+        else:
+            paid_at = None
+        self.conn.execute(
+            "UPDATE invoices SET paid_at = ? WHERE id = ?",
+            (paid_at, invoice_id),
+        )
+
+    def add_invoice_payment(
+        self,
+        invoice_id: int,
+        received_at: str,
+        invoice_amount_cents: int,
+        reporting_currency: str,
+        reporting_amount_cents: int,
+        note: str | None = None,
+    ) -> int:
+        invoice = self.get_invoice_with_project(invoice_id)
+        if invoice is None:
+            raise ValueError("Invoice does not exist.")
+        if invoice_amount_cents <= 0 or reporting_amount_cents <= 0:
+            raise ValueError("Payment amounts must be greater than zero.")
+        reporting_currency = reporting_currency.strip().upper()
+        if not reporting_currency:
+            raise ValueError("A reporting currency is required.")
+        try:
+            _dt.date.fromisoformat(received_at)
+        except ValueError as exc:
+            raise ValueError("Payment date must use YYYY-MM-DD format.") from exc
+
+        total = int(invoice["total_cents"] or 0)
+        already_applied = self.get_invoice_payment_applied_cents(invoice_id)
+        if already_applied + invoice_amount_cents > total:
+            raise ValueError("Payment amount exceeds the outstanding invoice balance.")
+
+        with self.conn:
+            cur = self.conn.execute(
+                """
+                INSERT INTO invoice_payments (
+                    invoice_id,
+                    received_at,
+                    invoice_amount_cents,
+                    reporting_currency,
+                    reporting_amount_cents,
+                    note
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    invoice_id,
+                    received_at,
+                    invoice_amount_cents,
+                    reporting_currency,
+                    reporting_amount_cents,
+                    note,
+                ),
+            )
+            payment_id = int(cur.lastrowid)
+            self._sync_invoice_paid_at_from_payments(invoice_id)
+        return payment_id
+
+    def delete_invoice_payment(self, payment_id: int) -> None:
+        row = self.conn.execute(
+            "SELECT invoice_id FROM invoice_payments WHERE id = ?",
+            (payment_id,),
+        ).fetchone()
+        if row is None:
+            return
+        invoice_id = int(row["invoice_id"])
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM invoice_payments WHERE id = ?", (payment_id,)
+            )
+            self._sync_invoice_paid_at_from_payments(invoice_id)
+
+    def get_payments_for_range(self, start_date_iso: str, end_date_iso: str):
+        return self.conn.execute(
+            """
+            SELECT
+                ip.id AS payment_id,
+                ip.received_at,
+                ip.invoice_amount_cents,
+                ip.reporting_currency,
+                ip.reporting_amount_cents,
+                ip.note,
+                i.id AS invoice_id,
+                i.invoice_number,
+                i.currency,
+                i.tax_label,
+                i.tax_rate_percent,
+                i.tax_cents,
+                i.total_cents,
+                p.name AS project_name,
+                pb.client_company
+            FROM invoice_payments AS ip
+            JOIN invoices AS i ON i.id = ip.invoice_id
+            LEFT JOIN projects AS p ON p.id = i.project_id
+            LEFT JOIN project_billing AS pb ON pb.project_id = i.project_id
+            WHERE ip.received_at BETWEEN ? AND ?
+            ORDER BY ip.received_at, LOWER(p.name), i.invoice_number, ip.id
+            """,
+            (start_date_iso, end_date_iso),
+        ).fetchall()
+
+    def get_paid_invoices_without_payments(
+        self, start_date_iso: str, end_date_iso: str
+    ):
+        return self.conn.execute(
+            """
+            SELECT i.*, p.name AS project_name
+            FROM invoices AS i
+            LEFT JOIN projects AS p ON p.id = i.project_id
+            WHERE i.paid_at BETWEEN ? AND ?
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM invoice_payments AS ip
+                  WHERE ip.invoice_id = i.id
+              )
+            ORDER BY i.paid_at, LOWER(p.name), i.invoice_number
+            """,
+            (start_date_iso, end_date_iso),
+        ).fetchall()
+
     def _validate_invoice_field(self, field: str) -> str:
         if field not in self._INVOICE_COLUMN_ALLOWLIST:
             raise ValueError(f"Invalid invoice field name: {field!r}")
@@ -2952,6 +3239,21 @@ class DBManager:
                     invoice_id,
                 ),
             )
+            # A foreign-currency reporting valuation is tied to the invoice's
+            # issue date, currency and gross total. If one of those changes,
+            # require the user to value the invoice again rather than silently
+            # retaining stale tax-reporting data.
+            if field in {"issue_date", "currency", "total_cents"}:
+                self.conn.execute(
+                    """
+                    UPDATE invoices
+                    SET reporting_currency = NULL,
+                        reporting_total_cents = NULL,
+                        reporting_note = NULL
+                    WHERE id = ?
+                    """,
+                    (invoice_id,),
+                )
 
     def update_invoice_number(self, invoice_id: int, invoice_number: str) -> None:
         with self.conn:

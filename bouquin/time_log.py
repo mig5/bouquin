@@ -1080,6 +1080,9 @@ class TimeReportDialog(QDialog):
         self.manage_invoices_btn = QPushButton(strings._("manage_invoices"))
         self.manage_invoices_btn.clicked.connect(self._on_manage_invoices)
 
+        self.earnings_btn = QPushButton(strings._("earnings_report"))
+        self.earnings_btn.clicked.connect(self._on_earnings_report)
+
         # Project
         self.project_combo = QComboBox()
         self.project_combo.addItem(strings._("all_projects"), None)
@@ -1153,6 +1156,7 @@ class TimeReportDialog(QDialog):
         if getattr(self._db.cfg, "invoicing", False):
             run_row.addWidget(self.invoice_btn)
             run_row.addWidget(self.manage_invoices_btn)
+            run_row.addWidget(self.earnings_btn)
         root.addLayout(run_row)
 
         # Table
@@ -1730,6 +1734,11 @@ class TimeReportDialog(QDialog):
         dlg.remindersChanged.connect(self.remindersChanged.emit)
 
         dlg.exec()
+
+    def _on_earnings_report(self) -> None:
+        from .earnings import EarningsReportDialog
+
+        EarningsReportDialog(self._db, self).exec()
 
     def _on_create_invoice(self) -> None:
         idx = self.project_combo.currentIndex()

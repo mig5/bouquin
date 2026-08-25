@@ -52,6 +52,7 @@ def load_db_config() -> DBConfig:
     reminders_webhook_secret = s.value("ui/reminders_webhook_secret", None, type=str)
     documents = s.value("ui/documents", True, type=bool)
     invoicing = s.value("ui/invoicing", False, type=bool)
+    reporting_currency = s.value("ui/reporting_currency", "AUD", type=str)
     locale = s.value("ui/locale", "en", type=str)
     font_size = s.value("ui/font_size", 11, type=int)
     return DBConfig(
@@ -68,6 +69,7 @@ def load_db_config() -> DBConfig:
         reminders_webhook_secret=reminders_webhook_secret,
         documents=documents,
         invoicing=invoicing,
+        reporting_currency=reporting_currency,
         locale=locale,
         font_size=font_size,
     )
@@ -88,5 +90,6 @@ def save_db_config(cfg: DBConfig) -> None:
     s.setValue("ui/reminders_webhook_secret", str(cfg.reminders_webhook_secret))
     s.setValue("ui/documents", str(cfg.documents))
     s.setValue("ui/invoicing", str(cfg.invoicing))
+    s.setValue("ui/reporting_currency", str(cfg.reporting_currency))
     s.setValue("ui/locale", str(cfg.locale))
     s.setValue("ui/font_size", str(cfg.font_size))

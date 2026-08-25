@@ -296,6 +296,10 @@ class SettingsDialog(QDialog):
         self.company_phone_edit = QLineEdit(phone or "")
         self.company_email_edit = QLineEdit(email or "")
         self.company_tax_id_edit = QLineEdit(tax_id or "")
+        self.reporting_currency_edit = QLineEdit(
+            self.current_settings.reporting_currency or "AUD"
+        )
+        self.reporting_currency_edit.setMaxLength(8)
         self.company_payment_details_edit = QTextEdit()
         self.company_payment_details_edit.setPlainText(payment_details or "")
 
@@ -313,6 +317,9 @@ class SettingsDialog(QDialog):
         )
         invoicing_layout.addRow(
             strings._("invoice_company_tax_id") + ":", self.company_tax_id_edit
+        )
+        invoicing_layout.addRow(
+            strings._("reporting_currency") + ":", self.reporting_currency_edit
         )
         invoicing_layout.addRow(
             strings._("invoice_company_payment_details") + ":",
@@ -470,6 +477,9 @@ class SettingsDialog(QDialog):
             documents=self.documents.isChecked(),
             invoicing=(
                 self.invoicing.isChecked() if self.time_log.isChecked() else False
+            ),
+            reporting_currency=(
+                self.reporting_currency_edit.text().strip().upper() or "AUD"
             ),
             locale=self.locale_combobox.currentText(),
             font_size=self.font_size.value(),

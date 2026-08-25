@@ -1071,6 +1071,18 @@ class InvoicesDialog(QDialog):
         delete_btn.clicked.connect(self._on_delete_clicked)
         btn_row.addWidget(delete_btn)
 
+        reporting_value_btn = QPushButton(strings._("invoice_reporting_value"))
+        reporting_value_btn.clicked.connect(self._on_reporting_value_clicked)
+        btn_row.addWidget(reporting_value_btn)
+
+        payments_btn = QPushButton(strings._("invoice_payments"))
+        payments_btn.clicked.connect(self._on_payments_clicked)
+        btn_row.addWidget(payments_btn)
+
+        earnings_btn = QPushButton(strings._("earnings_report"))
+        earnings_btn.clicked.connect(self._on_earnings_clicked)
+        btn_row.addWidget(earnings_btn)
+
         close_btn = QPushButton(strings._("close"))
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
@@ -1148,14 +1160,21 @@ class InvoicesDialog(QDialog):
         self.project_combo.blockSignals(True)
         try:
             self.project_combo.clear()
-            for proj_id, name in self._db.list_projects():
+            projects = self._db.list_projects()
+            if projects:
+                self.project_combo.addItem(strings._("all_projects"), None)
+            for proj_id, name in projects:
                 self.project_combo.addItem(name, proj_id)
         finally:
             self.project_combo.blockSignals(False)
 
     def _select_initial_project(self, project_id: int | None) -> None:
         if project_id is None:
-            if self.project_combo.count() > 0:
+            # Keep the historical default of selecting the first real project,
+            # while still exposing an explicit All projects view.
+            if self.project_combo.count() > 1:
+                self.project_combo.setCurrentIndex(1)
+            elif self.project_combo.count() > 0:
                 self.project_combo.setCurrentIndex(0)
             return
 
@@ -1163,7 +1182,68 @@ class InvoicesDialog(QDialog):
         if idx >= 0:
             self.project_combo.setCurrentIndex(idx)
         elif self.project_combo.count() > 0:
-            self.project_combo.setCurrentIndex(0)
+            self.project_combo.setCurrentIndex(
+                1 if self.project_combo.count() > 1 else 0
+            )
+
+    def _selected_invoice(self) -> tuple[int, int] | None:
+        row = self.table.currentRow()
+        if row < 0:
+            sel = self.table.selectionModel().selectedRows()
+            if sel:
+                row = sel[0].row()
+        if row < 0:
+            return None
+        item = self.table.item(row, self.COL_NUMBER)
+        if item is None:
+            return None
+        invoice_id = item.data(Qt.ItemDataRole.UserRole)
+        if invoice_id is None:
+            return None
+        return row, int(invoice_id)
+
+    def _on_reporting_value_clicked(self) -> None:
+        selected = self._selected_invoice()
+        if selected is None:
+            QMessageBox.information(
+                self,
+                strings._("invoice_reporting_value"),
+                strings._("invoice_required"),
+            )
+            return
+        _row, invoice_id = selected
+
+        from .earnings import InvoiceReportingValueDialog
+
+        dlg = InvoiceReportingValueDialog(self._db, invoice_id, self)
+        dlg.exec()
+
+    def _on_payments_clicked(self) -> None:
+        selected = self._selected_invoice()
+        if selected is None:
+            QMessageBox.information(
+                self,
+                strings._("invoice_payments"),
+                strings._("invoice_required"),
+            )
+            return
+        row, invoice_id = selected
+
+        from .earnings import PaymentsDialog
+
+        dlg = PaymentsDialog(self._db, invoice_id, self)
+        dlg.paymentsChanged.connect(self.remindersChanged.emit)
+        dlg.exec()
+
+        invoice = self._db.get_invoice_with_project(invoice_id)
+        if invoice is not None and invoice["paid_at"] and self.cfg.reminders:
+            self._remove_invoice_due_reminder(row, invoice_id)
+        self._reload_invoices()
+
+    def _on_earnings_clicked(self) -> None:
+        from .earnings import EarningsReportDialog
+
+        EarningsReportDialog(self._db, self).exec()
 
     def _current_project(self) -> int | None:
         idx = self.project_combo.currentIndex()
@@ -1371,6 +1451,15 @@ class InvoicesDialog(QDialog):
 
         # ---- Dates: issue, due, paid_at (YYYY-MM-DD) ------------------------
         if col in (self.COL_ISSUE_DATE, self.COL_DUE_DATE, self.COL_PAID_AT):
+            if col == self.COL_PAID_AT and self._db.get_invoice_payments(inv_id):
+                QMessageBox.information(
+                    self,
+                    strings._("invoice_payments"),
+                    strings._("invoice_paid_managed_by_payments"),
+                )
+                _reset_from_db("paid_at", lambda v: v or "")
+                return
+
             new_date: QDate | None = None
             if text:
                 new_date = QDate.fromString(text, "yyyy-MM-dd")

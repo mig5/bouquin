@@ -14,6 +14,7 @@ def _clear_db_settings():
         "ui/tags",
         "ui/time_log",
         "ui/reminders",
+        "ui/reporting_currency",
         "ui/locale",
         "ui/font_size",
     ]:
@@ -32,6 +33,7 @@ def test_load_and_save_db_config_roundtrip(app, tmp_path):
         tags=True,
         time_log=True,
         reminders=True,
+        reporting_currency="NZD",
         locale="en",
         font_size=11,
     )
@@ -46,6 +48,7 @@ def test_load_and_save_db_config_roundtrip(app, tmp_path):
     assert loaded.tags == cfg.tags
     assert loaded.time_log == cfg.time_log
     assert loaded.reminders == cfg.reminders
+    assert loaded.reporting_currency == cfg.reporting_currency
     assert loaded.locale == cfg.locale
     assert loaded.font_size == cfg.font_size
 
